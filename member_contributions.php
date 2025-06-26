@@ -16,10 +16,10 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 }
 
 $current_page = 'member_contributions.php';
-$user_id = $_SESSION["user"];
+$username = $_SESSION["user"];
 $is_admin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
-// Get user's contributions
+// Get user's contributions - Fixed to use username instead of user_id
 $stmt = $conn->prepare("
     SELECT 
         c.id,
@@ -29,25 +29,28 @@ $stmt = $conn->prepare("
         c.payment_method,
         c.reference_number,
         c.status,
-        c.notes
+        c.notes,
+        up.full_name as member_name
     FROM contributions c
-    WHERE c.user_id = ?
+    JOIN user_profiles up ON c.user_id = up.user_id
+    WHERE up.username = ?
     ORDER BY c.contribution_date DESC
 ");
-$stmt->bind_param("i", $user_id);
+$stmt->bind_param("s", $username);
 $stmt->execute();
 $contributions = $stmt->get_result();
 
-// Get total contributions
+// Get total contributions - Fixed to use username
 $stmt = $conn->prepare("
     SELECT 
-        SUM(CASE WHEN contribution_type = 'tithe' THEN amount ELSE 0 END) as total_tithe,
-        SUM(CASE WHEN contribution_type = 'offering' THEN amount ELSE 0 END) as total_offering,
-        SUM(amount) as total_contributions
-    FROM contributions 
-    WHERE user_id = ?
+        SUM(CASE WHEN c.contribution_type = 'tithe' THEN c.amount ELSE 0 END) as total_tithe,
+        SUM(CASE WHEN c.contribution_type = 'offering' THEN c.amount ELSE 0 END) as total_offering,
+        SUM(c.amount) as total_contributions
+    FROM contributions c
+    JOIN user_profiles up ON c.user_id = up.user_id
+    WHERE up.username = ?
 ");
-$stmt->bind_param("i", $user_id);
+$stmt->bind_param("s", $username);
 $stmt->execute();
 $totals = $stmt->get_result()->fetch_assoc();
 
@@ -59,45 +62,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
     $reference_number = $_POST['reference_number'];
     $notes = $_POST['notes'];
     
-    $stmt = $conn->prepare("
-        INSERT INTO contributions (
-            user_id, amount, contribution_type, contribution_date, 
-            payment_method, reference_number, status, notes
-        ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
-    ");
-    $stmt->bind_param("idssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
+    // Get the user_id from user_profiles using username
+    $stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $user_result = $stmt->get_result();
+    $user_data = $user_result->fetch_assoc();
     
-    if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Contribution submitted successfully!";
-        header("Location: member_contributions.php");
-        exit();
+    if ($user_data) {
+        $user_id = $user_data['user_id'];
+        
+        $stmt = $conn->prepare("
+            INSERT INTO contributions (
+                user_id, amount, contribution_type, contribution_date, 
+                payment_method, reference_number, status, notes
+            ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
+        ");
+        $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
+        
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "Contribution submitted successfully!";
+            header("Location: member_contributions.php");
+            exit();
+        } else {
+            $_SESSION['error_message'] = "Error submitting contribution. Please try again.";
+        }
     } else {
-        $_SESSION['error_message'] = "Error submitting contribution. Please try again.";
+        $_SESSION['error_message'] = "User profile not found.";
     }
 }
 
-// Create a temporary table to handle the collation mismatch
-$conn->query("DROP TEMPORARY TABLE IF EXISTS temp_members");
-$conn->query("
-    CREATE TEMPORARY TABLE temp_members (
-        id INT,
-        name VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
-        user_id INT
-    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci
-");
-
-// Insert data into temporary table with explicit collation
-$conn->query("
-    INSERT INTO temp_members (id, name, user_id)
-    SELECT 
-        m.id,
-        m.name COLLATE utf8mb4_general_ci,
-        u.id
-    FROM membership_records m
-    LEFT JOIN users u ON u.username COLLATE utf8mb4_general_ci = m.name COLLATE utf8mb4_general_ci
-");
-
-// Update the contributions query to use the temporary table
+// Get all contributions for admin view - Modified to use user_profiles table
 $contributions_query = "
     SELECT 
         c.id,
@@ -106,79 +101,97 @@ $contributions_query = "
         c.contribution_date,
         c.payment_method,
         c.reference_number,
-        c.status,
-        tm.name as member_name
+        up.full_name as member_name
     FROM contributions c
-    JOIN users u ON c.user_id = u.id
-    JOIN temp_members tm ON u.id = tm.user_id
+    JOIN user_profiles up ON c.user_id = up.user_id
     ORDER BY c.contribution_date DESC
 ";
-$contributions = $conn->query($contributions_query);
+$all_contributions = $conn->query($contributions_query);
 
 // Update the admin contribution submission code
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribution'])) {
-    $member_id = $_POST['member_id'];
+    $member_user_id = $_POST['member_id'];
     $amount = floatval($_POST['amount']);
     $contribution_type = $_POST['contribution_type'];
     $payment_method = $_POST['payment_method'];
     $reference_number = $_POST['reference_number'];
+    $contribution_date = $_POST['contribution_date'];
     
-    // First get the member's name
-    $member_query = "SELECT name FROM membership_records WHERE id = ?";
-    $stmt = $conn->prepare($member_query);
-    $stmt->bind_param("i", $member_id);
+    // Check if the user exists in user_profiles
+    $user_query = "SELECT user_id, full_name FROM user_profiles WHERE user_id = ?";
+    $stmt = $conn->prepare($user_query);
+    $stmt->bind_param("s", $member_user_id);
     $stmt->execute();
-    $member_result = $stmt->get_result();
-    $member_data = $member_result->fetch_assoc();
+    $user_result = $stmt->get_result();
+    $user_data = $user_result->fetch_assoc();
     
-    if ($member_data) {
-        $member_name = $member_data['name'];
+    if ($user_data) {
+        // Now insert the contribution using the user_id and specified date
+        $stmt = $conn->prepare("
+            INSERT INTO contributions (
+                user_id, amount, contribution_type, contribution_date, 
+                payment_method, reference_number, status
+            ) VALUES (?, ?, ?, ?, ?, ?, 'approved')
+        ");
+        $stmt->bind_param("sdssss", $member_user_id, $amount, $contribution_type, $contribution_date, $payment_method, $reference_number);
         
-        // Then find the user by converting both names to the same case
-        $user_query = "SELECT id FROM users WHERE LOWER(username) = LOWER(?)";
-        $stmt = $conn->prepare($user_query);
-        $stmt->bind_param("s", $member_name);
-        $stmt->execute();
-        $user_result = $stmt->get_result();
-        $user_data = $user_result->fetch_assoc();
-        
-        if ($user_data) {
-            $user_id = $user_data['id'];
-            
-            // Now insert the contribution using the user_id
-            $stmt = $conn->prepare("
-                INSERT INTO contributions (
-                    user_id, amount, contribution_type, contribution_date, 
-                    payment_method, reference_number, status
-                ) VALUES (?, ?, ?, NOW(), ?, ?, 'approved')
-            ");
-            $stmt->bind_param("idsss", $user_id, $amount, $contribution_type, $payment_method, $reference_number);
-            
-            if ($stmt->execute()) {
-                $_SESSION['success_message'] = "Contribution added successfully!";
-                header("Location: member_contributions.php");
-                exit();
-            } else {
-                $_SESSION['error_message'] = "Error adding contribution: " . $stmt->error;
-            }
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "Contribution added successfully for " . $user_data['full_name'] . "!";
+            header("Location: member_contributions.php");
+            exit();
         } else {
-            $_SESSION['error_message'] = "Member '$member_name' not found in the users system. Please ensure the member has a user account.";
+            $_SESSION['error_message'] = "Error adding contribution: " . $stmt->error;
         }
     } else {
-        $_SESSION['error_message'] = "Member not found in the membership records.";
+        $_SESSION['error_message'] = "User not found in the user profiles.";
     }
 }
 
-// Update the members query to use the temporary table
-$members_query = "SELECT id, name FROM membership_records WHERE status = 'Active' ORDER BY name";
-$members_result = $conn->query($members_query);
-$members = [];
-while ($row = $members_result->fetch_assoc()) {
-    $members[] = $row;
+// Get all users for admin dropdown - Modified to use user_profiles table
+$users_query = "SELECT user_id, full_name FROM user_profiles WHERE role = 'Member' ORDER BY full_name";
+$users_result = $conn->query($users_query);
+$users = [];
+while ($row = $users_result->fetch_assoc()) {
+    $users[] = $row;
 }
 
 // Site configuration
 $church_name = "Church of Christ-Disciples";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST["add_contribution"])) {
+        $member_user_id = $_POST["member_id"];
+        $amount = $_POST["amount"];
+        $contribution_type = $_POST["contribution_type"];
+        $contribution_date = $_POST["contribution_date"];
+        $payment_method = $_POST["payment_method"];
+        $notes = $_POST["notes"];
+
+        // Get member name from user_profiles
+        $stmt = $conn->prepare("SELECT full_name FROM user_profiles WHERE user_id = ?");
+        $stmt->bind_param("s", $member_user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $member = $result->fetch_assoc();
+
+        if (!$member) {
+            $message = "Member not found in the system.";
+            $messageType = "danger";
+        } else {
+            // Insert contribution
+            $stmt = $conn->prepare("INSERT INTO contributions (user_id, amount, contribution_type, contribution_date, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sdssss", $member_user_id, $amount, $contribution_type, $contribution_date, $payment_method, $notes);
+            
+            if ($stmt->execute()) {
+                $message = "Contribution added successfully!";
+                $messageType = "success";
+            } else {
+                $message = "Error adding contribution: " . $conn->error;
+                $messageType = "danger";
+            }
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -186,9 +199,10 @@ $church_name = "Church of Christ-Disciples";
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Member Contributions | <?php echo $church_name; ?></title>
+    <title>Stewardship Report | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -487,39 +501,6 @@ $church_name = "Church of Christ-Disciples";
             color: var(--danger-color);
         }
 
-        /* Updated Table Styles */
-        .table-responsive {
-            margin-top: 0;
-            background-color: var(--white);
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 0;
-        }
-
-        th {
-            background-color: #f8f9fa;
-            color: var(--primary-color);
-            font-weight: 600;
-            padding: 15px;
-            text-align: left;
-            border-bottom: 2px solid #dee2e6;
-        }
-
-        td {
-            padding: 12px 15px;
-            vertical-align: middle;
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        tr:hover {
-            background-color: #f8f9fa;
-        }
-
         /* Status Badges */
         .status-badge {
             padding: 5px 10px;
@@ -593,7 +574,7 @@ $church_name = "Church of Christ-Disciples";
             .card {
                 padding: 15px;
             }
-            .table-responsive {
+            .dataTables_wrapper {
                 padding: 10px;
             }
         }
@@ -758,7 +739,7 @@ $church_name = "Church of Christ-Disciples";
                 width: 100%;
             }
 
-            .table-responsive {
+            .dataTables_wrapper {
                 overflow-x: auto;
             }
 
@@ -766,6 +747,61 @@ $church_name = "Church of Christ-Disciples";
                 padding: 10px;
                 font-size: 14px;
             }
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1000px;
+            table-layout: fixed; /* Prevent layout shifts */
+        }
+        
+        table th, table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+            word-wrap: break-word; /* Handle long content */
+            overflow-wrap: break-word;
+        }
+        
+        table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            position: sticky; /* Keep headers visible */
+            top: 0;
+            z-index: 10;
+        }
+        
+        table tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        /* Prevent DataTable layout shifts */
+        .dataTables_wrapper {
+            width: 100%;
+        }
+        
+        .dataTables_scroll {
+            overflow-x: auto;
+        }
+        
+        /* Ensure table doesn't move during initialization */
+        #contributionsTable {
+            visibility: hidden;
+        }
+        
+        #contributionsTable.dataTable {
+            visibility: visible;
         }
     </style>
 </head>
@@ -784,7 +820,7 @@ $church_name = "Church of Christ-Disciples";
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
@@ -792,7 +828,7 @@ $church_name = "Church of Christ-Disciples";
 
         <main class="content-area">
             <div class="top-bar">
-                <h2>Member Contributions</h2>
+                <h2>Stewardship Report</h2>
                 <div class="user-profile">
                     <div class="avatar">
                         <?php if (!empty($user_profile['profile_picture'])): ?>
@@ -837,67 +873,30 @@ $church_name = "Church of Christ-Disciples";
                     </button>
                 </div>
 
-                <!-- Contribution Summary Cards -->
-                <div class="summary-cards">
-                    <div class="card">
-                        <div class="card-icon">
-                            <i class="fas fa-hand-holding-dollar"></i>
-                        </div>
-                        <div class="card-info">
-                            <h3>Total Contributions</h3>
-                            <p>₱<?php echo number_format($totals['total_contributions'] ?? 0, 2); ?></p>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon">
-                            <i class="fas fa-percentage"></i>
-                        </div>
-                        <div class="card-info">
-                            <h3>Total Tithes</h3>
-                            <p>₱<?php echo number_format($totals['total_tithe'] ?? 0, 2); ?></p>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon">
-                            <i class="fas fa-gift"></i>
-                        </div>
-                        <div class="card-info">
-                            <h3>Total Offerings</h3>
-                            <p>₱<?php echo number_format($totals['total_offering'] ?? 0, 2); ?></p>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Contributions Table -->
                 <div class="card">
-                    <h2>Member Contributions</h2>
+                    <h2>Stewardship Report</h2>
                     <div class="table-responsive">
-                        <table>
+                        <table id="contributionsTable">
                             <thead>
                                 <tr>
-                                    <th>Member Name</th>
                                     <th>Date</th>
+                                    <th>Member Name</th>
                                     <th>Type</th>
                                     <th>Amount</th>
                                     <th>Payment Method</th>
-                                    <th>Reference</th>
-                                    <th>Status</th>
+                                    <th>Reference Number</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php while ($row = $contributions->fetch_assoc()): ?>
+                                <?php while ($row = $all_contributions->fetch_assoc()): ?>
                                 <tr>
+                                    <td><strong><?php echo date('M d, Y', strtotime($row['contribution_date'])); ?></strong></td>
                                     <td><?php echo htmlspecialchars($row['member_name']); ?></td>
-                                    <td><?php echo date('M d, Y', strtotime($row['contribution_date'])); ?></td>
                                     <td><?php echo ucfirst($row['contribution_type']); ?></td>
                                     <td>₱<?php echo number_format($row['amount'], 2); ?></td>
                                     <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
                                     <td><?php echo htmlspecialchars($row['reference_number']); ?></td>
-                                    <td>
-                                        <span class="status-badge <?php echo $row['status']; ?>">
-                                            <?php echo ucfirst($row['status']); ?>
-                                        </span>
-                                    </td>
                                 </tr>
                                 <?php endwhile; ?>
                             </tbody>
@@ -920,12 +919,17 @@ $church_name = "Church of Christ-Disciples";
                     <label for="member_id">Member Name</label>
                     <select id="member_id" name="member_id" required>
                         <option value="">Select Member</option>
-                        <?php foreach ($members as $member): ?>
-                            <option value="<?php echo $member['id']; ?>">
-                                <?php echo htmlspecialchars($member['name']); ?>
+                        <?php foreach ($users as $user): ?>
+                            <option value="<?php echo $user['user_id']; ?>">
+                                <?php echo htmlspecialchars($user['full_name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label for="contribution_date">Date</label>
+                    <input type="date" id="contribution_date" name="contribution_date" required>
+                    <small style="color: #666; font-size: 12px;">Select the date when the transaction was made</small>
                 </div>
                 <div class="form-group">
                     <label for="amount">Amount (₱)</label>
@@ -959,9 +963,29 @@ $church_name = "Church of Christ-Disciples";
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
+        $(document).ready(function() {
+            $('#contributionsTable').DataTable({
+                columnDefs: [
+                    { width: '15%', targets: 0 }, // Date
+                    { width: '20%', targets: 1 }, // Member Name
+                    { width: '10%', targets: 2 }, // Type
+                    { width: '15%', targets: 3 }, // Amount
+                    { width: '15%', targets: 4 }, // Payment Method
+                    { width: '25%', targets: 5 }  // Reference Number
+                ],
+                autoWidth: false,
+                responsive: true
+            });
+        });
+
         function openAdminModal() {
             document.getElementById('adminContributionModal').style.display = 'block';
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('contribution_date').value = today;
         }
 
         function closeAdminModal() {

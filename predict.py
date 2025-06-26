@@ -68,11 +68,11 @@ def predict():
         model.fit(df)
         
         # Make future predictions
-        future = model.make_future_dataframe(periods=3, freq='M')
+        future = model.make_future_dataframe(periods=12, freq='M')
         forecast = model.predict(future)
         
-        # Get the last 3 predictions
-        forecast_data = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(3)
+        # Get all predictions for 2025
+        forecast_data = forecast[forecast['ds'].dt.year == 2025][['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
         
         # Convert to dictionary format
         result = []

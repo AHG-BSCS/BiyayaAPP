@@ -13,13 +13,15 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     exit;
 }
 
+// Check if user is an admin
+$is_admin = ($_SESSION["user_role"] === "Administrator");
+
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Site configuration
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
-$is_admin = ($_SESSION["user"] === "admin");
 
 // Initialize session arrays if not set
 if (!isset($_SESSION['membership_records'])) {
@@ -668,6 +670,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
     <title>Member Records | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -962,53 +965,59 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         .status-badge {
             display: inline-block;
             padding: 4px 8px;
-            border-radius: 20px;
+            border-radius: 4px;
             font-size: 12px;
             font-weight: 500;
+            text-transform: uppercase;
         }
 
         .status-active {
-            background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
+            background-color: #2ecc71;
+            color: white;
         }
 
         .status-inactive {
-            background-color: rgba(244, 67, 54, 0.1);
-            color: var(--danger-color);
+            background-color: #e74c3c;
+            color: white;
         }
 
         .action-buttons {
             display: flex;
-            gap: 5px;
+            gap: 8px;
+            justify-content: flex-start;
         }
 
         .action-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--white);
-            font-size: 12px;
-            cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s ease;
+            color: white;
         }
 
-        .action-btn:hover {
-            transform: scale(1.1);
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
         }
 
-        .view-btn {
-            background-color: var(--accent-color);
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
         }
 
-        .edit-btn {
-            background-color: var(--info-color);
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
         }
 
-        .delete-btn {
-            background-color: var(--danger-color);
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .action-btn i {
+            font-size: 14px;
         }
 
         .pagination {
@@ -1282,6 +1291,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         .status-btn.status-inactive {
             background-color: var(--warning-color);
         }
+
+        .view-btn {
+            background-color: var(--accent-color);
+        }
+
+        .view-btn:hover {
+            background-color: rgb(0, 112, 9);
+        }
     </style>
 </head>
 <body>
@@ -1294,12 +1311,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
             <div class="sidebar-menu">
                 <ul>
                     <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                    <li><a href="events.php" class="<?php echo $current_page == 'events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
+                    <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="messages.php" class="<?php echo $current_page == 'messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
@@ -1346,10 +1363,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Membership Tab -->
                     <div class="tab-pane active" id="membership">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-members" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-membership-btn">
                                     <i class="fas fa-user-plus"></i> Add New Member
@@ -1381,15 +1394,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             </td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="membership-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
                                                         <button class="action-btn status-btn <?php echo strtolower($record['status']) === 'active' ? 'status-active' : 'status-inactive'; ?>" 
+                                                                id="membership-status-<?php echo htmlspecialchars($record['id']); ?>"
                                                                 data-id="<?php echo htmlspecialchars($record['id']); ?>" 
                                                                 data-current-status="<?php echo htmlspecialchars($record['status']); ?>">
                                                             <i class="fas fa-toggle-on"></i>
                                                         </button>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="membership-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="membership-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1398,22 +1412,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                 </tbody>
                             </table>
                         </div>
-                        <div class="pagination">
-                            <a href="#"><i class="fas fa-angle-left"></i></a>
-                            <a href="#" class="active">1</a>
-                            <a href="#">2</a>
-                            <a href="#">3</a>
-                            <a href="#"><i class="fas fa-angle-right"></i></a>
-                        </div>
                     </div>
 
                     <!-- Baptismal Tab -->
                     <div class="tab-pane" id="baptismal">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-baptismal" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-baptismal-btn">
                                     <i class="fas fa-plus"></i> Add New Baptismal
@@ -1440,10 +1443,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             <td><?php echo $record['officiant']; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="baptismal-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="baptismal-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="baptismal-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1457,10 +1460,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Marriage Tab -->
                     <div class="tab-pane" id="marriage">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-marriage" placeholder="Search by ID or Couple...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-marriage-btn">
                                     <i class="fas fa-plus"></i> Add New Marriage
@@ -1487,10 +1486,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             <td><?php echo $record['venue']; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="marriage-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="marriage-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="marriage-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1504,10 +1503,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Child Dedication Tab -->
                     <div class="tab-pane" id="child-dedication">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-child-dedication" placeholder="Search by ID or Child Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-child-dedication-btn">
                                     <i class="fas fa-plus"></i> Add New Child Dedication
@@ -1534,10 +1529,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             <td><?php echo $record['parents']; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="child-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="child-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="child-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1551,10 +1546,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Visitor's Record Tab -->
                     <div class="tab-pane" id="visitor">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-visitor" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-visitor-btn">
                                     <i class="fas fa-user-plus"></i> Add New Visitor
@@ -1591,10 +1582,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             </td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="visitor-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="visitor-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="visitor-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -2424,6 +2415,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         </main>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
         // Tab Navigation
         const tabLinks = document.querySelectorAll('.tab-navigation a');
@@ -2785,6 +2778,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                 closeModal('baptismal-modal');
             });
         }
+    </script>
+    <script>
+        $(document).ready(function() {
+            $('#membership-table').DataTable();
+            $('#baptismal-table').DataTable();
+            $('#marriage-table').DataTable();
+            $('#child-dedication-table').DataTable();
+            $('#visitor-table').DataTable();
+        });
     </script>
 </body>
 </html>

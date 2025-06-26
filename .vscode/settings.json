@@ -1,0 +1,10 @@
+{
+  "sql.linter.dialect": "mysql",
+  "sql.format.dialect": "mysql",
+  "sql.validate.enable": true,
+  "sql.linter.enable": true,
+  "sql.linter.rules": {
+    "semicolon": "error",
+    "keyword-case": "warning"
+  }
+} 
