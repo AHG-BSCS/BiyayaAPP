@@ -16,10 +16,14 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 }
 
 $current_page = 'member_contributions.php';
-$user_id = $_SESSION["user"];
+$username = $_SESSION["user"];
 $is_admin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
+<<<<<<< HEAD
 // Get user's contributions - Modified to use user_profiles table
+=======
+// Get user's contributions - Fixed to use username instead of user_id
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $stmt = $conn->prepare("
     SELECT 
         c.id,
@@ -30,6 +34,7 @@ $stmt = $conn->prepare("
         c.reference_number,
         c.status,
         c.notes,
+<<<<<<< HEAD
         up.full_name as member_name,
         up.role as member_role
     FROM contributions c
@@ -38,19 +43,33 @@ $stmt = $conn->prepare("
     ORDER BY c.contribution_date DESC
 ");
 $stmt->bind_param("s", $user_id);
+=======
+        up.full_name as member_name
+    FROM contributions c
+    JOIN user_profiles up ON c.user_id = up.user_id
+    WHERE up.username = ?
+    ORDER BY c.contribution_date DESC
+");
+$stmt->bind_param("s", $username);
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $stmt->execute();
 $contributions = $stmt->get_result();
 
-// Get total contributions
+// Get total contributions - Fixed to use username
 $stmt = $conn->prepare("
     SELECT 
-        SUM(CASE WHEN contribution_type = 'tithe' THEN amount ELSE 0 END) as total_tithe,
-        SUM(CASE WHEN contribution_type = 'offering' THEN amount ELSE 0 END) as total_offering,
-        SUM(amount) as total_contributions
-    FROM contributions 
-    WHERE user_id = ?
+        SUM(CASE WHEN c.contribution_type = 'tithe' THEN c.amount ELSE 0 END) as total_tithe,
+        SUM(CASE WHEN c.contribution_type = 'offering' THEN c.amount ELSE 0 END) as total_offering,
+        SUM(c.amount) as total_contributions
+    FROM contributions c
+    JOIN user_profiles up ON c.user_id = up.user_id
+    WHERE up.username = ?
 ");
+<<<<<<< HEAD
 $stmt->bind_param("s", $user_id);
+=======
+$stmt->bind_param("s", $username);
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $stmt->execute();
 $totals = $stmt->get_result()->fetch_assoc();
 
@@ -62,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
     $reference_number = $_POST['reference_number'];
     $notes = $_POST['notes'];
     
+<<<<<<< HEAD
     $stmt = $conn->prepare("
         INSERT INTO contributions (
             user_id, amount, contribution_type, contribution_date, 
@@ -69,13 +89,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
         ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
     ");
     $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
+=======
+    // Get the user_id from user_profiles using username
+    $stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
+    $stmt->bind_param("s", $username);
+    $stmt->execute();
+    $user_result = $stmt->get_result();
+    $user_data = $user_result->fetch_assoc();
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     
-    if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Contribution submitted successfully!";
-        header("Location: member_contributions.php");
-        exit();
+    if ($user_data) {
+        $user_id = $user_data['user_id'];
+        
+        $stmt = $conn->prepare("
+            INSERT INTO contributions (
+                user_id, amount, contribution_type, contribution_date, 
+                payment_method, reference_number, status, notes
+            ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
+        ");
+        $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
+        
+        if ($stmt->execute()) {
+            $_SESSION['success_message'] = "Contribution submitted successfully!";
+            header("Location: member_contributions.php");
+            exit();
+        } else {
+            $_SESSION['error_message'] = "Error submitting contribution. Please try again.";
+        }
     } else {
-        $_SESSION['error_message'] = "Error submitting contribution. Please try again.";
+        $_SESSION['error_message'] = "User profile not found.";
     }
 }
 
@@ -88,8 +130,12 @@ $contributions_query = "
         c.contribution_date,
         c.payment_method,
         c.reference_number,
+<<<<<<< HEAD
         up.full_name as member_name,
         up.role as member_role
+=======
+        up.full_name as member_name
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     FROM contributions c
     JOIN user_profiles up ON c.user_id = up.user_id
     ORDER BY c.contribution_date DESC
@@ -136,7 +182,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
 }
 
 // Get all users for admin dropdown - Modified to use user_profiles table
+<<<<<<< HEAD
 $users_query = "SELECT user_id, full_name FROM user_profiles WHERE role IN ('Member', 'Pastor') ORDER BY full_name";
+=======
+$users_query = "SELECT user_id, full_name FROM user_profiles WHERE role = 'Member' ORDER BY full_name";
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $users_result = $conn->query($users_query);
 $users = [];
 while ($row = $users_result->fetch_assoc()) {
@@ -791,6 +841,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         #contributionsTable.dataTable {
             visibility: visible;
         }
+<<<<<<< HEAD
 
         /* Role Badge Styles (copied from settings.php) */
         .role-badge {
@@ -813,6 +864,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #95a5a6;
             color: white;
         }
+=======
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     </style>
 </head>
 <body>
@@ -892,7 +945,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 <tr>
                                     <th>Date</th>
                                     <th>Member Name</th>
+<<<<<<< HEAD
                                     <th>Role</th>
+=======
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                     <th>Type</th>
                                     <th>Amount</th>
                                     <th>Payment Method</th>
@@ -902,6 +958,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <tbody>
                                 <?php while ($row = $all_contributions->fetch_assoc()): ?>
                                 <tr>
+<<<<<<< HEAD
                                     <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
                                     <td><?php echo htmlspecialchars($row['member_name']); ?></td>
                                     <td>
@@ -909,6 +966,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <?php echo htmlspecialchars($row['member_role']); ?>
                                         </span>
                                     </td>
+=======
+                                    <td><strong><?php echo date('M d, Y', strtotime($row['contribution_date'])); ?></strong></td>
+                                    <td><?php echo htmlspecialchars($row['member_name']); ?></td>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                     <td><?php echo ucfirst($row['contribution_type']); ?></td>
                                     <td>₱<?php echo number_format($row['amount'], 2); ?></td>
                                     <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
@@ -987,11 +1048,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 columnDefs: [
                     { width: '15%', targets: 0 }, // Date
                     { width: '20%', targets: 1 }, // Member Name
+<<<<<<< HEAD
                     { width: '10%', targets: 2 }, // Role
                     { width: '10%', targets: 3 }, // Type
                     { width: '15%', targets: 4 }, // Amount
                     { width: '15%', targets: 5 }, // Payment Method
                     { width: '25%', targets: 6 }  // Reference Number
+=======
+                    { width: '10%', targets: 2 }, // Type
+                    { width: '15%', targets: 3 }, // Amount
+                    { width: '15%', targets: 4 }, // Payment Method
+                    { width: '25%', targets: 5 }  // Reference Number
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 ],
                 autoWidth: false,
                 responsive: true

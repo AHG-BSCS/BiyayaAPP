@@ -474,7 +474,11 @@ $recent_contributions = count(array_filter($donations, function($donation) {
             
             <div class="dashboard-content">
                 <div class="card">
+<<<<<<< HEAD
                     <h3>Total Tithes</h3>
+=======
+                    <h3>Total Amount</h3>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                     <div class="amount-display">
                         <p id="amount-text">₱<?php echo number_format($total_donated, 2); ?></p>
                         <button id="toggle-amount" class="toggle-btn" title="Toggle amount visibility">

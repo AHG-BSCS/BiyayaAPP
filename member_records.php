@@ -1683,7 +1683,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                                     <button class="action-btn view-btn" id="baptismal-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
                                                         <button class="action-btn edit-btn" id="baptismal-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
+<<<<<<< HEAD
                                                         <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
+=======
+                                                        <button class="action-btn delete-btn" id="baptismal-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -3297,6 +3301,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             $('#visitor-table').DataTable();
         });
     </script>
+<<<<<<< HEAD
     <!-- Add this modal at the end of the file before </body> -->
     <div class="modal" id="delete-baptismal-modal">
         <div class="modal-content">
@@ -3387,5 +3392,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         </div>
     </div>
     
+=======
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 </body>
 </html>

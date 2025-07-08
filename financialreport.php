@@ -422,6 +422,7 @@ if ($result) {
     }
 }
 
+<<<<<<< HEAD
 // Calculate average weekly amounts for tithes and offerings only
 $sql = "
     WITH weekly_totals AS (
@@ -461,6 +462,139 @@ if ($result) {
 
 $avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
 $avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
+=======
+// Calculate average weekly amounts using Prophet for offerings
+function calculateWeeklyOfferingsProphet($conn) {
+    // Fetch weekly offerings data for the past 52 weeks
+    $sql = "
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            SUM(amount) as total
+        FROM offerings
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 52 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+        ORDER BY week ASC";
+    $result = $conn->query($sql);
+    $weekly_data = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            // Convert week to a date (start of the week)
+            $year_week = explode('-', $row['week']);
+            $year = $year_week[0];
+            $week = ltrim($year_week[1], '0') ?: 0;
+            $date = date('Y-m-d', strtotime("$year-01-01 +$week weeks"));
+            $weekly_data[] = [
+                'ds' => $date,
+                'y' => floatval($row['total'])
+            ];
+        }
+    }
+
+    // Make API call to Prophet endpoint
+    $ch = curl_init('http://localhost:5000/predict');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $weekly_data]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code === 200) {
+        $predictions = json_decode($response, true);
+        if (is_array($predictions) && !empty($predictions)) {
+            // Get predictions for the last 4 weeks
+            $last_4_weeks = array_slice($predictions, -4);
+            $total = 0;
+            $count = 0;
+            foreach ($last_4_weeks as $pred) {
+                if (isset($pred['yhat']) && $pred['yhat'] >= 0) {
+                    $total += $pred['yhat'];
+                    $count++;
+                }
+            }
+            return $count > 0 ? $total / $count : 0;
+        }
+    }
+
+    // Fallback: Calculate simple average if Prophet fails
+    $sql = "
+        SELECT 
+            AVG(total) as avg_weekly
+        FROM (
+            SELECT 
+                DATE_FORMAT(date, '%Y-%U') as week,
+                SUM(amount) as total
+            FROM offerings
+            WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+            GROUP BY DATE_FORMAT(date, '%Y-%U')
+        ) weekly";
+    $result = $conn->query($sql);
+    $row = $result->fetch_assoc();
+    return $row['avg_weekly'] ?? 0;
+}
+
+// Calculate average weekly amounts for other sources
+$sql = "
+    WITH weekly_totals AS (
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'tithes' as type,
+            SUM(amount) as total
+        FROM tithes 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+        UNION ALL
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'offerings' as type,
+            SUM(amount) as total
+        FROM offerings 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+        UNION ALL
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'bank_gifts' as type,
+            SUM(amount) as total
+        FROM bank_gifts 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+        UNION ALL
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'specified_gifts' as type,
+            SUM(amount) as total
+        FROM specified_gifts 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+    )
+    SELECT 
+        type,
+        AVG(total) as avg_weekly
+    FROM weekly_totals
+    GROUP BY type";
+
+$result = $conn->query($sql);
+$weekly_averages = [
+    'tithes' => 0,
+    'offerings' => 0,
+    'bank_gifts' => 0,
+    'specified_gifts' => 0
+];
+
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $weekly_averages[$row['type']] = $row['avg_weekly'];
+    }
+}
+
+$avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
+$avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
+$avg_weekly_bank_gifts = $weekly_averages['bank_gifts'] ?? 0;
+$avg_weekly_specified_gifts = $weekly_averages['specified_gifts'] ?? 0;
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 
 // Add debugging
 error_log("Weekly Averages: " . print_r($weekly_averages, true));
@@ -514,6 +648,7 @@ if (empty($historical_data)) {
         $month = date('Y-m', strtotime("-$i months"));
         $historical_data[$month] = 0;
     }
+<<<<<<< HEAD
 }
 
 error_log("Final Historical Data: " . print_r($historical_data, true));
@@ -753,11 +888,139 @@ if ($prophet_predictions && is_array($prophet_predictions) && count($prophet_pre
     ];
 }
 
+=======
+}
+
+error_log("Final Historical Data: " . print_r($historical_data, true));
+
+// Calculate predicted next month income using Prophet
+function getProphetPrediction($conn) {
+    // Fetch monthly data for the past 12 months
+    $sql = "
+        SELECT 
+            DATE_FORMAT(date, '%Y-%m') as month,
+            SUM(amount) as total
+        FROM (
+            SELECT date, amount FROM tithes
+            UNION ALL
+            SELECT date, amount FROM offerings
+        ) combined
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(date, '%Y-%m')
+        ORDER BY month";
+    
+    $result = $conn->query($sql);
+    $prophet_data = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $prophet_data[] = [
+                'ds' => $row['month'] . '-01',
+                'y' => floatval($row['total'])
+            ];
+        }
+    }
+
+    // Check if we have enough data points
+    if (count($prophet_data) < 3) {
+        error_log("Not enough data points for Prophet prediction");
+        return null;
+    }
+
+    // Make API call to Prophet endpoint
+    $ch = curl_init('http://localhost:5000/predict');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Add timeout
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+
+    if ($http_code === 200 && !empty($response)) {
+        $predictions = json_decode($response, true);
+        if (is_array($predictions) && !empty($predictions)) {
+            error_log("Prophet predictions received successfully");
+            
+            // Filter predictions for 2025
+            $predictions_2025 = [];
+            foreach ($predictions as $pred) {
+                $date = new DateTime($pred['ds']);
+                if ($date->format('Y') === '2025') {
+                    $predictions_2025[] = [
+                        'month' => $date->format('Y-m'),
+                        'yhat' => $pred['yhat'],
+                        'yhat_lower' => $pred['yhat_lower'],
+                        'yhat_upper' => $pred['yhat_upper']
+                    ];
+                }
+            }
+
+            // Verify we have predictions for all months
+            if (count($predictions_2025) === 12) {
+                return $predictions_2025;
+            }
+        }
+    }
+
+    error_log("Prophet prediction failed. HTTP code: " . $http_code);
+    error_log("Curl error: " . $curl_error);
+    error_log("Response: " . $response);
+    
+    // Calculate monthly averages for the past year
+    $monthly_averages = [];
+    foreach ($prophet_data as $data) {
+        $month = date('m', strtotime($data['ds']));
+        if (!isset($monthly_averages[$month])) {
+            $monthly_averages[$month] = ['total' => 0, 'count' => 0];
+        }
+        $monthly_averages[$month]['total'] += $data['y'];
+        $monthly_averages[$month]['count']++;
+    }
+
+    // Generate predictions using monthly patterns
+    $predictions_2025 = [];
+    for ($month = 1; $month <= 12; $month++) {
+        $month_key = str_pad($month, 2, '0', STR_PAD_LEFT);
+        $avg = isset($monthly_averages[$month_key]) 
+            ? $monthly_averages[$month_key]['total'] / $monthly_averages[$month_key]['count']
+            : array_sum(array_column($prophet_data, 'y')) / count($prophet_data);
+        
+        $predictions_2025[] = [
+            'month' => "2025-" . $month_key,
+            'yhat' => $avg,
+            'yhat_lower' => $avg * 0.9,
+            'yhat_upper' => $avg * 1.1
+        ];
+    }
+
+    return $predictions_2025;
+}
+
+$prophet_predictions = getProphetPrediction($conn);
+if ($prophet_predictions) {
+    $predicted_monthly = $prophet_predictions[0]['yhat'];
+    $prediction_lower = $prophet_predictions[0]['yhat_lower'] ?? ($predicted_monthly * 0.9);
+    $prediction_upper = $prophet_predictions[0]['yhat_upper'] ?? ($predicted_monthly * 1.1);
+} else {
+    $predicted_monthly = ($avg_weekly_tithes + $avg_weekly_offerings + $avg_weekly_bank_gifts + $avg_weekly_specified_gifts) * 4;
+    $prediction_lower = $predicted_monthly * 0.9;
+    $prediction_upper = $predicted_monthly * 1.1;
+}
+
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 error_log("Predicted Monthly: " . $predicted_monthly);
 error_log("Prediction Lower: " . $prediction_lower);
 error_log("Prediction Upper: " . $prediction_upper);
 error_log("Avg Weekly Tithes: " . $avg_weekly_tithes);
 error_log("Avg Weekly Offerings: " . $avg_weekly_offerings);
+<<<<<<< HEAD
+=======
+error_log("Avg Weekly Bank Gifts: " . $avg_weekly_bank_gifts);
+error_log("Avg Weekly Specified Gifts: " . $avg_weekly_specified_gifts);
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 
 // Pass the calculated values to JavaScript
 echo "<script>
@@ -765,11 +1028,19 @@ echo "<script>
     const historicalData = " . json_encode($historical_data) . ";
     const avgWeeklyTithes = " . $avg_weekly_tithes . ";
     const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
+<<<<<<< HEAD
+=======
+    const avgWeeklyBankGifts = " . $avg_weekly_bank_gifts . ";
+    const avgWeeklySpecifiedGifts = " . $avg_weekly_specified_gifts . ";
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     const predictedMonthly = " . $predicted_monthly . ";
     const predictionLower = " . $prediction_lower . ";
     const predictionUpper = " . $prediction_upper . ";
     const prophetPredictions = " . json_encode($prophet_predictions) . ";
+<<<<<<< HEAD
     const predictionSummary = " . json_encode($prediction_summary) . ";
+=======
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     
     console.log('Historical Data:', historicalData);
     console.log('Weekly Averages:', {
@@ -1570,7 +1841,11 @@ if (isset($_GET['success'])) {
                                 <?php foreach ($tithes_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
+<<<<<<< HEAD
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+=======
+                                        <td><strong><?php echo $record['date']; ?></strong></td>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
@@ -1615,7 +1890,11 @@ if (isset($_GET['success'])) {
                                 <?php foreach ($offerings_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
+<<<<<<< HEAD
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+=======
+                                        <td><strong><?php echo $record['date']; ?></strong></td>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
@@ -1662,9 +1941,15 @@ if (isset($_GET['success'])) {
                                 <?php foreach ($bank_gifts_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
+<<<<<<< HEAD
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date_deposited'])); ?></strong></td>
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date_updated'])); ?></strong></td>
+=======
+                                        <td><strong><?php echo $record['date']; ?></strong></td>
+                                        <td><strong><?php echo $record['date_deposited']; ?></strong></td>
+                                        <td><strong><?php echo $record['date_updated']; ?></strong></td>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
@@ -1712,7 +1997,11 @@ if (isset($_GET['success'])) {
                                 <?php foreach ($specified_gifts_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
+<<<<<<< HEAD
                                         <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+=======
+                                        <td><strong><?php echo $record['date']; ?></strong></td>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                         <td><?php echo htmlspecialchars($record['category']); ?></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
@@ -1742,13 +2031,18 @@ if (isset($_GET['success'])) {
                     <div class="summary-content">
                         <div class="summary-grid">
                             <div class="summary-card full-width">
+<<<<<<< HEAD
                                 <h3>Monthly Income Predictions</h3>
+=======
+                                <h3>2025 Monthly Predictions</h3>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                 <div class="prediction-chart">
                                     <canvas id="predictionChart2025"></canvas>
                                 </div>
                                 <div class="prediction-details">
                                     <div class="prediction-metric">
                                         <span class="label">Total Predicted Income</span>
+<<<<<<< HEAD
                                         <span class="value">₱<?php echo number_format($prediction_summary['total_predicted_income'], 2); ?></span>
                                     </div>
                                     <div class="prediction-metric">
@@ -1777,6 +2071,16 @@ if (isset($_GET['success'])) {
                                     <canvas id="actualVsPredictedChart"></canvas>
                                 </div>
                             </div>
+=======
+                                        <span class="value">₱<?php echo number_format(array_sum(array_column($prophet_predictions, 'yhat')), 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Average Monthly Income</span>
+                                        <span class="value">₱<?php echo number_format(array_sum(array_column($prophet_predictions, 'yhat')) / 12, 2); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                             <div class="summary-card">
                                 <h3>Next Month Income Prediction</h3>
                                 <div class="prediction-chart">
@@ -1788,12 +2092,17 @@ if (isset($_GET['success'])) {
                                         <span class="value">₱<?php echo number_format($predicted_monthly, 2); ?></span>
                                     </div>
                                     <div class="prediction-metric">
+<<<<<<< HEAD
                                         <span class="label">Confidence Range</span>
                                         <span class="value">₱<?php echo number_format($prediction_lower, 2); ?> - ₱<?php echo number_format($prediction_upper, 2); ?></span>
                                     </div>
                                     <div class="prediction-metric">
                                         <span class="label">Prediction Period</span>
                                         <span class="value"><?php echo $prophet_predictions[0]['date_formatted'] ?? $prophet_predictions[0]['month']; ?></span>
+=======
+                                        <span class="label">Range</span>
+                                        <span class="value">₱<?php echo number_format($prediction_lower, 2); ?> - ₱<?php echo number_format($prediction_upper, 2); ?></span>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                     </div>
                                 </div>
                             </div>
@@ -1803,6 +2112,30 @@ if (isset($_GET['success'])) {
                                     <canvas id="trendChart"></canvas>
                                 </div>
                             </div>
+<<<<<<< HEAD
+=======
+                            <div class="summary-card">
+                                <h3>Weekly Averages</h3>
+                                <div class="metrics-grid">
+                                    <div class="metric-item">
+                                        <span class="metric-label">Tithes</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_tithes, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Offerings</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_offerings, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Bank Gifts</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_bank_gifts, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Specified Gifts</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_specified_gifts, 2); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                         </div>
                     </div>
                 </div>
@@ -2124,14 +2457,24 @@ if (isset($_GET['success'])) {
             }, {
                 label: 'Range Low',
                 data: [predictionLower],
+<<<<<<< HEAD
                 backgroundColor: 'rgba(255, 165, 0, 0.6)',
                 borderColor: 'rgba(255, 140, 0, 1)',
+=======
+                backgroundColor: 'rgba(220, 53, 69, 0.6)', // red
+                borderColor: 'rgba(220, 53, 69, 1)', // red
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 borderWidth: 1
             }, {
                 label: 'Range High',
                 data: [predictionUpper],
+<<<<<<< HEAD
                 backgroundColor: 'rgba(220, 53, 69, 0.6)',
                 borderColor: 'rgba(220, 53, 69, 1)',
+=======
+                backgroundColor: 'rgba(54, 162, 235, 0.6)', // blue
+                borderColor: 'rgba(54, 162, 235, 1)', // blue
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 borderWidth: 1
             }]
         },
@@ -2161,6 +2504,7 @@ if (isset($_GET['success'])) {
 
     // Trend Chart
     const trendCtx = document.getElementById('trendChart').getContext('2d');
+<<<<<<< HEAD
     
     // Check if we have historical data
     if (historicalData && Object.keys(historicalData).length > 0) {
@@ -2299,6 +2643,103 @@ if (isset($_GET['success'])) {
                 chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available for comparison.</p>';
             }
             return;
+=======
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: Object.keys(historicalData),
+            datasets: [{
+                label: 'Monthly Income',
+                data: Object.values(historicalData),
+                fill: false,
+                borderColor: 'rgba(0, 139, 30, 1)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Amount'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                title: {
+                    display: true,
+                    text: 'Historical Income Trend (Last 6 Months)'
+                }
+            }
+        }
+    });
+
+    // 2025 Prediction Chart
+    const predictionCtx2025 = document.getElementById('predictionChart2025').getContext('2d');
+    new Chart(predictionCtx2025, {
+        type: 'bar',
+        data: {
+            labels: prophetPredictions.map(p => p.month),
+            datasets: [{
+                label: 'Predicted Amount',
+                data: prophetPredictions.map(p => p.yhat),
+                backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                borderColor: 'rgba(0, 100, 0, 1)',
+                borderWidth: 1
+            }, {
+                label: 'Range Low',
+                data: prophetPredictions.map(p => p.yhat_lower),
+                backgroundColor: 'rgba(220, 53, 69, 0.6)', // red
+                borderColor: 'rgba(220, 53, 69, 1)', // red
+                borderWidth: 1
+            }, {
+                label: 'Range High',
+                data: prophetPredictions.map(p => p.yhat_upper),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)', // blue
+                borderColor: 'rgba(54, 162, 235, 1)', // blue
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Amount'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
+                },
+                title: {
+                    display: true,
+                    text: '2025 Monthly Income Predictions'
+                }
+            }
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
         }
         
         // Use all months from prophetPredictions
@@ -2362,6 +2803,36 @@ if (isset($_GET['success'])) {
             }
         });
     })();
+
+    // DataTables Initialization (jQuery version)
+    $(document).ready(function() {
+        ['tithes-tbody', 'offerings-tbody', 'bank-gifts-tbody', 'specified-gifts-tbody'].forEach(function(tbodyId) {
+            var $tbody = $('#' + tbodyId);
+            if ($tbody.length) {
+                var $table = $tbody.closest('table');
+                if ($table.length) {
+                    $table.DataTable({
+                        responsive: true,
+                        paging: true,
+                        pageLength: 10,
+                        lengthMenu: [5, 10, 25, 50, 100],
+                        searching: true,
+                        ordering: true,
+                        info: true,
+                        language: {
+                            search: 'Search:',
+                            lengthMenu: 'Show _MENU_ entries',
+                            info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                            paginate: {
+                                previous: 'Prev',
+                                next: 'Next'
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    });
 
     // DataTables Initialization (jQuery version)
     $(document).ready(function() {

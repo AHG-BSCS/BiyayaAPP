@@ -1514,6 +1514,7 @@ $church_logo = getChurchLogo($conn);
     <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+<<<<<<< HEAD
             // DataTable initialization for users table
             if (window.jQuery) {
                 $('#users-table').DataTable({
@@ -1530,6 +1531,31 @@ $church_logo = getChurchLogo($conn);
                     ],
                     autoWidth: false,
                     responsive: true
+=======
+            // Prevent table movement
+            const usersTable = document.getElementById('users-table');
+            if (usersTable) {
+                // Lock table dimensions
+                usersTable.style.width = '100%';
+                usersTable.style.tableLayout = 'fixed';
+                usersTable.style.position = 'relative';
+                
+                // Prevent any dynamic changes
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                            // Revert any style changes that might cause movement
+                            usersTable.style.width = '100%';
+                            usersTable.style.tableLayout = 'fixed';
+                            usersTable.style.position = 'relative';
+                        }
+                    });
+                });
+                
+                observer.observe(usersTable, {
+                    attributes: true,
+                    attributeFilter: ['style']
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 });
             }
             
@@ -1624,6 +1650,26 @@ $church_logo = getChurchLogo($conn);
             document.getElementById('delete_user_id').value = id;
             modal.classList.add('show');
         }
+<<<<<<< HEAD
+=======
+        
+        // Restore search functionality
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const searchQuery = this.value.trim();
+                if (searchQuery.length === 0) {
+                    window.location.href = 'settings.php';
+                    return;
+                }
+                searchTimeout = setTimeout(() => {
+                    window.location.href = 'settings.php?search=' + encodeURIComponent(searchQuery);
+                }, 300);
+            });
+        }
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     </script>
 </body>
 </html>

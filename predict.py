@@ -72,6 +72,7 @@ def predict():
         logger.info("Fitting Prophet model...")
         model.fit(df)
         
+<<<<<<< HEAD
         # Make future predictions specifically for 2025
         # Create future dataframe for all months of 2025
         future_dates = pd.date_range(start='2025-01-01', end='2025-12-31', freq='MS')
@@ -82,6 +83,14 @@ def predict():
         
         # Get only the predictions for 2025
         predictions_2025 = forecast[forecast['ds'].dt.year == 2025][['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+=======
+        # Make future predictions
+        future = model.make_future_dataframe(periods=12, freq='M')
+        forecast = model.predict(future)
+        
+        # Get all predictions for 2025
+        forecast_data = forecast[forecast['ds'].dt.year == 2025][['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+>>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
         
         # Convert to dictionary format
         result = []
