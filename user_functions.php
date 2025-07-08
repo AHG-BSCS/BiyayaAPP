@@ -16,7 +16,8 @@ function getUserProfile($conn, $username) {
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
-        return $result->fetch_assoc();
+        $profile = $result->fetch_assoc();
+        return $profile;
     }
     
     // If not found by username, try to find by user_id
@@ -27,15 +28,17 @@ function getUserProfile($conn, $username) {
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
-        return $result->fetch_assoc();
+        $profile = $result->fetch_assoc();
+        return $profile;
     }
     
-    // Return default profile if user not found, but use the actual username
+    // Return default profile if user not found
     return [
         'user_id' => $username,
-        'username' => $username,  // Use the actual username from session
+        'username' => $username,
+        'full_name' => $username, // Use username as fallback for full_name
         'email' => '',
-        'role' => $_SESSION['user_role'] ?? 'Member',  // Use role from session if available
+        'role' => 'Member',  // Always default to Member if not found in database
         'profile_picture' => '',
         'created_at' => date('Y-m-d H:i:s'),
         'updated_at' => date('Y-m-d H:i:s')

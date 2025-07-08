@@ -13,85 +13,22 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     exit;
 }
 
+// Check if user is an admin
+$is_admin = ($_SESSION["user_role"] === "Administrator");
+
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Site configuration
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
-$is_admin = ($_SESSION["user"] === "admin");
 
 // Initialize session arrays if not set
 if (!isset($_SESSION['membership_records'])) {
-    $_SESSION['membership_records'] = [
-        [
-            "id" => "M001",
-            "name" => "Francis Constantino",
-            "join_date" => "2017-11-01",
-            "status" => "Active",
-            "details" => [
-                "nickname" => "Frank",
-                "address" => "123 Main St, San Pablo City",
-                "telephone" => "049-123-4567",
-                "cellphone" => "0917-123-4567",
-                "email" => "frank@example.com",
-                "civil_status" => "Single",
-                "sex" => "Male",
-                "birthday" => "1990-05-15",
-                "father_name" => "John Constantino",
-                "mother_name" => "Mary Constantino",
-                "children" => "",
-                "education" => "Bachelor's Degree",
-                "course" => "Computer Science",
-                "school" => "San Pablo Colleges",
-                "year" => "2012",
-                "company" => "Tech Corp",
-                "position" => "Software Engineer",
-                "business" => "",
-                "spiritual_birthday" => "2017-10-01",
-                "inviter" => "Pastor James",
-                "how_know" => "Through a friend",
-                "attendance_duration" => "5 years",
-                "previous_church" => "None"
-            ]
-        ],
-        [
-            "id" => "M002",
-            "name" => "Carlo",
-            "join_date" => "2004-11-01",
-            "status" => "Inactive",
-            "details" => [
-                "nickname" => "Carl",
-                "address" => "456 Elm St, San Pablo City",
-                "telephone" => "049-234-5678",
-                "cellphone" => "0927-234-5678",
-                "email" => "carlo@example.com",
-                "civil_status" => "Married",
-                "sex" => "Male",
-                "birthday" => "1985-08-20",
-                "father_name" => "Robert Carlo",
-                "mother_name" => "Susan Carlo",
-                "children" => "Anna, Ben",
-                "education" => "High School",
-                "course" => "",
-                "school" => "San Pablo High",
-                "year" => "2003",
-                "company" => "",
-                "position" => "",
-                "business" => "Retail Store",
-                "spiritual_birthday" => "2004-10-01",
-                "inviter" => "Sister Mary",
-                "how_know" => "Community event",
-                "attendance_duration" => "10 years",
-                "previous_church" => "Methodist Church"
-            ]
-        ]
-    ];
+    $_SESSION['membership_records'] = [];
 }
 if (!isset($_SESSION['baptismal_records'])) {
-    $_SESSION['baptismal_records'] = [
-        ["id" => "B001", "name" => "Quenneth Cansino", "baptism_date" => "2023-09-30", "officiant" => "Pastor James"]
-    ];
+    $_SESSION['baptismal_records'] = [];
 }
 if (!isset($_SESSION['marriage_records'])) {
     $_SESSION['marriage_records'] = [
@@ -130,6 +67,18 @@ try {
 } catch(PDOException $e) {
     $membership_records = [];
     $message = "Error fetching records: " . $e->getMessage();
+    $messageType = "danger";
+}
+
+// Fetch baptismal records from database
+try {
+    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $stmt = $conn->query("SELECT * FROM baptismal_records ORDER BY id");
+    $baptismal_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $baptismal_records = [];
+    $message = "Error fetching baptismal records: " . $e->getMessage();
     $messageType = "danger";
 }
 
@@ -228,8 +177,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $message = "New member added successfully!";
     $messageType = "success";
 
-        // Refresh the page to show the new record
-        header("Location: " . $_SERVER['PHP_SELF']);
+        // Refresh the page to show the new record and stay on baptismal tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
         exit();
 
     } catch(PDOException $e) {
@@ -358,38 +307,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_admin) {
-    // Database connection
+    $id = $_POST['id'];
+    $type = isset($_POST['type']) ? $_POST['type'] : '';
     $servername = "localhost";
     $username = "root";
     $password = "";
     $dbname = "churchdb";
-
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Store POST values in variables
-        $id = $_POST['id'];
-
-        // Prepare SQL statement
-        $sql = "DELETE FROM membership_records WHERE id = :id";
-        $stmt = $conn->prepare($sql);
-        
-        // Bind parameters
-        $stmt->bindParam(':id', $id);
-
-        // Execute the statement
-        $stmt->execute();
-
-        $message = "Member record deleted successfully!";
-        $messageType = "success";
-
-        // Refresh the page to show the updated records
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit();
-
+        if ($type === 'baptismal') {
+            $stmt = $conn->prepare("DELETE FROM baptismal_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "Baptismal record deleted successfully!";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+            exit();
+        } else if ($type === 'membership') {
+            // Existing membership delete logic
+            $stmt = $conn->prepare("SELECT name FROM membership_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $member = $stmt->fetch(PDO::FETCH_ASSOC);
+            $memberName = $member ? $member['name'] : 'Unknown Member';
+            $stmt = $conn->prepare("DELETE FROM membership_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "✅ Member record for <strong>{$memberName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF']);
+            exit();
+        }
+        // ... handle other types as needed ...
     } catch(PDOException $e) {
-        $message = "Error: " . $e->getMessage();
+        $message = "Error deleting record: " . $e->getMessage();
         $messageType = "danger";
     }
     $conn = null;
@@ -471,6 +423,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
         $id = $_POST['id'];
         $new_status = $_POST['status'];
 
+        // Get member name and current status for better messaging
+        $stmt = $conn->prepare("SELECT name, status FROM membership_records WHERE id = :id");
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        $member = $stmt->fetch(PDO::FETCH_ASSOC);
+        $memberName = $member ? $member['name'] : 'Unknown Member';
+        $oldStatus = $member ? $member['status'] : 'Unknown';
+
         // Prepare SQL statement
         $sql = "UPDATE membership_records SET status = :status WHERE id = :id";
         $stmt = $conn->prepare($sql);
@@ -482,7 +442,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
         // Execute the statement
         $stmt->execute();
 
-        $message = "Member status updated successfully!";
+        $statusIcon = $new_status === 'Active' ? '🟢' : '🔴';
+        $message = "{$statusIcon} Member status updated successfully! <strong>{$memberName}</strong> (ID: {$id}) status changed from <span class='badge badge-" . ($oldStatus === 'Active' ? 'success' : 'warning') . "'>{$oldStatus}</span> to <span class='badge badge-" . ($newStatus === 'Active' ? 'success' : 'warning') . "'>{$newStatus}</span>.";
         $messageType = "success";
 
         // Refresh the page to show the updated record
@@ -490,7 +451,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
         exit();
 
     } catch(PDOException $e) {
-        $message = "Error: " . $e->getMessage();
+        $message = "❌ Error: Unable to update member status. Please try again or contact support if the problem persists.";
         $messageType = "danger";
     }
     $conn = null;
@@ -658,6 +619,181 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
     }
     $conn = null;
 }
+
+// Handle form submissions
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $is_admin) {
+    $required_fields = [
+        'name', 'nickname', 'address', 'telephone', 'cellphone', 'email', 'civil_status', 'sex', 'birthday',
+        'father_name', 'mother_name', 'children', 'education', 'course', 'school', 'year', 'company', 'position',
+        'business', 'spiritual_birthday', 'inviter', 'how_know', 'attendance_duration', 'previous_church',
+        'baptism_date', 'officiant', 'venue'
+    ];
+    foreach ($required_fields as $field) {
+        if (!isset($_POST[$field]) || $_POST[$field] === '') {
+            $message = "Error: All fields are required. Please fill in the $field field.";
+            $messageType = "danger";
+            break;
+        }
+    }
+    if (!empty($message)) {
+        // Do not proceed if validation failed
+    } else {
+        $servername = "localhost";
+        $username = "root";
+        $password = "";
+        $dbname = "churchdb";
+        try {
+            $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+            $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM baptismal_records");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $next_id = "B" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
+            // Store POST values in variables
+            $name = $_POST['name'];
+            $nickname = $_POST['nickname'];
+            $address = $_POST['address'];
+            $telephone = $_POST['telephone'];
+            $cellphone = $_POST['cellphone'];
+            $email = $_POST['email'];
+            $civil_status = $_POST['civil_status'];
+            $sex = $_POST['sex'];
+            $birthday = $_POST['birthday'];
+            $father_name = $_POST['father_name'];
+            $mother_name = $_POST['mother_name'];
+            $children = $_POST['children'];
+            $education = $_POST['education'];
+            $course = $_POST['course'];
+            $school = $_POST['school'];
+            $year = $_POST['year'];
+            $company = $_POST['company'];
+            $position = $_POST['position'];
+            $business = $_POST['business'];
+            $spiritual_birthday = $_POST['spiritual_birthday'];
+            $inviter = $_POST['inviter'];
+            $how_know = $_POST['how_know'];
+            $attendance_duration = $_POST['attendance_duration'];
+            $previous_church = $_POST['previous_church'];
+            $baptism_date = $_POST['baptism_date'];
+            $officiant = $_POST['officiant'];
+            $venue = $_POST['venue'];
+            $sql = "INSERT INTO baptismal_records (id, name, nickname, address, telephone, cellphone, email, civil_status, sex, birthday, father_name, mother_name, children, education, course, school, year, company, position, business, spiritual_birthday, inviter, how_know, attendance_duration, previous_church, baptism_date, officiant, venue) VALUES (:id, :name, :nickname, :address, :telephone, :cellphone, :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children, :education, :course, :school, :year, :company, :position, :business, :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :baptism_date, :officiant, :venue)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':id', $next_id);
+            $stmt->bindParam(':name', $name);
+            $stmt->bindParam(':nickname', $nickname);
+            $stmt->bindParam(':address', $address);
+            $stmt->bindParam(':telephone', $telephone);
+            $stmt->bindParam(':cellphone', $cellphone);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':civil_status', $civil_status);
+            $stmt->bindParam(':sex', $sex);
+            $stmt->bindParam(':birthday', $birthday);
+            $stmt->bindParam(':father_name', $father_name);
+            $stmt->bindParam(':mother_name', $mother_name);
+            $stmt->bindParam(':children', $children);
+            $stmt->bindParam(':education', $education);
+            $stmt->bindParam(':course', $course);
+            $stmt->bindParam(':school', $school);
+            $stmt->bindParam(':year', $year);
+            $stmt->bindParam(':company', $company);
+            $stmt->bindParam(':position', $position);
+            $stmt->bindParam(':business', $business);
+            $stmt->bindParam(':spiritual_birthday', $spiritual_birthday);
+            $stmt->bindParam(':inviter', $inviter);
+            $stmt->bindParam(':how_know', $how_know);
+            $stmt->bindParam(':attendance_duration', $attendance_duration);
+            $stmt->bindParam(':previous_church', $previous_church);
+            $stmt->bindParam(':baptism_date', $baptism_date);
+            $stmt->bindParam(':officiant', $officiant);
+            $stmt->bindParam(':venue', $venue);
+            $stmt->execute();
+            $message = "New baptismal record added successfully!";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+            exit();
+        } catch(PDOException $e) {
+            $message = "Error: " . $e->getMessage();
+            $messageType = "danger";
+        }
+        $conn = null;
+    }
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $is_admin) {
+    $id = $_POST['edit_bap_id'];
+    $name = $_POST['edit_bap_name'];
+    $nickname = $_POST['edit_bap_nickname'];
+    $address = $_POST['edit_bap_address'];
+    $telephone = $_POST['edit_bap_telephone'];
+    $cellphone = $_POST['edit_bap_cellphone'];
+    $email = $_POST['edit_bap_email'];
+    $civil_status = $_POST['edit_bap_civil_status'] ?? '';
+    $sex = $_POST['edit_bap_sex'] ?? '';
+    $birthday = $_POST['edit_bap_birthday'];
+    $father_name = $_POST['edit_bap_father_name'];
+    $mother_name = $_POST['edit_bap_mother_name'];
+    $children = $_POST['edit_bap_children'];
+    $education = $_POST['edit_bap_education'];
+    $course = $_POST['edit_bap_course'];
+    $school = $_POST['edit_bap_school'];
+    $year = $_POST['edit_bap_year'];
+    $company = $_POST['edit_bap_company'];
+    $position = $_POST['edit_bap_position'];
+    $business = $_POST['edit_bap_business'];
+    $spiritual_birthday = $_POST['edit_bap_spiritual_birthday'];
+    $inviter = $_POST['edit_bap_inviter'];
+    $how_know = $_POST['edit_bap_how_know'];
+    $attendance_duration = $_POST['edit_bap_attendance_duration'];
+    $previous_church = $_POST['edit_bap_previous_church'];
+    $baptism_date = $_POST['edit_bap_baptism_date'];
+    $officiant = $_POST['edit_bap_officiant'];
+    $venue = $_POST['edit_bap_venue'];
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $stmt = $conn->prepare("UPDATE baptismal_records SET name = :name, nickname = :nickname, address = :address, telephone = :telephone, cellphone = :cellphone, email = :email, civil_status = :civil_status, sex = :sex, birthday = :birthday, father_name = :father_name, mother_name = :mother_name, children = :children, education = :education, course = :course, school = :school, year = :year, company = :company, position = :position, business = :business, spiritual_birthday = :spiritual_birthday, inviter = :inviter, how_know = :how_know, attendance_duration = :attendance_duration, previous_church = :previous_church, baptism_date = :baptism_date, officiant = :officiant, venue = :venue WHERE id = :id");
+        $stmt->bindParam(':name', $name);
+        $stmt->bindParam(':nickname', $nickname);
+        $stmt->bindParam(':address', $address);
+        $stmt->bindParam(':telephone', $telephone);
+        $stmt->bindParam(':cellphone', $cellphone);
+        $stmt->bindParam(':email', $email);
+        $stmt->bindParam(':civil_status', $civil_status);
+        $stmt->bindParam(':sex', $sex);
+        $stmt->bindParam(':birthday', $birthday);
+        $stmt->bindParam(':father_name', $father_name);
+        $stmt->bindParam(':mother_name', $mother_name);
+        $stmt->bindParam(':children', $children);
+        $stmt->bindParam(':education', $education);
+        $stmt->bindParam(':course', $course);
+        $stmt->bindParam(':school', $school);
+        $stmt->bindParam(':year', $year);
+        $stmt->bindParam(':company', $company);
+        $stmt->bindParam(':position', $position);
+        $stmt->bindParam(':business', $business);
+        $stmt->bindParam(':spiritual_birthday', $spiritual_birthday);
+        $stmt->bindParam(':inviter', $inviter);
+        $stmt->bindParam(':how_know', $how_know);
+        $stmt->bindParam(':attendance_duration', $attendance_duration);
+        $stmt->bindParam(':previous_church', $previous_church);
+        $stmt->bindParam(':baptism_date', $baptism_date);
+        $stmt->bindParam(':officiant', $officiant);
+        $stmt->bindParam(':venue', $venue);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        $message = "Baptismal record updated successfully!";
+        $messageType = "success";
+        header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+        exit();
+    } catch(PDOException $e) {
+        $message = "Error updating baptismal record: " . $e->getMessage();
+        $messageType = "danger";
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -668,6 +804,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
     <title>Member Records | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -962,53 +1099,59 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         .status-badge {
             display: inline-block;
             padding: 4px 8px;
-            border-radius: 20px;
+            border-radius: 4px;
             font-size: 12px;
             font-weight: 500;
+            text-transform: uppercase;
         }
 
         .status-active {
-            background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
+            background-color: #2ecc71;
+            color: white;
         }
 
         .status-inactive {
-            background-color: rgba(244, 67, 54, 0.1);
-            color: var(--danger-color);
+            background-color: #e74c3c;
+            color: white;
         }
 
         .action-buttons {
             display: flex;
-            gap: 5px;
+            gap: 8px;
+            justify-content: flex-start;
         }
 
         .action-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--white);
-            font-size: 12px;
-            cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s ease;
+            color: white;
         }
 
-        .action-btn:hover {
-            transform: scale(1.1);
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
         }
 
-        .view-btn {
-            background-color: var(--accent-color);
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
         }
 
-        .edit-btn {
-            background-color: var(--info-color);
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
         }
 
-        .delete-btn {
-            background-color: var(--danger-color);
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .action-btn i {
+            font-size: 14px;
         }
 
         .pagination {
@@ -1140,26 +1283,126 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         }
 
         .alert {
-            padding: 15px;
+            padding: 15px 20px;
             margin-bottom: 20px;
-            border-radius: 5px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
+            border-left: 4px solid;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            line-height: 1.5;
+            animation: slideInDown 0.3s ease-out;
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideOutUp {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
         }
 
         .alert i {
-            margin-right: 10px;
-            font-size: 20px;
+            margin-right: 12px;
+            font-size: 18px;
+            flex-shrink: 0;
         }
 
         .alert-success {
             background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
+            color: #2e7d32;
+            border-left-color: #4caf50;
         }
 
         .alert-danger {
             background-color: rgba(244, 67, 54, 0.1);
-            color: var(--danger-color);
+            color: #c62828;
+            border-left-color: #f44336;
+        }
+
+        .alert-warning {
+            background-color: rgba(255, 152, 0, 0.1);
+            color: #ef6c00;
+            border-left-color: #ff9800;
+        }
+
+        .alert-info {
+            background-color: rgba(33, 150, 243, 0.1);
+            color: #1565c0;
+            border-left-color: #2196f3;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-success {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .badge-danger {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .badge-info {
+            background-color: #2196f3;
+            color: white;
+        }
+
+        .alert strong {
+            font-weight: 600;
+        }
+
+        .alert .alert-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
+
+        .alert .alert-close {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .alert .alert-close:hover {
+            opacity: 1;
         }
 
         .view-field {
@@ -1282,6 +1525,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         .status-btn.status-inactive {
             background-color: var(--warning-color);
         }
+
+        .view-btn {
+            background-color: var(--accent-color);
+        }
+
+        .view-btn:hover {
+            background-color: rgb(0, 112, 9);
+        }
     </style>
 </head>
 <body>
@@ -1294,12 +1545,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
             <div class="sidebar-menu">
                 <ul>
                     <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                    <li><a href="events.php" class="<?php echo $current_page == 'events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
+                    <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="messages.php" class="<?php echo $current_page == 'messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
@@ -1340,16 +1591,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <a href="#marriage" data-tab="marriage">Marriage</a>
                     <a href="#child-dedication" data-tab="child-dedication">Child Dedication</a>
                     <a href="#visitor" data-tab="visitor">Visitor's Record</a>
+                    <a href="#burial" data-tab="burial">Burial Records</a>
                 </div>
 
                 <div class="tab-content">
                     <!-- Membership Tab -->
                     <div class="tab-pane active" id="membership">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-members" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-membership-btn">
                                     <i class="fas fa-user-plus"></i> Add New Member
@@ -1381,15 +1629,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             </td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="membership-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
                                                         <button class="action-btn status-btn <?php echo strtolower($record['status']) === 'active' ? 'status-active' : 'status-inactive'; ?>" 
+                                                                id="membership-status-<?php echo htmlspecialchars($record['id']); ?>"
                                                                 data-id="<?php echo htmlspecialchars($record['id']); ?>" 
                                                                 data-current-status="<?php echo htmlspecialchars($record['status']); ?>">
                                                             <i class="fas fa-toggle-on"></i>
                                                         </button>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="membership-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="membership-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1398,22 +1647,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                 </tbody>
                             </table>
                         </div>
-                        <div class="pagination">
-                            <a href="#"><i class="fas fa-angle-left"></i></a>
-                            <a href="#" class="active">1</a>
-                            <a href="#">2</a>
-                            <a href="#">3</a>
-                            <a href="#"><i class="fas fa-angle-right"></i></a>
-                        </div>
                     </div>
 
                     <!-- Baptismal Tab -->
                     <div class="tab-pane" id="baptismal">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-baptismal" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-baptismal-btn">
                                     <i class="fas fa-plus"></i> Add New Baptismal
@@ -1428,21 +1666,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                         <th>Name</th>
                                         <th>Baptism Date</th>
                                         <th>Officiant</th>
+                                        <th>Venue</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($_SESSION['baptismal_records'] as $record): ?>
+                                    <?php foreach ($baptismal_records as $record): ?>
                                         <tr>
                                             <td><?php echo $record['id']; ?></td>
                                             <td><?php echo $record['name']; ?></td>
                                             <td><?php echo $record['baptism_date']; ?></td>
                                             <td><?php echo $record['officiant']; ?></td>
+                                            <td><?php echo isset($record['venue']) ? $record['venue'] : ''; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="baptismal-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn edit-btn" id="baptismal-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
@@ -1457,10 +1697,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Marriage Tab -->
                     <div class="tab-pane" id="marriage">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-marriage" placeholder="Search by ID or Couple...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-marriage-btn">
                                     <i class="fas fa-plus"></i> Add New Marriage
@@ -1487,10 +1723,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             <td><?php echo $record['venue']; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="marriage-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="marriage-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="marriage-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1504,10 +1740,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Child Dedication Tab -->
                     <div class="tab-pane" id="child-dedication">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-child-dedication" placeholder="Search by ID or Child Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-child-dedication-btn">
                                     <i class="fas fa-plus"></i> Add New Child Dedication
@@ -1534,10 +1766,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             <td><?php echo $record['parents']; ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="child-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="child_dedication"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="child-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="child-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1551,10 +1783,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     <!-- Visitor's Record Tab -->
                     <div class="tab-pane" id="visitor">
                         <div class="action-bar">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-visitor" placeholder="Search by ID or Name...">
-                            </div>
                             <?php if ($is_admin): ?>
                                 <button class="btn" id="add-visitor-btn">
                                     <i class="fas fa-user-plus"></i> Add New Visitor
@@ -1591,15 +1819,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                             </td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="visitor-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="visitor"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="visitor-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="visitor-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Burial Records Tab -->
+                    <div class="tab-pane" id="burial">
+                        <div class="action-bar">
+                            <?php if ($is_admin): ?>
+                                <button class="btn" id="add-burial-btn">
+                                    <i class="fas fa-plus"></i> Add New Burial Record
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="burial-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name of Deceased</th>
+                                        <th>Date of Burial</th>
+                                        <th>Officiant</th>
+                                        <th>Venue</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Burial records will be listed here. You can populate this with PHP or JS as needed. -->
                                 </tbody>
                             </table>
                         </div>
@@ -2046,30 +2302,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                         <p>25 Artemio B. Fule St., San Pablo City</p>
                         <h4>Baptismal Application Form</h4>
                     </div>
-                    <form action="" method="post">
+                    <form action="" method="post" id="baptismal-form">
+                        <input type="hidden" name="add_baptismal" value="1">
+                        <input type="hidden" name="id" id="bap_id">
                         <div class="form-group">
-                            <label for="name">Name/Pangalan</label>
-                            <input type="text" id="name" name="name" class="form-control" required>
+                            <label for="bap_name">Name/Pangalan</label>
+                            <input type="text" id="bap_name" name="name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="nickname">Nickname/Palayaw</label>
-                            <input type="text" id="nickname" name="nickname" class="form-control">
+                            <label for="bap_nickname">Nickname/Palayaw</label>
+                            <input type="text" id="bap_nickname" name="nickname" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="address">Address/Tirahan</label>
-                            <input type="text" id="address" name="address" class="form-control" required>
+                            <label for="bap_address">Address/Tirahan</label>
+                            <input type="text" id="bap_address" name="address" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="telephone">Telephone No./Telepono</label>
-                            <input type="tel" id="telephone" name="telephone" class="form-control">
+                            <label for="bap_telephone">Telephone No./Telepono</label>
+                            <input type="tel" id="bap_telephone" name="telephone" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="cellphone">Cellphone No.</label>
-                            <input type="tel" id="cellphone" name="cellphone" class="form-control" required>
+                            <label for="bap_cellphone">Cellphone No.</label>
+                            <input type="tel" id="bap_cellphone" name="cellphone" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="email">E-mail</label>
-                            <input type="email" id="email" name="email" class="form-control">
+                            <label for="bap_email">E-mail</label>
+                            <input type="email" id="bap_email" name="email" class="form-control">
                         </div>
                         <div class="form-group">
                             <label>Civil Status</label>
@@ -2087,84 +2345,80 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="birthday">Birthday/Kaarawan</label>
-                            <input type="date" id="birthday" name="birthday" class="form-control" required>
+                            <label for="bap_birthday">Birthday/Kaarawan</label>
+                            <input type="date" id="bap_birthday" name="birthday" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="father_name">Father's Name/Pangalan ng Tatay</label>
-                            <input type="text" id="father_name" name="father_name" class="form-control">
+                            <label for="bap_father_name">Father's Name/Pangalan ng Tatay</label>
+                            <input type="text" id="bap_father_name" name="father_name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="mother_name">Mother's Name/Pangalan ng Nanay</label>
-                            <input type="text" id="mother_name" name="mother_name" class="form-control">
+                            <label for="bap_mother_name">Mother's Name/Pangalan ng Nanay</label>
+                            <input type="text" id="bap_mother_name" name="mother_name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="children">Name of Children/Pangalan ng Anak</label>
-                            <textarea id="children" name="children" class="form-control" rows="3"></textarea>
+                            <label for="bap_children">Name of Children/Pangalan ng Anak</label>
+                            <textarea id="bap_children" name="children" class="form-control" rows="3" required></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="education">Educational Attainment/Antas na natapos</label>
-                            <input type="text" id="education" name="education" class="form-control">
+                            <label for="bap_education">Educational Attainment/Antas na natapos</label>
+                            <input type="text" id="bap_education" name="education" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="course">Course/Kurso</label>
-                            <input type="text" id="course" name="course" class="form-control">
+                            <label for="bap_course">Course/Kurso</label>
+                            <input type="text" id="bap_course" name="course" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="school">School/Paaralan</label>
-                            <input type="text" id="school" name="school" class="form-control">
+                            <label for="bap_school">School/Paaralan</label>
+                            <input type="text" id="bap_school" name="school" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="year">Year/Taon</label>
-                            <input type="text" id="year" name="year" class="form-control">
+                            <label for="bap_year">Year/Taon</label>
+                            <input type="text" id="bap_year" name="year" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="company">If employed, what company/Pangalan ng kompanya</label>
-                            <input type="text" id="company" name="company" class="form-control">
+                            <label for="bap_company">If employed, what company/Pangalan ng kompanya</label>
+                            <input type="text" id="bap_company" name="company" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="position">Position/Title/Trabaho</label>
-                            <input type="text" id="position" name="position" class="form-control">
+                            <label for="bap_position">Position/Title/Trabaho</label>
+                            <input type="text" id="bap_position" name="position" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
-                            <input type="text" id="business" name="business" class="form-control">
+                            <label for="bap_business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
+                            <input type="text" id="bap_business" name="business" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="spiritual_birthday">Spiritual Birthday</label>
-                            <input type="date" id="spiritual_birthday" name="spiritual_birthday" class="form-control">
+                            <label for="bap_spiritual_birthday">Spiritual Birthday</label>
+                            <input type="date" id="bap_spiritual_birthday" name="spiritual_birthday" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
-                            <input type="text" id="inviter" name="inviter" class="form-control">
+                            <label for="bap_inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
+                            <input type="text" id="bap_inviter" name="inviter" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
-                            <textarea id="how_know" name="how_know" class="form-control" rows="3"></textarea>
+                            <label for="bap_how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
+                            <textarea id="bap_how_know" name="how_know" class="form-control" rows="3" required></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
-                            <input type="text" id="attendance_duration" name="attendance_duration" class="form-control">
+                            <label for="bap_attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
+                            <input type="text" id="bap_attendance_duration" name="attendance_duration" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
-                            <input type="text" id="previous_church" name="previous_church" class="form-control">
+                            <label for="bap_previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
+                            <input type="text" id="bap_previous_church" name="previous_church" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="baptism_date">Baptism Date</label>
-                            <input type="date" id="baptism_date" name="baptism_date" class="form-control" required>
+                            <label for="bap_baptism_date">Date of Baptism</label>
+                            <input type="date" id="bap_baptism_date" name="baptism_date" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="officiant">Officiating Pastor</label>
-                            <input type="text" id="officiant" class="form-control" required>
+                            <label for="bap_officiant">Officiating Pastor</label>
+                            <input type="text" id="bap_officiant" name="officiant" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="witnesses">Witnesses</label>
-                            <input type="text" id="witnesses" name="witnesses" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="venue">Venue</label>
-                            <input type="text" id="venue" class="form-control" required>
+                            <label for="bap_venue">Venue of Baptismal</label>
+                            <input type="text" id="bap_venue" name="venue" class="form-control" required>
                         </div>
                         <div class="modal-buttons">
                             <button type="submit" class="btn" name="add_baptismal">
@@ -2185,129 +2439,127 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                         <p>25 Artemio B. Fule St., San Pablo City</p>
                         <h4>Edit Baptismal Record</h4>
                     </div>
-                    <form action="" method="post">
-                        <input type="hidden" id="edit-membership-id" name="id">
+                    <form id="edit-baptismal-form" method="POST">
+                        <input type="hidden" name="edit_baptismal" value="1">
+                        <input type="hidden" name="id" id="edit_bap_id">
                         <div class="form-group">
-                            <label for="edit-membership-name">Name/Pangalan</label>
-                            <input type="text" id="edit-membership-name" name="name" class="form-control" required>
+                            <label for="edit_bap_name">Name/Pangalan</label>
+                            <input type="text" id="edit_bap_name" name="name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-join_date">Join Date</label>
-                            <input type="date" id="edit-membership-join_date" name="join_date" class="form-control" required>
+                            <label for="edit_bap_nickname">Nickname/Palayaw</label>
+                            <input type="text" id="edit_bap_nickname" name="nickname" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-status">Status</label>
-                            <select id="edit-membership-status" name="status" class="form-control" required>
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
-                            </select>
+                            <label for="edit_bap_address">Address/Tirahan</label>
+                            <input type="text" id="edit_bap_address" name="address" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-nickname">Nickname/Palayaw</label>
-                            <input type="text" id="edit-membership-nickname" name="nickname" class="form-control">
+                            <label for="edit_bap_telephone">Telephone No./Telepono</label>
+                            <input type="tel" id="edit_bap_telephone" name="telephone" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-address">Address/Tirahan</label>
-                            <input type="text" id="edit-membership-address" name="address" class="form-control" required>
+                            <label for="edit_bap_cellphone">Cellphone No.</label>
+                            <input type="tel" id="edit_bap_cellphone" name="cellphone" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-telephone">Telephone No./Telepono</label>
-                            <input type="tel" id="edit-membership-telephone" name="telephone" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-membership-cellphone">Cellphone No.</label>
-                            <input type="tel" id="edit-membership-cellphone" name="cellphone" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-membership-email">E-mail</label>
-                            <input type="email" id="edit-membership-email" name="email" class="form-control">
+                            <label for="edit_bap_email">E-mail</label>
+                            <input type="email" id="edit_bap_email" name="email" class="form-control">
                         </div>
                         <div class="form-group">
                             <label>Civil Status</label>
                             <div class="radio-group">
-                                <label><input type="radio" name="civil_status" value="Single" required> Single</label>
-                                <label><input type="radio" name="civil_status" value="Married"> Married</label>
-                                <label><input type="radio" name="civil_status" value="Widowed"> Widowed</label>
+                                <label><input type="radio" name="edit_bap_civil_status" value="Single" required> Single</label>
+                                <label><input type="radio" name="edit_bap_civil_status" value="Married"> Married</label>
+                                <label><input type="radio" name="edit_bap_civil_status" value="Widowed"> Widowed</label>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Sex</label>
                             <div class="radio-group">
-                                <label><input type="radio" name="sex" value="Male" required> Male</label>
-                                <label><input type="radio" name="sex" value="Female"> Female</label>
+                                <label><input type="radio" name="edit_bap_sex" value="Male" required> Male</label>
+                                <label><input type="radio" name="edit_bap_sex" value="Female"> Female</label>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-birthday">Birthday/Kaarawan</label>
-                            <input type="date" id="edit-membership-birthday" name="birthday" class="form-control" required>
+                            <label for="edit_bap_birthday">Birthday/Kaarawan</label>
+                            <input type="date" id="edit_bap_birthday" name="birthday" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-father_name">Father's Name/Pangalan ng Tatay</label>
-                            <input type="text" id="edit-membership-father_name" name="father_name" class="form-control">
+                            <label for="edit_bap_father_name">Father's Name/Pangalan ng Tatay</label>
+                            <input type="text" id="edit_bap_father_name" name="father_name" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-mother_name">Mother's Name/Pangalan ng Nanay</label>
-                            <input type="text" id="edit-membership-mother_name" name="mother_name" class="form-control">
+                            <label for="edit_bap_mother_name">Mother's Name/Pangalan ng Nanay</label>
+                            <input type="text" id="edit_bap_mother_name" name="mother_name" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-children">Name of Children/Pangalan ng Anak</label>
-                            <textarea id="edit-membership-children" name="children" class="form-control" rows="3"></textarea>
+                            <label for="edit_bap_children">Name of Children/Pangalan ng Anak</label>
+                            <textarea id="edit_bap_children" name="children" class="form-control" rows="3"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-education">Educational Attainment/Antas na natapos</label>
-                            <input type="text" id="edit-membership-education" name="education" class="form-control">
+                            <label for="edit_bap_education">Educational Attainment/Antas na natapos</label>
+                            <input type="text" id="edit_bap_education" name="education" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-course">Course/Kurso</label>
-                            <input type="text" id="edit-membership-course" name="course" class="form-control">
+                            <label for="edit_bap_course">Course/Kurso</label>
+                            <input type="text" id="edit_bap_course" name="course" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-school">School/Paaralan</label>
-                            <input type="text" id="edit-membership-school" name="school" class="form-control">
+                            <label for="edit_bap_school">School/Paaralan</label>
+                            <input type="text" id="edit_bap_school" name="school" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-year">Year/Taon</label>
-                            <input type="text" id="edit-membership-year" name="year" class="form-control">
+                            <label for="edit_bap_year">Year/Taon</label>
+                            <input type="text" id="edit_bap_year" name="year" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-company">If employed, what company/Pangalan ng kompanya</label>
-                            <input type="text" id="edit-membership-company" name="company" class="form-control">
+                            <label for="edit_bap_company">If employed, what company/Pangalan ng kompanya</label>
+                            <input type="text" id="edit_bap_company" name="company" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-position">Position/Title/Trabaho</label>
-                            <input type="text" id="edit-membership-position" name="position" class="form-control">
+                            <label for="edit_bap_position">Position/Title/Trabaho</label>
+                            <input type="text" id="edit_bap_position" name="position" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
-                            <input type="text" id="edit-membership-business" name="business" class="form-control">
+                            <label for="edit_bap_business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
+                            <input type="text" id="edit_bap_business" name="business" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-spiritual_birthday">Spiritual Birthday</label>
-                            <input type="date" id="edit-membership-spiritual_birthday" name="spiritual_birthday" class="form-control">
+                            <label for="edit_bap_spiritual_birthday">Spiritual Birthday</label>
+                            <input type="date" id="edit_bap_spiritual_birthday" name="spiritual_birthday" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
-                            <input type="text" id="edit-membership-inviter" name="inviter" class="form-control">
+                            <label for="edit_bap_inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
+                            <input type="text" id="edit_bap_inviter" name="inviter" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
-                            <textarea id="edit-membership-how_know" name="how_know" class="form-control" rows="3"></textarea>
+                            <label for="edit_bap_how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
+                            <textarea id="edit_bap_how_know" name="how_know" class="form-control" rows="3"></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
-                            <input type="text" id="edit-membership-attendance_duration" name="attendance_duration" class="form-control">
+                            <label for="edit_bap_attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
+                            <input type="text" id="edit_bap_attendance_duration" name="attendance_duration" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
-                            <input type="text" id="edit-membership-previous_church" name="previous_church" class="form-control">
+                            <label for="edit_bap_previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
+                            <input type="text" id="edit_bap_previous_church" name="previous_church" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_bap_baptism_date">Date of Baptism</label>
+                            <input type="date" id="edit_bap_baptism_date" name="baptism_date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_bap_officiant">Officiating Pastor</label>
+                            <input type="text" id="edit_bap_officiant" name="officiant" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_bap_venue">Venue of Baptismal</label>
+                            <input type="text" id="edit_bap_venue" name="venue" class="form-control" required>
                         </div>
                         <div class="modal-buttons">
-                            <button type="submit" class="btn" name="edit_membership">
-                                <i class="fas fa-save"></i> Save Changes
-                            </button>
-                            <button type="button" class="btn exit-btn" id="edit-membership-exit-btn">
-                                <i class="fas fa-times"></i> Exit
-                            </button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <button type="button" class="btn exit-btn" id="edit-baptismal-exit-btn">Exit</button>
                         </div>
                     </form>
                 </div>
@@ -2424,6 +2676,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         </main>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
         // Tab Navigation
         const tabLinks = document.querySelectorAll('.tab-navigation a');
@@ -2492,7 +2746,78 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                 openModal('view-membership-modal');
                             }
                             break;
-                        // ... other cases remain the same ...
+                        case 'baptismal':
+                            records = <?php echo json_encode($baptismal_records); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value || ''; };
+                                fill('view_bap_id', record.id);
+                                fill('view_bap_name', record.name);
+                                fill('view_bap_nickname', record.nickname);
+                                fill('view_bap_address', record.address);
+                                fill('view_bap_telephone', record.telephone);
+                                fill('view_bap_cellphone', record.cellphone);
+                                fill('view_bap_email', record.email);
+                                fill('view_bap_civil_status', record.civil_status);
+                                fill('view_bap_sex', record.sex);
+                                fill('view_bap_birthday', record.birthday);
+                                fill('view_bap_father_name', record.father_name);
+                                fill('view_bap_mother_name', record.mother_name);
+                                fill('view_bap_children', record.children);
+                                fill('view_bap_education', record.education);
+                                fill('view_bap_course', record.course);
+                                fill('view_bap_school', record.school);
+                                fill('view_bap_year', record.year);
+                                fill('view_bap_company', record.company);
+                                fill('view_bap_position', record.position);
+                                fill('view_bap_business', record.business);
+                                fill('view_bap_spiritual_birthday', record.spiritual_birthday);
+                                fill('view_bap_inviter', record.inviter);
+                                fill('view_bap_how_know', record.how_know);
+                                fill('view_bap_attendance_duration', record.attendance_duration);
+                                fill('view_bap_previous_church', record.previous_church);
+                                fill('view_bap_baptism_date', record.baptism_date);
+                                fill('view_bap_officiant', record.officiant);
+                                fill('view_bap_venue', record.venue);
+                                openModal('view-baptismal-modal');
+                            }
+                            break;
+                        case 'marriage':
+                            records = <?php echo json_encode($_SESSION['marriage_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('view-marriage-id').textContent = record.id;
+                                document.getElementById('view-marriage-couple').textContent = record.couple;
+                                document.getElementById('view-marriage-marriage_date').textContent = record.marriage_date;
+                                document.getElementById('view-marriage-venue').textContent = record.venue;
+                                openModal('view-marriage-modal');
+                            }
+                            break;
+                        case 'child_dedication':
+                            records = <?php echo json_encode($_SESSION['child_dedication_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('view-child-dedication-id').textContent = record.id;
+                                document.getElementById('view-child-dedication-child_name').textContent = record.child_name;
+                                document.getElementById('view-child-dedication-dedication_date').textContent = record.dedication_date;
+                                document.getElementById('view-child-dedication-parents').textContent = record.parents;
+                                openModal('view-child-dedication-modal');
+                            }
+                            break;
+                        case 'visitor':
+                            records = <?php echo json_encode($_SESSION['visitor_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('view-visitor-id').textContent = record.id;
+                                document.getElementById('view-visitor-name').textContent = record.name;
+                                document.getElementById('view-visitor-visit_date').textContent = record.visit_date;
+                                document.getElementById('view-visitor-contact').textContent = record.contact;
+                                document.getElementById('view-visitor-purpose').textContent = record.purpose;
+                                document.getElementById('view-visitor-invited_by').textContent = record.invited_by;
+                                document.getElementById('view-visitor-status').textContent = record.status;
+                                openModal('view-visitor-modal');
+                            }
+                            break;
                     }
                 });
             });
@@ -2505,7 +2830,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     const id = btn.getAttribute('data-id');
                     let records;
                     let record;
-                    
                     switch(recordType) {
                         case 'membership':
                             records = <?php echo json_encode($membership_records); ?>;
@@ -2541,7 +2865,80 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                                 openModal('edit-membership-modal');
                             }
                             break;
-                        // ... other cases remain the same ...
+                        case 'baptismal':
+                            records = <?php echo json_encode($baptismal_records); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                const fill = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
+                                fill('edit_bap_id', record.id);
+                                fill('edit_bap_name', record.name);
+                                fill('edit_bap_nickname', record.nickname);
+                                fill('edit_bap_address', record.address);
+                                fill('edit_bap_telephone', record.telephone);
+                                fill('edit_bap_cellphone', record.cellphone);
+                                fill('edit_bap_email', record.email);
+                                if (record.civil_status) document.querySelector(`input[name="edit_bap_civil_status"][value="${record.civil_status}"]`)?.click();
+                                if (record.sex) document.querySelector(`input[name="edit_bap_sex"][value="${record.sex}"]`)?.click();
+                                fill('edit_bap_birthday', record.birthday);
+                                fill('edit_bap_father_name', record.father_name);
+                                fill('edit_bap_mother_name', record.mother_name);
+                                fill('edit_bap_children', record.children);
+                                fill('edit_bap_education', record.education);
+                                fill('edit_bap_course', record.course);
+                                fill('edit_bap_school', record.school);
+                                fill('edit_bap_year', record.year);
+                                fill('edit_bap_company', record.company);
+                                fill('edit_bap_position', record.position);
+                                fill('edit_bap_business', record.business);
+                                fill('edit_bap_spiritual_birthday', record.spiritual_birthday);
+                                fill('edit_bap_inviter', record.inviter);
+                                fill('edit_bap_how_know', record.how_know);
+                                fill('edit_bap_attendance_duration', record.attendance_duration);
+                                fill('edit_bap_previous_church', record.previous_church);
+                                fill('edit_bap_baptism_date', record.baptism_date);
+                                fill('edit_bap_officiant', record.officiant);
+                                fill('edit_bap_venue', record.venue);
+                                openModal('edit-baptismal-modal');
+                            } else {
+                                console.log('Baptismal record not found for id:', id);
+                            }
+                            break;
+                        case 'marriage':
+                            records = <?php echo json_encode($_SESSION['marriage_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('edit-marriage-id').value = record.id;
+                                document.getElementById('edit-marriage-couple').value = record.couple;
+                                document.getElementById('edit-marriage-marriage_date').value = record.marriage_date;
+                                document.getElementById('edit-marriage-venue').value = record.venue;
+                                openModal('edit-marriage-modal');
+                            }
+                            break;
+                        case 'child_dedication':
+                            records = <?php echo json_encode($_SESSION['child_dedication_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('edit-child-dedication-id').value = record.id;
+                                document.getElementById('edit-child-dedication-child_name').value = record.child_name;
+                                document.getElementById('edit-child-dedication-dedication_date').value = record.dedication_date;
+                                document.getElementById('edit-child-dedication-parents').value = record.parents;
+                                openModal('edit-child-dedication-modal');
+                            }
+                            break;
+                        case 'visitor':
+                            records = <?php echo json_encode($_SESSION['visitor_records']); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('edit-visitor-id').value = record.id;
+                                document.getElementById('edit-visitor-name').value = record.name;
+                                document.getElementById('edit-visitor-visit_date').value = record.visit_date;
+                                document.getElementById('edit-visitor-contact').value = record.contact;
+                                document.getElementById('edit-visitor-purpose').value = record.purpose;
+                                document.getElementById('edit-visitor-invited_by').value = record.invited_by;
+                                document.getElementById('edit-visitor-status').value = record.status;
+                                openModal('edit-visitor-modal');
+                            }
+                            break;
                     }
                 });
             });
@@ -2552,6 +2949,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
             document.querySelectorAll(`.delete-btn[data-type="${recordType}"]`).forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.getAttribute('data-id');
+                    const row = btn.closest('tr');
+                    const memberName = row ? row.cells[1].textContent : 'Unknown Member';
+                    
+                    // Update modal content with member details
+                    const modal = document.getElementById('delete-confirmation-modal');
+                    const modalContent = modal.querySelector('.modal-content');
+                    const header = modalContent.querySelector('.form-header');
+                    
+                    header.innerHTML = `
+                        <h3>⚠️ Confirm Deletion</h3>
+                        <p>Are you sure you want to delete the record for <strong>${memberName}</strong> (ID: ${id})?</p>
+                        <p style="color: #f44336; font-weight: 600;">⚠️ This action cannot be undone and will permanently remove all data for this member.</p>
+                    `;
+                    
                     document.getElementById('delete-record-id').value = id;
                     document.getElementById('delete-record-type').value = recordType;
                     openModal('delete-confirmation-modal');
@@ -2582,32 +2993,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                     const currentStatus = btn.getAttribute('data-current-status');
                     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
                     
+                    // Get member name for better messaging
+                    const row = btn.closest('tr');
+                    const memberName = row ? row.cells[1].textContent : 'Unknown Member';
+                    
+                    // Update modal content with member details
+                    const modal = document.getElementById('status-change-modal');
+                    const modalContent = modal.querySelector('.modal-content');
+                    const header = modalContent.querySelector('.form-header');
+                    
+                    header.innerHTML = `
+                        <h3>Change Member Status</h3>
+                        <p>Are you sure you want to change the status of <strong>${memberName}</strong> (ID: ${id})?</p>
+                        <p>Current Status: <span class="badge badge-${currentStatus === 'Active' ? 'success' : 'warning'}">${currentStatus}</span></p>
+                        <p>New Status: <span class="badge badge-${newStatus === 'Active' ? 'success' : 'warning'}">${newStatus}</span></p>
+                    `;
+                    
                     document.getElementById('status-change-id').value = id;
                     document.getElementById('status-change-status').value = newStatus;
                     openModal('status-change-modal');
                 });
             });
         }
-        /*
-        // View Records Baptismal
-        function setupViewButtons(recordType) {
-            document.querySelectorAll(`.view-btn[data-type="${recordType}"]`).forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const od = btn.getAttribute('data-id');
-                    let records;
-                    let record;
 
-                    switch(recordtype) {
-                        case 'baptismal':
-                            records = <?php echo json_encode(value: $baptismal_records); ?>;
-                            record = records.find(r => r.id === id);
-                        if(record) {
-
-                        }
-                    }
-                })
-            })
-        } */
         // Initialize all functionality
         function initializeAllHandlers() {
             setupViewButtons('membership');
@@ -2640,15 +3048,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         // Initialize when the page loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeAllHandlers();
+            setupAlertHandling();
 
             // Add Visitor Modal
             document.getElementById('add-visitor-btn')?.addEventListener('click', () => {
                 openModal('visitor-modal');
             });
 
-            // Visitor Modal exit buttons
-            document.getElementById('visitor-exit-btn')?.addEventListener('click', () => {
-                closeModal('visitor-modal');
+            // Add Baptismal Modal
+            document.getElementById('add-baptismal-btn')?.addEventListener('click', () => {
+                openModal('baptismal-modal');
+            });
+            document.getElementById('baptismal-exit-btn')?.addEventListener('click', () => {
+                closeModal('baptismal-modal');
             });
 
             document.getElementById('view-visitor-exit-btn')?.addEventListener('click', () => {
@@ -2670,6 +3082,55 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
                 };
                 
                 printFrame.src = `visitor_certificate_template.php?id=${visitorId}`;
+            });
+
+            // Stay on baptismal tab if hash is present
+            if (window.location.hash === '#baptismal') {
+                document.querySelectorAll('.tab-navigation a').forEach(link => link.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+                document.querySelector('.tab-navigation a[data-tab="baptismal"]').classList.add('active');
+                document.getElementById('baptismal').classList.add('active');
+            }
+
+            // Hash-based tab activation FIRST
+            let hash = window.location.hash;
+            let defaultTab = 'membership';
+            if (hash && document.querySelector('.tab-navigation a[data-tab="' + hash.replace('#', '') + '"]')) {
+                defaultTab = hash.replace('#', '');
+            }
+            document.querySelectorAll('.tab-navigation a').forEach(link => link.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            document.querySelector('.tab-navigation a[data-tab="' + defaultTab + '"]').classList.add('active');
+            document.getElementById(defaultTab).classList.add('active');
+
+            // Remove the hash from the URL after activating the tab
+            if (window.location.hash) {
+                history.replaceState(null, '', window.location.pathname);
+            }
+
+            document.getElementById('edit-baptismal-exit-btn')?.addEventListener('click', function() {
+                closeModal('edit-baptismal-modal');
+            });
+            document.getElementById('view-baptismal-exit-btn')?.addEventListener('click', function() {
+                closeModal('view-baptismal-modal');
+            });
+
+            document.getElementById('print-baptismal-btn')?.addEventListener('click', function() {
+                const bapId = document.getElementById('view_bap_id').textContent.trim();
+                if (!bapId) {
+                    alert('No baptismal record ID found.');
+                    return;
+                }
+                const printFrame = document.createElement('iframe');
+                printFrame.style.display = 'none';
+                document.body.appendChild(printFrame);
+                printFrame.onload = function() {
+                    printFrame.contentWindow.print();
+                    setTimeout(() => {
+                        document.body.removeChild(printFrame);
+                    }, 1000);
+                };
+                printFrame.src = `baptismal_certificate_template.php?id=${encodeURIComponent(bapId)}`;
             });
         });
 
@@ -2723,68 +3184,208 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
             }
         });
 
-        // Baptismal Form Functionality
-        const baptismalForm = document.getElementById('baptismal-form');
-        const baptismalExitBtn = document.getElementById('baptismal-exit-btn');
-        
-        if (baptismalForm) {
-            baptismalForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-                const baptismalData = {
-                    id: generateId(),
-                    name: formData.get('name'),
-                    baptism_date: formData.get('baptism_date'),
-                    officiant: formData.get('officiant'),
-                    venue: formData.get('venue'),
-                    witnesses: formData.get('witnesses')
-                };
-                
-                // Add to session array
-                <?php
-                if (!isset($_SESSION['baptismal_records'])) {
-                    $_SESSION['baptismal_records'] = [];
+        // Enhanced Alert Handling
+        function setupAlertHandling() {
+            const alerts = document.querySelectorAll('.alert');
+            
+            alerts.forEach(alert => {
+                // Add close button if not present
+                if (!alert.querySelector('.alert-close')) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'alert-close';
+                    closeBtn.innerHTML = '×';
+                    closeBtn.setAttribute('aria-label', 'Close alert');
+                    
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'alert-actions';
+                    actionsDiv.appendChild(closeBtn);
+                    alert.appendChild(actionsDiv);
+                    
+                    closeBtn.addEventListener('click', () => {
+                        dismissAlert(alert);
+                    });
                 }
-                ?>
                 
-                // Add to table
-                const tbody = document.querySelector('#baptismal-table tbody');
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${baptismalData.id}</td>
-                    <td>${baptismalData.name}</td>
-                    <td>${baptismalData.baptism_date}</td>
-                    <td>${baptismalData.officiant}</td>
-                    <td>
-                        <button class="view-btn" data-type="baptismal" data-id="${baptismalData.id}">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="edit-btn" data-type="baptismal" data-id="${baptismalData.id}">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="delete-btn" data-type="baptismal" data-id="${baptismalData.id}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
+                // Auto-dismiss success alerts after 5 seconds
+                if (alert.classList.contains('alert-success')) {
+                    setTimeout(() => {
+                        dismissAlert(alert);
+                    }, 5000);
+                }
                 
-                // Reset form and close modal
-                this.reset();
-                closeModal('baptismal-modal');
-                
-                // Setup new buttons
-                setupViewButtons('baptismal');
-                setupEditButtons('baptismal');
-                setupDeleteButtons('baptismal');
+                // Auto-dismiss warning alerts after 8 seconds
+                if (alert.classList.contains('alert-warning')) {
+                    setTimeout(() => {
+                        dismissAlert(alert);
+                    }, 8000);
+                }
             });
         }
-        
-        if (baptismalExitBtn) {
-            baptismalExitBtn.addEventListener('click', () => {
-                closeModal('baptismal-modal');
+
+        function dismissAlert(alert) {
+            alert.style.animation = 'slideOutUp 0.3s ease-in forwards';
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 300);
+        }
+
+        // Enhanced Status Change with better user feedback
+        function setupStatusButtons() {
+            document.querySelectorAll('.status-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    const currentStatus = btn.getAttribute('data-current-status');
+                    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+                    
+                    // Get member name for better messaging
+                    const row = btn.closest('tr');
+                    const memberName = row ? row.cells[1].textContent : 'Unknown Member';
+                    
+                    // Update modal content with member details
+                    const modal = document.getElementById('status-change-modal');
+                    const modalContent = modal.querySelector('.modal-content');
+                    const header = modalContent.querySelector('.form-header');
+                    
+                    header.innerHTML = `
+                        <h3>Change Member Status</h3>
+                        <p>Are you sure you want to change the status of <strong>${memberName}</strong> (ID: ${id})?</p>
+                        <p>Current Status: <span class="badge badge-${currentStatus === 'Active' ? 'success' : 'warning'}">${currentStatus}</span></p>
+                        <p>New Status: <span class="badge badge-${newStatus === 'Active' ? 'success' : 'warning'}">${newStatus}</span></p>
+                    `;
+                    
+                    document.getElementById('status-change-id').value = id;
+                    document.getElementById('status-change-status').value = newStatus;
+                    openModal('status-change-modal');
+                });
+            });
+        }
+
+        // Enhanced Delete Confirmation with member details
+        function setupDeleteButtons(recordType) {
+            document.querySelectorAll(`.delete-btn[data-type="${recordType}"]`).forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    const row = btn.closest('tr');
+                    const memberName = row ? row.cells[1].textContent : 'Unknown Member';
+                    
+                    // Update modal content with member details
+                    const modal = document.getElementById('delete-confirmation-modal');
+                    const modalContent = modal.querySelector('.modal-content');
+                    const header = modalContent.querySelector('.form-header');
+                    
+                    header.innerHTML = `
+                        <h3>⚠️ Confirm Deletion</h3>
+                        <p>Are you sure you want to delete the record for <strong>${memberName}</strong> (ID: ${id})?</p>
+                        <p style="color: #f44336; font-weight: 600;">⚠️ This action cannot be undone and will permanently remove all data for this member.</p>
+                    `;
+                    
+                    document.getElementById('delete-record-id').value = id;
+                    document.getElementById('delete-record-type').value = recordType;
+                    openModal('delete-confirmation-modal');
+                });
             });
         }
     </script>
+    <script>
+        $(document).ready(function() {
+            $('#membership-table').DataTable();
+            $('#baptismal-table').DataTable();
+            $('#marriage-table').DataTable();
+            $('#child-dedication-table').DataTable();
+            $('#visitor-table').DataTable();
+        });
+    </script>
+    <!-- Add this modal at the end of the file before </body> -->
+    <div class="modal" id="delete-baptismal-modal">
+        <div class="modal-content">
+            <div class="form-header">
+                <h3>Confirm Deletion</h3>
+                <p>Are you sure you want to delete this baptismal record?</p>
+            </div>
+            <form method="post" id="confirm-delete-baptismal-form">
+                <input type="hidden" name="id" id="delete-baptismal-id">
+                <input type="hidden" name="delete_baptismal" value="1">
+                <div class="modal-buttons">
+                    <button type="submit" class="btn" style="background-color: var(--danger-color);">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn exit-btn" id="delete-baptismal-exit-btn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Add this JS after DOMContentLoaded -->
+    <script>
+        // Baptismal delete modal logic
+        document.querySelectorAll('.delete-baptismal-form .delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = btn.getAttribute('data-id');
+                document.getElementById('delete-baptismal-id').value = id;
+                openModal('delete-baptismal-modal');
+            });
+        });
+        document.getElementById('delete-baptismal-exit-btn').addEventListener('click', function() {
+            closeModal('delete-baptismal-modal');
+        });
+    </script>
+    <!-- View Baptismal Modal -->
+    <div class="modal" id="view-baptismal-modal">
+        <div class="modal-content">
+            <div class="form-header">
+                <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                <p>25 Artemio B. Fule St., San Pablo City</p>
+                <h4>Baptismal Record</h4>
+            </div>
+            <div class="form-group"><label>ID</label><div class="view-field" id="view_bap_id"></div></div>
+            <div class="form-group"><label>Name/Pangalan</label><div class="view-field" id="view_bap_name"></div></div>
+            <div class="form-group"><label>Nickname/Palayaw</label><div class="view-field" id="view_bap_nickname"></div></div>
+            <div class="form-group"><label>Address/Tirahan</label><div class="view-field" id="view_bap_address"></div></div>
+            <div class="form-group"><label>Telephone No./Telepono</label><div class="view-field" id="view_bap_telephone"></div></div>
+            <div class="form-group"><label>Cellphone No.</label><div class="view-field" id="view_bap_cellphone"></div></div>
+            <div class="form-group"><label>E-mail</label><div class="view-field" id="view_bap_email"></div></div>
+            <div class="form-group"><label>Civil Status</label><div class="view-field" id="view_bap_civil_status"></div></div>
+            <div class="form-group"><label>Sex</label><div class="view-field" id="view_bap_sex"></div></div>
+            <div class="form-group"><label>Birthday/Kaarawan</label><div class="view-field" id="view_bap_birthday"></div></div>
+            <div class="form-group"><label>Father's Name/Pangalan ng Tatay</label><div class="view-field" id="view_bap_father_name"></div></div>
+            <div class="form-group"><label>Mother's Name/Pangalan ng Nanay</label><div class="view-field" id="view_bap_mother_name"></div></div>
+            <div class="form-group"><label>Name of Children/Pangalan ng Anak</label><div class="view-field" id="view_bap_children"></div></div>
+            <div class="form-group"><label>Educational Attainment/Antas na natapos</label><div class="view-field" id="view_bap_education"></div></div>
+            <div class="form-group"><label>Course/Kursong Natapos</label><div class="view-field" id="view_bap_course"></div></div>
+            <div class="form-group"><label>School/Lokal ng Pag-aaral</label><div class="view-field" id="view_bap_school"></div></div>
+            <div class="form-group"><label>Year Graduated/Taon na Natapos</label><div class="view-field" id="view_bap_year"></div></div>
+            <div class="form-group"><label>If employed, what company/Pangalan ng kompanya</label><div class="view-field" id="view_bap_company"></div></div>
+            <div class="form-group"><label>Position/Title/Trabaho</label><div class="view-field" id="view_bap_position"></div></div>
+            <div class="form-group"><label>If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label><div class="view-field" id="view_bap_business"></div></div>
+            <div class="form-group"><label>Spiritual Birthday</label><div class="view-field" id="view_bap_spiritual_birthday"></div></div>
+            <div class="form-group"><label>Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label><div class="view-field" id="view_bap_inviter"></div></div>
+            <div class="form-group"><label>How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label><div class="view-field" id="view_bap_how_know"></div></div>
+            <div class="form-group"><label>How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label><div class="view-field" id="view_bap_attendance_duration"></div></div>
+            <div class="form-group"><label>Previous Church Membership?/Dating miembro ng anong simbahan?</label><div class="view-field" id="view_bap_previous_church"></div></div>
+            <div class="form-group"><label>Date of Baptism</label><div class="view-field" id="view_bap_baptism_date"></div></div>
+            <div class="form-group"><label>Officiating Pastor</label><div class="view-field" id="view_bap_officiant"></div></div>
+            <div class="form-group"><label>Venue of Baptismal</label><div class="view-field" id="view_bap_venue"></div></div>
+            <div class="modal-buttons">
+                <button type="button" class="btn print-btn" id="print-baptismal-btn">
+                    <i class="fas fa-print"></i> Print
+                </button>
+                <button type="button" class="btn exit-btn" id="view-baptismal-exit-btn">Exit</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="modal" id="edit-baptismal-modal">
+        <div class="modal-content">
+            <div class="form-header">
+                <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                <p>25 Artemio B. Fule St., San Pablo City</p>
+                <h4>Baptismal Record</h4>
+            </div>
+        </div>
+    </div>
+    
 </body>
 </html>

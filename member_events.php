@@ -400,6 +400,7 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                 <ul>
                     <li><a href="member_dashboard.php" class="<?php echo $current_page == 'member_dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
                     <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
+                    <li><a href="member_messages.php" class="<?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_prayers.php" class="<?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                 </ul>
             </div>
@@ -413,11 +414,11 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                         <?php if (!empty($user_profile['profile_picture'])): ?>
                             <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                         <?php else: ?>
-                            <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                            <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                         <?php endif; ?>
                     </div>
                     <div class="user-info">
-                        <h4><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></h4>
+                        <h4><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></h4>
                         <p><?php echo htmlspecialchars($user_profile['role'] ?? 'Member'); ?></p>
                     </div>
                     <form action="logout.php" method="post">

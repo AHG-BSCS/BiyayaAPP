@@ -62,7 +62,10 @@ if ($conn->query($sql) === TRUE) {
 $sql = "CREATE TABLE IF NOT EXISTS user_profiles (
     user_id VARCHAR(50) PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
     email VARCHAR(255) NOT NULL,
+    contact_number VARCHAR(20),
+    address TEXT,
     password VARCHAR(255) NOT NULL,
     profile_picture VARCHAR(255),
     role ENUM('Member', 'Pastor', 'Administrator') NOT NULL DEFAULT 'Member',
@@ -78,18 +81,37 @@ if ($conn->query($sql) === TRUE) {
     if ($row['count'] == 0) {
         // Insert default admin profile with hashed password
         $admin_password = password_hash('church123', PASSWORD_DEFAULT);
-        $sql = "INSERT INTO user_profiles (user_id, username, email, password, role) 
-                VALUES ('admin', 'admin', 'cocd1910@gmail.com', ?, 'Administrator')";
+        $sql = "INSERT INTO user_profiles (user_id, username, full_name, email, password, role) 
+                VALUES ('admin', 'admin', 'Administrator', 'cocd1910@gmail.com', ?, 'Administrator')";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("s", $admin_password);
         $stmt->execute();
     }
 }
 
+// Add new columns if they don't exist
+$result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'full_name'");
+if ($result->num_rows == 0) {
+    $sql = "ALTER TABLE user_profiles ADD COLUMN full_name VARCHAR(255) AFTER username";
+    $conn->query($sql);
+}
+
+$result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'contact_number'");
+if ($result->num_rows == 0) {
+    $sql = "ALTER TABLE user_profiles ADD COLUMN contact_number VARCHAR(20) AFTER email";
+    $conn->query($sql);
+}
+
+$result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'address'");
+if ($result->num_rows == 0) {
+    $sql = "ALTER TABLE user_profiles ADD COLUMN address TEXT AFTER contact_number";
+    $conn->query($sql);
+}
+
 // Add password column if it doesn't exist
 $result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'password'");
 if ($result->num_rows == 0) {
-    $sql = "ALTER TABLE user_profiles ADD COLUMN password VARCHAR(255) NOT NULL AFTER email";
+    $sql = "ALTER TABLE user_profiles ADD COLUMN password VARCHAR(255) NOT NULL AFTER address";
     $conn->query($sql);
     
     // Update admin password if it's not set

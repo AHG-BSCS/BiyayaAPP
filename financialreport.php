@@ -4,14 +4,11 @@ session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
 
-// Get church logo
-$church_logo = getChurchLogo($conn);
-
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Check if user is logged in and is admin
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user"] !== "admin") {
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Administrator") {
     header("Location: login.php");
     exit;
 }
@@ -97,7 +94,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             if ($stmt->execute()) {
                 $message = "Tithes record added successfully!";
-                // Redirect to prevent form resubmission
                 header("Location: " . $_SERVER['PHP_SELF'] . "?success=tithes");
                 exit();
             } else {
@@ -108,7 +104,77 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         $check_stmt->close();
     }
+
+    // Handle edit tithes
+    if (isset($_POST["edit_tithes"])) {
+        $id = intval($_POST["record_id"]);
+        $date = htmlspecialchars(trim($_POST["date"]));
+        $amount = floatval($_POST["amount"]);
+
+        // Check if another record with the same date exists
+        $check_sql = "SELECT id FROM tithes WHERE date = ? AND id != ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("si", $date, $id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+
+        if ($check_result->num_rows > 0) {
+            $message = "A tithes record for this date already exists!";
+            $messageType = "error";
+        } else {
+            // Update the record
+            $sql = "UPDATE tithes SET date = ?, amount = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sdi", $date, $amount, $id);
+
+            if ($stmt->execute()) {
+                $message = "Tithes record updated successfully!";
+                header("Location: " . $_SERVER['PHP_SELF'] . "?success=tithes");
+                exit();
+            } else {
+                $message = "Error updating tithes record: " . $conn->error;
+                $messageType = "error";
+            }
+            $stmt->close();
+        }
+        $check_stmt->close();
+    }
     
+    // Handle edit offerings
+    if (isset($_POST["edit_offering"])) {
+        $id = intval($_POST["record_id"]);
+        $date = htmlspecialchars(trim($_POST["date"]));
+        $amount = floatval($_POST["amount"]);
+
+        // Check if another record with the same date exists
+        $check_sql = "SELECT id FROM offerings WHERE date = ? AND id != ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("si", $date, $id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+
+        if ($check_result->num_rows > 0) {
+            $message = "An offering record for this date already exists!";
+            $messageType = "error";
+        } else {
+            // Update the record
+            $sql = "UPDATE offerings SET date = ?, amount = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sdi", $date, $amount, $id);
+
+            if ($stmt->execute()) {
+                $message = "Offering record updated successfully!";
+                header("Location: " . $_SERVER['PHP_SELF'] . "?success=offering");
+                exit();
+            } else {
+                $message = "Error updating offering record: " . $conn->error;
+                $messageType = "error";
+            }
+            $stmt->close();
+        }
+        $check_stmt->close();
+    }
+
     if (isset($_POST["add_offering"])) {
         $date = htmlspecialchars(trim($_POST["date"]));
         $amount = floatval($_POST["amount"]);
@@ -136,7 +202,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             if ($stmt->execute()) {
                 $message = "Offering record added successfully!";
-                // Redirect to prevent form resubmission
                 header("Location: " . $_SERVER['PHP_SELF'] . "?success=offering");
                 exit();
             } else {
@@ -174,12 +239,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("isssd", $next_id, $date, $date_deposited, $date_updated, $amount);
             
             if ($stmt->execute()) {
-        $message = "Bank gift record added successfully!";
-                // Redirect to prevent form resubmission
+                $message = "Bank gift record added successfully!";
                 header("Location: " . $_SERVER['PHP_SELF'] . "?success=bank_gift");
                 exit();
             } else {
                 $message = "Error adding bank gift record: " . $conn->error;
+                $messageType = "error";
+            }
+            $stmt->close();
+        }
+        $check_stmt->close();
+    } elseif (isset($_POST["edit_bank_gift"])) {
+        $id = intval($_POST["record_id"]);
+        $date = htmlspecialchars(trim($_POST["date"]));
+        $date_deposited = htmlspecialchars(trim($_POST["date_deposited"]));
+        $date_updated = htmlspecialchars(trim($_POST["date_updated"]));
+        $amount = floatval($_POST["amount"]);
+    
+        // Check if another record with the same date exists
+        $check_sql = "SELECT id FROM bank_gifts WHERE date = ? AND id != ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("si", $date, $id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+    
+        if ($check_result->num_rows > 0) {
+            $message = "A bank gift record for this date already exists!";
+            $messageType = "error";
+        } else {
+            // Update the record
+            $sql = "UPDATE bank_gifts SET date = ?, date_deposited = ?, date_updated = ?, amount = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sssdi", $date, $date_deposited, $date_updated, $amount, $id);
+    
+            if ($stmt->execute()) {
+                $message = "Bank gift record updated successfully!";
+                header("Location: " . $_SERVER['PHP_SELF'] . "?success=bank_gift");
+                exit();
+            } else {
+                $message = "Error updating bank gift record: " . $conn->error;
                 $messageType = "error";
             }
             $stmt->close();
@@ -212,12 +310,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("issd", $next_id, $date, $category, $amount);
             
             if ($stmt->execute()) {
-        $message = "Specified gift record added successfully!";
-                // Redirect to prevent form resubmission
+                $message = "Specified gift record added successfully!";
                 header("Location: " . $_SERVER['PHP_SELF'] . "?success=specified_gift");
                 exit();
             } else {
                 $message = "Error adding specified gift record: " . $conn->error;
+                $messageType = "error";
+            }
+            $stmt->close();
+        }
+        $check_stmt->close();
+    } elseif (isset($_POST["edit_specified_gift"])) {
+        $id = intval($_POST["record_id"]);
+        $date = htmlspecialchars(trim($_POST["date"]));
+        $category = htmlspecialchars(trim($_POST["category"]));
+        $amount = floatval($_POST["amount"]);
+
+        // Check if another record with the same date and category exists
+        $check_sql = "SELECT id FROM specified_gifts WHERE date = ? AND category = ? AND id != ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("ssi", $date, $category, $id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+
+        if ($check_result->num_rows > 0) {
+            $message = "A specified gift record for this date and category already exists!";
+            $messageType = "error";
+        } else {
+            // Update the record
+            $sql = "UPDATE specified_gifts SET date = ?, category = ?, amount = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssdi", $date, $category, $amount, $id);
+
+            if ($stmt->execute()) {
+                $message = "Specified gift record updated successfully!";
+                header("Location: " . $_SERVER['PHP_SELF'] . "?success=specified_gift");
+                exit();
+            } else {
+                $message = "Error updating specified gift record: " . $conn->error;
                 $messageType = "error";
             }
             $stmt->close();
@@ -230,7 +360,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $id = intval($_POST["record_id"]);
         $type = $_POST["record_type"];
         
-        // Delete the record based on type
         switch ($type) {
             case 'tithes':
                 $sql = "DELETE FROM tithes WHERE id = ?";
@@ -259,7 +388,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("i", $id);
             
             if ($stmt->execute()) {
-                // Reset auto-increment and reorder IDs
                 $conn->query("SET @count = 0");
                 $conn->query("UPDATE $table SET id = @count:= @count + 1");
                 $conn->query("ALTER TABLE $table AUTO_INCREMENT = 1");
@@ -294,180 +422,375 @@ if ($result) {
     }
 }
 
-// Calculate average weekly amounts for each source
-$sql = "SELECT 
-    (SELECT COALESCE(AVG(amount), 0) FROM tithes WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)) as avg_tithes,
-    (SELECT COALESCE(AVG(amount), 0) FROM offerings WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)) as avg_offerings,
-    (SELECT COALESCE(AVG(amount), 0) FROM bank_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)) as avg_bank_gifts,
-    (SELECT COALESCE(AVG(amount), 0) FROM specified_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)) as avg_specified_gifts";
+// Calculate average weekly amounts for tithes and offerings only
+$sql = "
+    WITH weekly_totals AS (
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'tithes' as type,
+            SUM(amount) as total
+        FROM tithes 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+        UNION ALL
+        SELECT 
+            DATE_FORMAT(date, '%Y-%U') as week,
+            'offerings' as type,
+            SUM(amount) as total
+        FROM offerings 
+        WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 4 WEEK)
+        GROUP BY DATE_FORMAT(date, '%Y-%U')
+    )
+    SELECT 
+        type,
+        AVG(total) as avg_weekly
+    FROM weekly_totals
+    GROUP BY type";
+
 $result = $conn->query($sql);
-$weekly_averages = $result->fetch_assoc();
+$weekly_averages = [
+    'tithes' => 0,
+    'offerings' => 0
+];
 
-$avg_weekly_tithes = $weekly_averages['avg_tithes'] ?? 0;
-$avg_weekly_offerings = $weekly_averages['avg_offerings'] ?? 0;
-$avg_weekly_bank_gifts = $weekly_averages['avg_bank_gifts'] ?? 0;
-$avg_weekly_specified_gifts = $weekly_averages['avg_specified_gifts'] ?? 0;
-
-// Calculate monthly totals for predictions including all sources
-$monthly_totals = [];
-$current_month = date('Y-m');
-$previous_month = date('Y-m', strtotime('-1 month'));
-
-// Calculate current month total from all sources
-$sql = "SELECT 
-    (SELECT COALESCE(SUM(amount), 0) FROM tithes WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM offerings WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM bank_gifts WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM specified_gifts WHERE DATE_FORMAT(date, '%Y-%m') = ?) as total";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("ssss", $current_month, $current_month, $current_month, $current_month);
-$stmt->execute();
-$result = $stmt->get_result();
-$monthly_totals[$current_month] = $result->fetch_assoc()['total'] ?? 0;
-
-// Calculate previous month total from all sources
-$sql = "SELECT 
-    (SELECT COALESCE(SUM(amount), 0) FROM tithes WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM offerings WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM bank_gifts WHERE DATE_FORMAT(date, '%Y-%m') = ?) +
-    (SELECT COALESCE(SUM(amount), 0) FROM specified_gifts WHERE DATE_FORMAT(date, '%Y-%m') = ?) as total";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("ssss", $previous_month, $previous_month, $previous_month, $previous_month);
-$stmt->execute();
-$result = $stmt->get_result();
-$monthly_totals[$previous_month] = $result->fetch_assoc()['total'] ?? 0;
-
-// Calculate growth rate
-$growth_rate = 0;
-if ($monthly_totals[$previous_month] > 0) {
-    $growth_rate = (($monthly_totals[$current_month] - $monthly_totals[$previous_month]) / $monthly_totals[$previous_month]) * 100;
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $weekly_averages[$row['type']] = $row['avg_weekly'];
+    }
 }
+
+$avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
+$avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
+
+// Add debugging
+error_log("Weekly Averages: " . print_r($weekly_averages, true));
 
 // Get historical data for trend analysis
-$sql = "SELECT 
-    DATE_FORMAT(date, '%Y-%m') as month,
-    SUM(amount) as total
-FROM (
-    SELECT date, amount FROM tithes
-    UNION ALL
-    SELECT date, amount FROM offerings
-    UNION ALL
-    SELECT date, amount FROM bank_gifts
-    UNION ALL
-    SELECT date, amount FROM specified_gifts
-) combined
-WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 6 MONTH)
-GROUP BY DATE_FORMAT(date, '%Y-%m')
-ORDER BY month ASC";
+$sql = "
+    WITH all_dates AS (
+        SELECT date FROM tithes
+        UNION ALL
+        SELECT date FROM offerings
+    ),
+    date_range AS (
+        SELECT 
+            MIN(date) as start_date,
+            MAX(date) as end_date
+        FROM all_dates
+    )
+    SELECT 
+        DATE_FORMAT(date, '%Y-%m') as month,
+        SUM(amount) as total
+    FROM (
+        SELECT date, amount FROM tithes
+        UNION ALL
+        SELECT date, amount FROM offerings
+    ) combined
+    WHERE date >= (SELECT start_date FROM date_range)
+    GROUP BY DATE_FORMAT(date, '%Y-%m')
+    ORDER BY month ASC";
+
+// Add debugging
+error_log("SQL Query for historical data: " . $sql);
+
 $result = $conn->query($sql);
 $historical_data = [];
-while ($row = $result->fetch_assoc()) {
-    $historical_data[$row['month']] = $row['total'];
+
+if ($result === false) {
+    error_log("SQL Error: " . $conn->error);
+} else {
+    if ($result->num_rows === 0) {
+        error_log("No historical data found");
+    }
+    while ($row = $result->fetch_assoc()) {
+        $historical_data[$row['month']] = $row['total'];
+        error_log("Month: " . $row['month'] . ", Total: " . $row['total']);
+    }
 }
 
-// Calculate predicted next month income
-$predicted_monthly = ($avg_weekly_tithes + $avg_weekly_offerings + $avg_weekly_bank_gifts + $avg_weekly_specified_gifts) * 4;
-
-// Calculate confidence level based on data quality
-$sql = "SELECT 
-    (SELECT COUNT(*) FROM tithes WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as tithes_count,
-    (SELECT COUNT(*) FROM offerings WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as offerings_count,
-    (SELECT COUNT(*) FROM bank_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as bank_gifts_count,
-    (SELECT COUNT(*) FROM specified_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as specified_gifts_count";
-$result = $conn->query($sql);
-$data_points = $result->fetch_assoc();
-
-$total_data_points = array_sum($data_points);
-$confidence_level = min(95, max(60, 70 + ($total_data_points / 20)));
-
-// Calculate prediction bounds
-$prediction_lower = $predicted_monthly * 0.9; // 10% lower bound
-$prediction_upper = $predicted_monthly * 1.1; // 10% upper bound
-
-// Pass the calculated values to JavaScript
-echo "<script>
-    const monthlyTotals = " . json_encode($monthly_totals) . ";
-    const historicalData = " . json_encode($historical_data) . ";
-    const avgWeeklyTithes = " . $avg_weekly_tithes . ";
-    const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
-    const avgWeeklyBankGifts = " . $avg_weekly_bank_gifts . ";
-    const avgWeeklySpecifiedGifts = " . $avg_weekly_specified_gifts . ";
-    const predictedMonthly = " . $predicted_monthly . ";
-    const confidenceLevel = " . $confidence_level . ";
-    const predictionLower = " . $prediction_lower . ";
-    const predictionUpper = " . $prediction_upper . ";
-    const growthRate = " . $growth_rate . ";
-</script>";
-
-// Calculate predicted next month income using weighted averages
-$predicted_monthly = ($avg_weekly_tithes + $avg_weekly_offerings + $avg_weekly_bank_gifts + $avg_weekly_specified_gifts) * 4;
-
-// Calculate confidence level based on data quality and consistency
-$sql = "SELECT 
-    (SELECT COUNT(*) FROM tithes WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as tithes_count,
-    (SELECT COUNT(*) FROM offerings WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as offerings_count,
-    (SELECT COUNT(*) FROM bank_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as bank_gifts_count,
-    (SELECT COUNT(*) FROM specified_gifts WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)) as specified_gifts_count";
-$result = $conn->query($sql);
-$data_points = $result->fetch_assoc();
-
-$total_data_points = array_sum($data_points);
-$confidence_level = min(95, max(60, 70 + ($total_data_points / 20)));
-
-// Replace the prediction calculation code with:
-$predictor = new FinancialPredictor($historical_data);
-$prediction = $predictor->predictNextMonth();
-
-$predicted_monthly = $prediction['prediction'];
-$confidence_level = $prediction['confidence'];
-$prediction_lower = $prediction['lowerBound'];
-$prediction_upper = $prediction['upperBound'];
-
-// Get Prophet predictions
-$prophet_predictions = getProphetPrediction($historical_data);
-
-if ($prophet_predictions) {
-    // Use Prophet predictions if available
-    $predicted_monthly = $prophet_predictions[0]['yhat'];
-    $confidence_level = 85; // Prophet typically has good confidence
-    $prediction_lower = $prophet_predictions[0]['yhat_lower'] ?? ($predicted_monthly * 0.9);
-    $prediction_upper = $prophet_predictions[0]['yhat_upper'] ?? ($predicted_monthly * 1.1);
+// If no data found, initialize with zeros for the last 6 months
+if (empty($historical_data)) {
+    for ($i = 5; $i >= 0; $i--) {
+        $month = date('Y-m', strtotime("-$i months"));
+        $historical_data[$month] = 0;
+    }
 }
 
-// Pass the calculated values to JavaScript
-echo "<script>
-    // Debug logging
-    console.log('Initializing chart data...');
-    const monthlyTotals = " . json_encode($monthly_totals) . ";
-    const historicalData = " . json_encode($historical_data) . ";
-    const avgWeeklyTithes = " . $avg_weekly_tithes . ";
-    const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
-    const avgWeeklyBankGifts = " . $avg_weekly_bank_gifts . ";
-    const avgWeeklySpecifiedGifts = " . $avg_weekly_specified_gifts . ";
-    const predictedMonthly = " . $predicted_monthly . ";
-    const confidenceLevel = " . $confidence_level . ";
-    const predictionLower = " . $prediction_lower . ";
-    const predictionUpper = " . $prediction_upper . ";
-    const growthRate = " . $growth_rate . ";
-    const prophetPredictions = " . json_encode($prophet_predictions) . ";
+error_log("Final Historical Data: " . print_r($historical_data, true));
+
+// Calculate predicted next month income using Prophet
+function getProphetPrediction($conn) {
+    // Fetch monthly data for all months from 2022 onward (only tithes and offerings)
+    $sql = "
+        SELECT 
+            DATE_FORMAT(date, '%Y-%m') as month,
+            SUM(amount) as total
+        FROM (
+            SELECT date, amount FROM tithes
+            UNION ALL
+            SELECT date, amount FROM offerings
+        ) combined
+        WHERE date >= '2022-01-01'
+        GROUP BY DATE_FORMAT(date, '%Y-%m')
+        ORDER BY month";
     
-    // Log the data
-    console.log('Monthly Totals:', monthlyTotals);
+    $result = $conn->query($sql);
+    $prophet_data = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $prophet_data[] = [
+                'ds' => $row['month'] . '-01',
+                'y' => floatval($row['total'])
+            ];
+        }
+    }
+
+    // Check if we have enough data points
+    if (count($prophet_data) < 3) {
+        error_log("Not enough data points for Prophet prediction. Found: " . count($prophet_data));
+        return null;
+    }
+
+    error_log("Sending " . count($prophet_data) . " data points to Prophet API (tithes and offerings only)");
+
+    // Make API call to Prophet endpoint with enhanced error handling
+    $ch = curl_init('http://localhost:5000/predict');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Increased timeout
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+
+    if ($http_code === 200 && !empty($response)) {
+        $predictions = json_decode($response, true);
+        if (is_array($predictions) && !empty($predictions)) {
+            error_log("Prophet predictions received successfully. Count: " . count($predictions));
+            
+            // Process predictions and format them properly
+            $predictions_formatted = [];
+            foreach ($predictions as $pred) {
+                $date = new DateTime($pred['ds']);
+                $predictions_formatted[] = [
+                    'month' => $date->format('Y-m'),
+                    'yhat' => $pred['yhat'],
+                    'yhat_lower' => $pred['yhat_lower'],
+                    'yhat_upper' => $pred['yhat_upper'],
+                    'date_formatted' => $date->format('F Y')
+                ];
+            }
+
+            // Sort by month to ensure proper order
+            usort($predictions_formatted, function($a, $b) {
+                return strcmp($a['month'], $b['month']);
+            });
+
+            error_log("Formatted predictions: " . json_encode($predictions_formatted));
+            return $predictions_formatted;
+        } else {
+            error_log("Invalid response format from Prophet API");
+        }
+    }
+
+    error_log("Prophet prediction failed. HTTP code: " . $http_code);
+    error_log("Curl error: " . $curl_error);
+    error_log("Response: " . $response);
+    
+    // Enhanced fallback: Calculate monthly averages with better logic (tithes and offerings only)
+    $monthly_averages = [];
+    $total_data = [];
+    
+    foreach ($prophet_data as $data) {
+        $month = date('m', strtotime($data['ds']));
+        $year = date('Y', strtotime($data['ds']));
+        $key = $year . '-' . $month;
+        
+        if (!isset($monthly_averages[$month])) {
+            $monthly_averages[$month] = ['total' => 0, 'count' => 0];
+        }
+        $monthly_averages[$month]['total'] += $data['y'];
+        $monthly_averages[$month]['count']++;
+        $total_data[] = $data['y'];
+    }
+
+    // Calculate overall average
+    $overall_avg = count($total_data) > 0 ? array_sum($total_data) / count($total_data) : 0;
+    
+    // Always predict for 2025
+    $next_year = 2025;
+    
+    // Generate predictions for the next 12 months
+    $predictions_formatted = [];
+    for ($month = 1; $month <= 12; $month++) {
+        $month_key = str_pad($month, 2, '0', STR_PAD_LEFT);
+        
+        // Use monthly average if available, otherwise use overall average
+        $avg = isset($monthly_averages[$month_key]) 
+            ? $monthly_averages[$month_key]['total'] / $monthly_averages[$month_key]['count']
+            : $overall_avg;
+        
+        // Apply seasonal adjustments for church events
+        $seasonal_factor = 1.0;
+        if ($month == 12) { // December - Christmas
+            $seasonal_factor = 1.2;
+        } elseif ($month == 4) { // April - Easter
+            $seasonal_factor = 1.15;
+        } elseif ($month == 11) { // November - Thanksgiving
+            $seasonal_factor = 1.1;
+        } elseif ($month == 1) { // January - New Year
+            $seasonal_factor = 1.05;
+        }
+        
+        $predicted_amount = $avg * $seasonal_factor;
+        
+        $predictions_formatted[] = [
+            'month' => $next_year . '-' . $month_key,
+            'yhat' => $predicted_amount,
+            'yhat_lower' => $predicted_amount * 0.85,
+            'yhat_upper' => $predicted_amount * 1.15,
+            'date_formatted' => date('F Y', strtotime($next_year . '-' . $month_key . '-01'))
+        ];
+    }
+
+    error_log("Generated fallback predictions (tithes and offerings only): " . json_encode($predictions_formatted));
+    return $predictions_formatted;
+}
+
+$prophet_predictions = getProphetPrediction($conn);
+
+// Debug: Log the predictions to see what we're getting
+if ($prophet_predictions && is_array($prophet_predictions) && count($prophet_predictions) > 0) {
+    error_log("First prediction yhat: " . $prophet_predictions[0]['yhat']);
+    error_log("All predictions: " . json_encode(array_column($prophet_predictions, 'yhat')));
+}
+
+// Process predictions and calculate summary statistics
+if ($prophet_predictions && is_array($prophet_predictions) && count($prophet_predictions) > 0) {
+    // Calculate summary statistics
+    $total_predicted_income = array_sum(array_column($prophet_predictions, 'yhat'));
+    $average_monthly_income = $total_predicted_income / count($prophet_predictions);
+    
+    // Find best and worst months
+    $best_month = array_reduce($prophet_predictions, function($carry, $item) {
+        return ($carry === null || $item['yhat'] > $carry['yhat']) ? $item : $carry;
+    });
+    
+    $worst_month = array_reduce($prophet_predictions, function($carry, $item) {
+        return ($carry === null || $item['yhat'] < $carry['yhat']) ? $item : $carry;
+    });
+    
+    // Calculate growth rate compared to recent historical data
+    $recent_historical_avg = 0;
+    if (!empty($historical_data)) {
+        $recent_months = array_slice($historical_data, -6, 6, true); // Last 6 months
+        if (!empty($recent_months)) {
+            $recent_historical_avg = array_sum($recent_months) / count($recent_months);
+        }
+    }
+    
+    $growth_rate = $recent_historical_avg > 0 ? 
+        (($average_monthly_income - $recent_historical_avg) / $recent_historical_avg * 100) : 0;
+    
+    // Set prediction values for charts
+    $predicted_monthly = $average_monthly_income; // Use average instead of first prediction
+    $prediction_lower = $prophet_predictions[0]['yhat_lower'] ?? ($predicted_monthly * 0.85);
+    $prediction_upper = $prophet_predictions[0]['yhat_upper'] ?? ($predicted_monthly * 1.15);
+    
+    // Add summary data to predictions array
+    $prediction_summary = [
+        'total_predicted_income' => $total_predicted_income,
+        'average_monthly_income' => $average_monthly_income,
+        'predicted_growth_rate' => $growth_rate,
+        'best_month' => $best_month,
+        'worst_month' => $worst_month,
+        'total_months' => count($prophet_predictions)
+    ];
+    
+} else {
+    // Generate fallback predictions if Prophet fails (tithes and offerings only)
+    $prophet_predictions = [];
+    $current_year = date('Y');
+    $next_year = 2025; // Always predict for 2025 specifically
+    
+    for ($month = 1; $month <= 12; $month++) {
+        $month_key = str_pad($month, 2, '0', STR_PAD_LEFT);
+        $avg_monthly = ($avg_weekly_tithes + $avg_weekly_offerings) * 4; // Only tithes and offerings
+        
+        // Apply seasonal adjustments
+        $seasonal_factor = 1.0;
+        if ($month == 12) $seasonal_factor = 1.2; // Christmas
+        elseif ($month == 4) $seasonal_factor = 1.15; // Easter
+        elseif ($month == 11) $seasonal_factor = 1.1; // Thanksgiving
+        elseif ($month == 1) $seasonal_factor = 1.05; // New Year
+        
+        $predicted_amount = $avg_monthly * $seasonal_factor;
+        
+        $prophet_predictions[] = [
+            'month' => $next_year . "-" . $month_key,
+            'yhat' => $predicted_amount,
+            'yhat_lower' => $predicted_amount * 0.85,
+            'yhat_upper' => $predicted_amount * 1.15,
+            'date_formatted' => date('F Y', strtotime($next_year . '-' . $month_key . '-01'))
+        ];
+    }
+    
+    $predicted_monthly = array_sum(array_column($prophet_predictions, 'yhat')) / count($prophet_predictions);
+    $prediction_lower = $predicted_monthly * 0.85;
+    $prediction_upper = $predicted_monthly * 1.15;
+    
+    $prediction_summary = [
+        'total_predicted_income' => array_sum(array_column($prophet_predictions, 'yhat')),
+        'average_monthly_income' => $predicted_monthly,
+        'predicted_growth_rate' => 0,
+        'best_month' => $prophet_predictions[0],
+        'worst_month' => $prophet_predictions[0],
+        'total_months' => 12
+    ];
+}
+
+error_log("Predicted Monthly: " . $predicted_monthly);
+error_log("Prediction Lower: " . $prediction_lower);
+error_log("Prediction Upper: " . $prediction_upper);
+error_log("Avg Weekly Tithes: " . $avg_weekly_tithes);
+error_log("Avg Weekly Offerings: " . $avg_weekly_offerings);
+
+// Pass the calculated values to JavaScript
+echo "<script>
+    console.log('Initializing chart data...');
+    const historicalData = " . json_encode($historical_data) . ";
+    const avgWeeklyTithes = " . $avg_weekly_tithes . ";
+    const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
+    const predictedMonthly = " . $predicted_monthly . ";
+    const predictionLower = " . $prediction_lower . ";
+    const predictionUpper = " . $prediction_upper . ";
+    const prophetPredictions = " . json_encode($prophet_predictions) . ";
+    const predictionSummary = " . json_encode($prediction_summary) . ";
+    
     console.log('Historical Data:', historicalData);
     console.log('Weekly Averages:', {
         tithes: avgWeeklyTithes,
-        offerings: avgWeeklyOfferings,
-        bankGifts: avgWeeklyBankGifts,
-        specifiedGifts: avgWeeklySpecifiedGifts
+        offerings: avgWeeklyOfferings
     });
     console.log('Predicted Monthly:', predictedMonthly);
-    console.log('Confidence Level:', confidenceLevel);
     console.log('Prediction Range:', {
         lower: predictionLower,
         upper: predictionUpper
     });
-    console.log('Growth Rate:', growthRate);
     console.log('Prophet Predictions:', prophetPredictions);
+    console.log('Prediction Summary:', predictionSummary);
+    
+    // Validate data before creating charts
+    if (!prophetPredictions || prophetPredictions.length === 0) {
+        console.error('No prediction data available. Charts will not be created.');
+    }
+    if (!historicalData || Object.keys(historicalData).length === 0) {
+        console.error('No historical data available. Some charts may not display properly.');
+    }
 </script>";
 
 // Function to calculate total amount from denominations
@@ -482,7 +805,7 @@ function calculate_total($denominations, $denomination_list) {
     return $total;
 }
 
-// Add this near the top of the file, after session_start()
+// Handle success messages
 if (isset($_GET['success'])) {
     switch ($_GET['success']) {
         case 'tithes':
@@ -492,203 +815,12 @@ if (isset($_GET['success'])) {
             $message = "Offering record added successfully!";
             break;
         case 'bank_gift':
-            $message = "Bank gift record added successfully!";
+            $message = "Bank gift record added or updated successfully!";
             break;
         case 'specified_gift':
-            $message = "Specified gift record added successfully!";
+            $message = "Specified gift record added or updated successfully!";
             break;
     }
-}
-
-// Add this after the session_start() and before the user profile check
-class FinancialPredictor {
-    private $historicalData;
-    private $alpha = 0.3; // Smoothing factor
-    private $seasonalPeriod = 12; // Monthly seasonal pattern
-
-    public function __construct($historicalData) {
-        $this->historicalData = $historicalData;
-    }
-
-    public function calculateExponentialSmoothing() {
-        if (empty($this->historicalData)) {
-            return [];
-        }
-
-        $smoothed = [];
-        $firstValue = reset($this->historicalData);
-        $smoothed[key($this->historicalData)] = $firstValue;
-
-        foreach ($this->historicalData as $date => $value) {
-            if ($date === key($this->historicalData)) continue;
-            $prevDate = array_key_last($smoothed);
-            $smoothed[$date] = $this->alpha * $value + (1 - $this->alpha) * $smoothed[$prevDate];
-        }
-
-        return $smoothed;
-    }
-
-    public function detectSeasonality() {
-        if (empty($this->historicalData)) {
-            return array_fill(0, $this->seasonalPeriod, 1);
-        }
-
-        $values = array_values($this->historicalData);
-        $n = count($values);
-        if ($n < $this->seasonalPeriod * 2) {
-            return array_fill(0, $this->seasonalPeriod, 1);
-        }
-
-        $seasonalFactors = array_fill(0, $this->seasonalPeriod, 0);
-        $seasonalCounts = array_fill(0, $this->seasonalPeriod, 0);
-
-        for ($i = 0; $i < $n; $i++) {
-            $seasonalIndex = $i % $this->seasonalPeriod;
-            $seasonalFactors[$seasonalIndex] += $values[$i];
-            $seasonalCounts[$seasonalIndex]++;
-        }
-
-        for ($i = 0; $i < $this->seasonalPeriod; $i++) {
-            if ($seasonalCounts[$i] > 0) {
-                $seasonalFactors[$i] /= $seasonalCounts[$i];
-            } else {
-                $seasonalFactors[$i] = 1;
-            }
-        }
-
-        return $seasonalFactors;
-    }
-
-    public function predictNextMonth() {
-        if (empty($this->historicalData)) {
-            return [
-                'prediction' => 0,
-                'lowerBound' => 0,
-                'upperBound' => 0,
-                'confidence' => 60
-            ];
-        }
-
-        $smoothed = $this->calculateExponentialSmoothing();
-        if (empty($smoothed)) {
-            return [
-                'prediction' => 0,
-                'lowerBound' => 0,
-                'upperBound' => 0,
-                'confidence' => 60
-            ];
-        }
-
-        $seasonalFactors = $this->detectSeasonality();
-        
-        $lastDate = array_key_last($smoothed);
-        $lastValue = end($smoothed);
-        
-        // Calculate trend
-        $trend = 0;
-        if (count($smoothed) > 1) {
-            $firstValue = reset($smoothed);
-            $trend = ($lastValue - $firstValue) / (count($smoothed) - 1);
-        }
-
-        // Predict next value with seasonality
-        $nextMonthIndex = (count($smoothed) % $this->seasonalPeriod);
-        $seasonalFactor = $seasonalFactors[$nextMonthIndex] ?? 1;
-        
-        $prediction = $lastValue + $trend;
-        $prediction *= $seasonalFactor;
-
-        // Calculate confidence interval
-        $stdDev = $this->calculateStandardDeviation();
-        $confidenceInterval = 1.96 * $stdDev; // 95% confidence interval
-
-        // Ensure prediction is not negative
-        $prediction = max(0, $prediction);
-
-        return [
-            'prediction' => $prediction,
-            'lowerBound' => max(0, $prediction - $confidenceInterval),
-            'upperBound' => $prediction + $confidenceInterval,
-            'confidence' => min(95, max(60, 100 - ($stdDev / max(0.01, $prediction) * 100)))
-        ];
-    }
-
-    private function calculateStandardDeviation() {
-        if (empty($this->historicalData)) {
-            return 0;
-        }
-
-        $values = array_values($this->historicalData);
-        $n = count($values);
-        
-        if ($n <= 1) {
-            return 0;
-        }
-
-        $mean = array_sum($values) / $n;
-        $squaredDiffs = array_map(function($value) use ($mean) {
-            return pow($value - $mean, 2);
-        }, $values);
-        
-        return sqrt(array_sum($squaredDiffs) / $n);
-    }
-}
-
-// Add this after the FinancialPredictor class
-function getProphetPrediction($historical_data) {
-    global $conn; // Use the global database connection
-    
-    // Format data for Prophet
-    $prophet_data = [];
-    
-    // Get tithes and offerings data
-    $sql = "SELECT 
-        DATE_FORMAT(date, '%Y-%m') as month,
-        SUM(CASE WHEN source = 'tithes' THEN amount ELSE 0 END) as tithes_amount,
-        SUM(CASE WHEN source = 'offerings' THEN amount ELSE 0 END) as offerings_amount
-    FROM (
-        SELECT date, amount, 'tithes' as source FROM tithes
-        UNION ALL
-        SELECT date, amount, 'offerings' as source FROM offerings
-    ) combined
-    WHERE date >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH)
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
-    ORDER BY month";
-    
-    $result = $conn->query($sql);
-    while ($row = $result->fetch_assoc()) {
-        $prophet_data[] = [
-            'ds' => $row['month'] . '-01', // Add day to make it a full date
-            'y' => floatval($row['tithes_amount'] + $row['offerings_amount'])
-        ];
-    }
-
-    // Make API call to Python endpoint
-    $ch = curl_init('http://localhost:5000/predict');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200) {
-        $predictions = json_decode($response, true);
-        if (is_array($predictions) && !empty($predictions)) {
-            // Log the predictions for debugging
-            error_log("Prophet predictions: " . print_r($predictions, true));
-            return $predictions;
-        }
-    }
-
-    // Log the error if prediction failed
-    error_log("Prophet prediction failed. HTTP code: " . $http_code);
-    error_log("Response: " . $response);
-    
-    // Fallback to simple prediction if API fails
-    return null;
 }
 ?>
 
@@ -697,9 +829,10 @@ function getProphetPrediction($historical_data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Reports | <?php echo $church_name; ?></title>
-    <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
+    <title>Financial Reports - <?php echo $church_name; ?></title>
+    <link rel="icon" type="image/png" href="logo/cocd_icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -854,11 +987,11 @@ function getProphetPrediction($historical_data) {
         .logout-btn {
             background-color: #f0f0f0;
             color: var(--primary-color);
+            border: none;
             padding: 8px 15px;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
-            border: 1px solid #ddd;
         }
 
         .logout-btn:hover {
@@ -1100,56 +1233,41 @@ function getProphetPrediction($historical_data) {
 
         .action-buttons {
             display: flex;
-            gap: 5px;
+            gap: 8px;
+            justify-content: flex-start;
         }
 
         .action-btn {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--white);
-            font-size: 12px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            border: 1px solid #000;
-            position: relative;
-            overflow: hidden;
+            transition: all 0.2s ease;
+            color: white;
         }
 
-        .action-btn::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(
-                to bottom,
-                rgba(255, 255, 255, 0.2) 0%,
-                rgba(255, 255, 255, 0) 50%,
-                rgba(0, 0, 0, 0.1) 50%,
-                rgba(0, 0, 0, 0) 100%
-            );
-            transform: rotate(45deg);
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
         }
 
-        .action-btn:hover {
-            transform: scale(1.1);
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
         }
 
-        .view-btn {
-            background-color: var(--accent-color);
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
         }
 
-        .edit-btn {
-            background-color: var(--info-color);
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
         }
 
-        .delete-btn {
-            background-color: var(--danger-color);
+        .action-btn i {
+            font-size: 14px;
         }
 
         .summary-content {
@@ -1179,6 +1297,12 @@ function getProphetPrediction($historical_data) {
         .prediction-chart, .trend-chart {
             height: 300px;
             margin-bottom: 20px;
+            position: relative;
+        }
+
+        .prediction-chart canvas, .trend-chart canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         .prediction-details {
@@ -1204,6 +1328,14 @@ function getProphetPrediction($historical_data) {
         .prediction-metric .value {
             font-weight: bold;
             color: var(--accent-color);
+        }
+
+        .prediction-metric .value.positive {
+            color: #28a745;
+        }
+
+        .prediction-metric .value.negative {
+            color: #dc3545;
         }
 
         .metrics-grid {
@@ -1344,13 +1476,24 @@ function getProphetPrediction($historical_data) {
         .pagination-btn:not(:disabled):hover {
             background: rgba(0, 139, 30, 0.1);
         }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card.full-width {
+            grid-column: 1 / -1;
+        }
     </style>
 </head>
 <body>
 <div class="dashboard-container">
     <aside class="sidebar">
         <div class="sidebar-header">
-            <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo">
+            <img src="logo/cocd_icon.png" alt="Church Logo">
             <h3><?php echo $church_name; ?></h3>
         </div>
         <div class="sidebar-menu">
@@ -1361,7 +1504,7 @@ function getProphetPrediction($historical_data) {
                 <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                 <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                 <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                 <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
             </ul>
         </div>
@@ -1427,14 +1570,15 @@ function getProphetPrediction($historical_data) {
                                 <?php foreach ($tithes_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
-                                        <td><?php echo $record['date']; ?></td>
-                                        <td><?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="tithes">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="tithes">
+                                                <button class="action-btn edit-btn" 
+                                                        data-id="<?php echo $record['id']; ?>" 
+                                                        data-type="tithes"
+                                                        data-date="<?php echo $record['date']; ?>"
+                                                        data-amount="<?php echo $record['amount']; ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="tithes">
@@ -1471,14 +1615,15 @@ function getProphetPrediction($historical_data) {
                                 <?php foreach ($offerings_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
-                                        <td><?php echo $record['date']; ?></td>
-                                        <td><?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="offerings">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="offerings">
+                                                <button class="action-btn edit-btn" 
+                                                        data-id="<?php echo $record['id']; ?>" 
+                                                        data-type="offerings"
+                                                        data-date="<?php echo $record['date']; ?>"
+                                                        data-amount="<?php echo $record['amount']; ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="offerings">
@@ -1517,16 +1662,19 @@ function getProphetPrediction($historical_data) {
                                 <?php foreach ($bank_gifts_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
-                                        <td><?php echo $record['date']; ?></td>
-                                        <td><?php echo $record['date_deposited']; ?></td>
-                                        <td><?php echo $record['date_updated']; ?></td>
-                                        <td><?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_deposited'])); ?></strong></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_updated'])); ?></strong></td>
+                                        <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="bank-gifts">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="bank-gifts">
+                                                <button class="action-btn edit-btn" 
+                                                        data-id="<?php echo $record['id']; ?>" 
+                                                        data-type="bank-gifts"
+                                                        data-date="<?php echo $record['date']; ?>"
+                                                        data-date-deposited="<?php echo $record['date_deposited']; ?>"
+                                                        data-date-updated="<?php echo $record['date_updated']; ?>"
+                                                        data-amount="<?php echo $record['amount']; ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="bank-gifts">
@@ -1564,15 +1712,17 @@ function getProphetPrediction($historical_data) {
                                 <?php foreach ($specified_gifts_records as $record): ?>
                                     <tr>
                                         <td><?php echo $record['id']; ?></td>
-                                        <td><?php echo $record['date']; ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
                                         <td><?php echo htmlspecialchars($record['category']); ?></td>
-                                        <td><?php echo number_format($record['amount'], 2); ?></td>
+                                        <td>₱<?php echo number_format($record['amount'], 2); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <button class="action-btn view-btn" data-id="<?php echo $record['id']; ?>" data-type="specified-gifts">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="action-btn edit-btn" data-id="<?php echo $record['id']; ?>" data-type="specified-gifts">
+                                                <button class="action-btn edit-btn" 
+                                                        data-id="<?php echo $record['id']; ?>" 
+                                                        data-type="specified-gifts"
+                                                        data-date="<?php echo $record['date']; ?>"
+                                                        data-category="<?php echo htmlspecialchars($record['category']); ?>"
+                                                        data-amount="<?php echo $record['amount']; ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="specified-gifts">
@@ -1591,576 +1741,656 @@ function getProphetPrediction($historical_data) {
                 <div class="tab-pane" id="summary">
                     <div class="summary-content">
                         <div class="summary-grid">
+                            <div class="summary-card full-width">
+                                <h3>Monthly Income Predictions</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="predictionChart2025"></canvas>
+                                </div>
+                                <div class="prediction-details">
+                                    <div class="prediction-metric">
+                                        <span class="label">Total Predicted Income</span>
+                                        <span class="value">₱<?php echo number_format($prediction_summary['total_predicted_income'], 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Average Monthly Income</span>
+                                        <span class="value">₱<?php echo number_format($prediction_summary['average_monthly_income'], 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Predicted Growth Rate</span>
+                                        <span class="value <?php echo $prediction_summary['predicted_growth_rate'] >= 0 ? 'positive' : 'negative'; ?>">
+                                            <?php echo ($prediction_summary['predicted_growth_rate'] >= 0 ? '+' : '') . number_format($prediction_summary['predicted_growth_rate'], 1); ?>%
+                                        </span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Best Month</span>
+                                        <span class="value"><?php echo $prediction_summary['best_month']['date_formatted'] ?? $prediction_summary['best_month']['month']; ?> (₱<?php echo number_format($prediction_summary['best_month']['yhat'], 2); ?>)</span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Worst Month</span>
+                                        <span class="value"><?php echo $prediction_summary['worst_month']['date_formatted'] ?? $prediction_summary['worst_month']['month']; ?> (₱<?php echo number_format($prediction_summary['worst_month']['yhat'], 2); ?>)</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="summary-card full-width">
+                                <h3>Actual Income vs Predicted Amount</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="actualVsPredictedChart"></canvas>
+                                </div>
+                            </div>
                             <div class="summary-card">
-                                <h3>Monthly Income Prediction</h3>
+                                <h3>Next Month Income Prediction</h3>
                                 <div class="prediction-chart">
                                     <canvas id="predictionChart"></canvas>
                                 </div>
                                 <div class="prediction-details">
                                     <div class="prediction-metric">
-                                        <span class="label">Predicted Monthly Income:</span>
-                                        <span class="value" id="predictedIncome">0.00</span>
+                                        <span class="label">Predicted Amount</span>
+                                        <span class="value">₱<?php echo number_format($predicted_monthly, 2); ?></span>
                                     </div>
                                     <div class="prediction-metric">
-                                        <span class="label">Confidence Level:</span>
-                                        <span class="value" id="confidenceLevel">0%</span>
+                                        <span class="label">Confidence Range</span>
+                                        <span class="value">₱<?php echo number_format($prediction_lower, 2); ?> - ₱<?php echo number_format($prediction_upper, 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Prediction Period</span>
+                                        <span class="value"><?php echo $prophet_predictions[0]['date_formatted'] ?? $prophet_predictions[0]['month']; ?></span>
                                     </div>
                                 </div>
                             </div>
-                            
                             <div class="summary-card">
-                                <h3>Historical Trends</h3>
+                                <h3>Historical Income Trend</h3>
                                 <div class="trend-chart">
                                     <canvas id="trendChart"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="summary-card">
-                                <h3>Key Metrics</h3>
-                                <div class="metrics-grid">
-                                    <div class="metric-item">
-                                        <span class="metric-label">Average Weekly Tithes</span>
-                                        <span class="metric-value" id="avgTithes">0.00</span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Average Weekly Offerings</span>
-                                        <span class="metric-value" id="avgOfferings">0.00</span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Total Monthly Income</span>
-                                        <span class="metric-value" id="totalMonthly">0.00</span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Growth Rate</span>
-                                        <span class="metric-value" id="growthRate">0%</span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Tithes Form Modal -->
+            <div id="tithes-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="tithes-modal-title">Add New Tithes</h3>
+                        <span class="close">×</span>
+                    </div>
+                    <form id="tithes-form" method="post" action="">
+                        <input type="hidden" name="record_id" id="tithes-record-id">
+                        <div class="form-group">
+                            <label for="tithes-date">Date</label>
+                            <input type="date" class="form-control" id="tithes-date" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="tithes-amount">Amount ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="tithes-amount" name="amount" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-tithes">Cancel</button>
+                            <button type="submit" class="btn btn-primary" name="add_tithes" id="tithes-submit-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Offerings Form Modal -->
+            <div id="offering-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="offering-modal-title">Add New Offering</h3>
+                        <span class="close">×</span>
+                    </div>
+                    <form id="offering-form" method="post" action="">
+                        <input type="hidden" name="record_id" id="offering-record-id">
+                        <div class="form-group">
+                            <label for="offering-date">Date</label>
+                            <input type="date" class="form-control" id="offering-date" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="offering-amount">Amount ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="offering-amount" name="amount" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-offering">Cancel</button>
+                            <button type="submit" class="btn btn-primary" name="add_offering" id="offering-submit-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Bank Gifts Form Modal -->
+            <div id="bank-gift-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="bank-gift-modal-title">Add New Bank Gift</h3>
+                        <span class="close">×</span>
+                    </div>
+                    <form id="bank-gift-form" method="post" action="">
+                        <input type="hidden" name="record_id" id="bank-gift-record-id">
+                        <div class="form-group">
+                            <label for="bank-gift-date">Date</label>
+                            <input type="date" class="form-control" id="bank-gift-date" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="bank-gift-date-deposited">Date Deposited</label>
+                            <input type="date" class="form-control" id="bank-gift-date-deposited" name="date_deposited" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="bank-gift-date-updated">Date Updated</label>
+                            <input type="date" class="form-control" id="bank-gift-date-updated" name="date_updated" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="bank-gift-amount">Amount ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="bank-gift-amount" name="amount" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-bank-gift">Cancel</button>
+                            <button type="submit" class="btn btn-primary" name="add_bank_gift" id="bank-gift-submit-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Specified Gifts Form Modal -->
+            <div id="specified-gift-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="specified-gift-modal-title">Add New Specified Gift</h3>
+                        <span class="close">×</span>
+                    </div>
+                    <form id="specified-gift-form" method="post" action="">
+                        <input type="hidden" name="record_id" id="specified-gift-record-id">
+                        <div class="form-group">
+                            <label for="specified-gift-date">Date</label>
+                            <input type="date" class="form-control" id="specified-gift-date" name="date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="specified-gift-category">Category</label>
+                            <select class="form-control" id="specified-gift-category" name="category" required>
+                                <?php foreach ($specified_gifts as $category): ?>
+                                    <option value="<?php echo htmlspecialchars($category); ?>"><?php echo htmlspecialchars($category); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="specified-gift-amount">Amount ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="specified-gift-amount" name="amount" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-specified-gift">Cancel</button>
+                            <button type="submit" class="btn btn-primary" name="add_specified_gift" id="specified-gift-submit-btn">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div id="delete-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Confirm Deletion</h3>
+                        <span class="close">×</span>
+                    </div>
+                    <form id="delete-form" method="post" action="">
+                        <input type="hidden" name="record_id" id="delete-record-id">
+                        <input type="hidden" name="record_type" id="delete-record-type">
+                        <p>Are you sure you want to delete this record?</p>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancel</button>
+                            <button type="submit" class="btn btn-primary" name="delete_record">Delete</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </main>
 </div>
 
-<div id="tithes-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Add New Tithes</h3>
-            <span class="close">&times;</span>
-        </div>
-        <form id="tithes-form" method="POST" action="">
-            <div class="form-group">
-                <label for="date">Date:</label>
-                <input type="date" id="date" name="date" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="amount">Amount:</label>
-                <input type="number" id="amount" name="amount" class="form-control" step="0.01" min="0" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" name="add_tithes" class="btn btn-primary">Submit</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div id="offerings-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Add New Offering</h3>
-            <span class="close">&times;</span>
-        </div>
-        <form id="offerings-form" method="POST" action="">
-            <div class="form-group">
-                <label for="offering_date">Date:</label>
-                <input type="date" id="offering_date" name="date" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="offering_amount">Amount:</label>
-                <input type="number" id="offering_amount" name="amount" class="form-control" step="0.01" min="0" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" name="add_offering" class="btn btn-primary">Submit</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div id="bank-gifts-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Add New Bank Gift</h3>
-            <span class="close">&times;</span>
-        </div>
-        <form id="bank-gifts-form" method="POST" action="">
-            <div class="form-group">
-                <label for="bank_date">Date:</label>
-                <input type="date" id="bank_date" name="date" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="date_deposited">Date Deposited:</label>
-                <input type="date" id="date_deposited" name="date_deposited" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="date_updated">Date Updated in COCD's Passbook:</label>
-                <input type="date" id="date_updated" name="date_updated" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="bank_amount">Amount:</label>
-                <input type="number" id="bank_amount" name="amount" class="form-control" step="0.01" min="0" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" name="add_bank_gift" class="btn btn-primary">Submit</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div id="specified-gifts-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Add New Specified Gift</h3>
-            <span class="close">&times;</span>
-        </div>
-        <form id="specified-gifts-form" method="POST" action="">
-            <div class="form-group">
-                <label for="specified_date">Date:</label>
-                <input type="date" id="specified_date" name="date" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="category">Category:</label>
-                <select id="category" name="category" class="form-control" required>
-                    <option value="">Select a category</option>
-                    <?php foreach ($specified_gifts as $gift): ?>
-                        <option value="<?php echo htmlspecialchars($gift); ?>"><?php echo htmlspecialchars($gift); ?></option>
-                    <?php endforeach; ?>
-                    <option value="other">Other (specify below)</option>
-                </select>
-            </div>
-            <div class="form-group" id="other_category_group" style="display: none;">
-                <label for="other_category">Specify Category:</label>
-                <input type="text" id="other_category" name="other_category" class="form-control">
-            </div>
-            <div class="form-group">
-                <label for="specified_amount">Amount:</label>
-                <input type="number" id="specified_amount" name="amount" class="form-control" step="0.01" min="0" required>
-            </div>
-            <div class="form-actions">
-                <button type="submit" name="add_specified_gift" class="btn btn-primary">Submit</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Load Chart.js with fallback -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
 <script>
-    // Initialize charts when the page loads
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM Content Loaded');
-        
-        // Tab Navigation
-        const tabLinks = document.querySelectorAll('.tab-navigation a');
-        const tabPanes = document.querySelectorAll('.tab-pane');
-
-        tabLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                tabLinks.forEach(l => l.classList.remove('active'));
-                tabPanes.forEach(p => p.classList.remove('active'));
-                link.classList.add('active');
-                const tabId = link.getAttribute('data-tab');
-                document.getElementById(tabId).classList.add('active');
-
-                // Initialize charts when Summary tab is clicked
-                if (tabId === 'summary') {
-                    console.log('Summary tab clicked, updating predictions');
-                    updatePredictions();
-                }
-            });
-        });
-
-        // Initialize charts if Summary tab is active
-        if (document.querySelector('.tab-navigation a.active').getAttribute('data-tab') === 'summary') {
-            console.log('Summary tab is active, initializing charts');
-            updatePredictions();
-        }
-    });
-
-    // Chart update function
-    function updatePredictions() {
-        try {
-            console.log('Updating predictions...');
+    // Tab Navigation
+    document.querySelectorAll('.tab-navigation a').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('.tab-navigation a').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
             
-            // Update metrics with proper formatting
-            document.getElementById('avgTithes').textContent = (avgWeeklyTithes || 0).toFixed(2);
-            document.getElementById('avgOfferings').textContent = (avgWeeklyOfferings || 0).toFixed(2);
-            document.getElementById('predictedIncome').textContent = (predictedMonthly || 0).toFixed(2);
-            document.getElementById('confidenceLevel').textContent = (confidenceLevel || 0) + '%';
-            document.getElementById('totalMonthly').textContent = (monthlyTotals[Object.keys(monthlyTotals)[0]] || 0).toFixed(2);
-            document.getElementById('growthRate').textContent = (growthRate || 0).toFixed(2) + '%';
+            this.classList.add('active');
+            const tabId = this.getAttribute('data-tab');
+            document.getElementById(tabId).classList.add('active');
+        });
+    });
 
-            // Create new charts
-            createPredictionChart();
-            createTrendChart();
+    // Modal Handling
+    const modals = document.querySelectorAll('.modal');
+    const closeButtons = document.querySelectorAll('.close');
+    
+    closeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            modals.forEach(modal => modal.style.display = 'none');
+        });
+    });
 
-            console.log('Charts updated successfully');
-        } catch (error) {
-            console.error('Error updating predictions:', error);
-        }
-    }
-
-    function createPredictionChart() {
-        const predictionCtx = document.getElementById('predictionChart');
-        if (!predictionCtx) {
-            console.error('Prediction chart canvas not found');
-            return;
-        }
-
-        try {
-            // Destroy existing chart if it exists
-            if (window.predictionChart) {
-                window.predictionChart.destroy();
+    window.addEventListener('click', (e) => {
+        modals.forEach(modal => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
             }
+        });
+    });
 
-            // Prepare data
-            const labels = Object.keys(historicalData).map(date => {
-                const [year, month] = date.split('-');
-                return new Date(year, month - 1).toLocaleString('default', { month: 'short' });
-            });
+    // Tithes Form Handling
+    document.getElementById('add-tithes-btn').addEventListener('click', () => {
+        const modal = document.getElementById('tithes-modal');
+        document.getElementById('tithes-modal-title').textContent = 'Add New Tithes';
+        document.getElementById('tithes-record-id').value = '';
+        document.getElementById('tithes-date').value = '';
+        document.getElementById('tithes-amount').value = '';
+        document.getElementById('tithes-submit-btn').setAttribute('name', 'add_tithes');
+        modal.style.display = 'block';
+    });
 
-            // Add next month for prediction
-            const lastDate = new Date(Object.keys(historicalData).pop());
-            lastDate.setMonth(lastDate.getMonth() + 1);
-            labels.push(lastDate.toLocaleString('default', { month: 'short' }));
+    document.getElementById('cancel-tithes').addEventListener('click', () => {
+        document.getElementById('tithes-modal').style.display = 'none';
+    });
 
-            const historicalValues = Object.values(historicalData);
-            const predictionData = [...Array(historicalValues.length).fill(null), predictedMonthly];
-            const upperBoundData = [...Array(historicalValues.length).fill(null), predictionUpper];
-            const lowerBoundData = [...Array(historicalValues.length).fill(null), predictionLower];
+    document.querySelectorAll('.edit-btn[data-type="tithes"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('tithes-modal');
+            document.getElementById('tithes-modal-title').textContent = 'Edit Tithes';
+            document.getElementById('tithes-record-id').value = btn.dataset.id;
+            document.getElementById('tithes-date').value = btn.dataset.date;
+            document.getElementById('tithes-amount').value = btn.dataset.amount;
+            document.getElementById('tithes-submit-btn').setAttribute('name', 'edit_tithes');
+            modal.style.display = 'block';
+        });
+    });
 
-            // Create new chart
-            window.predictionChart = new Chart(predictionCtx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Historical Income',
-                        data: historicalValues,
-                        borderColor: 'rgb(0, 139, 30)',
-                        tension: 0.1,
-                        fill: false
-                    }, {
-                        label: 'Predicted Income',
-                        data: predictionData,
-                        borderColor: 'rgb(255, 99, 132)',
-                        borderDash: [5, 5],
-                        tension: 0.1,
-                        fill: false
-                    }, {
-                        label: 'Confidence Interval',
-                        data: upperBoundData,
-                        borderColor: 'rgba(255, 99, 132, 0.2)',
-                        borderDash: [2, 2],
-                        fill: '+1',
-                        backgroundColor: 'rgba(255, 99, 132, 0.1)'
-                    }, {
-                        label: 'Lower Bound',
-                        data: lowerBoundData,
-                        borderColor: 'rgba(255, 99, 132, 0.2)',
-                        borderDash: [2, 2],
-                        fill: false
-                    }]
+    // Offerings Form Handling
+    document.getElementById('add-offering-btn').addEventListener('click', () => {
+        const modal = document.getElementById('offering-modal');
+        document.getElementById('offering-modal-title').textContent = 'Add New Offering';
+        document.getElementById('offering-record-id').value = '';
+        document.getElementById('offering-date').value = '';
+        document.getElementById('offering-amount').value = '';
+        document.getElementById('offering-submit-btn').setAttribute('name', 'add_offering');
+        modal.style.display = 'block';
+    });
+
+    document.getElementById('cancel-offering').addEventListener('click', () => {
+        document.getElementById('offering-modal').style.display = 'none';
+    });
+
+    document.querySelectorAll('.edit-btn[data-type="offerings"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('offering-modal');
+            document.getElementById('offering-modal-title').textContent = 'Edit Offering';
+            document.getElementById('offering-record-id').value = btn.dataset.id;
+            document.getElementById('offering-date').value = btn.dataset.date;
+            document.getElementById('offering-amount').value = btn.dataset.amount;
+            document.getElementById('offering-submit-btn').setAttribute('name', 'edit_offering');
+            modal.style.display = 'block';
+        });
+    });
+
+    // Bank Gifts Form Handling
+    document.getElementById('add-bank-gift-btn').addEventListener('click', () => {
+        const modal = document.getElementById('bank-gift-modal');
+        document.getElementById('bank-gift-modal-title').textContent = 'Add New Bank Gift';
+        document.getElementById('bank-gift-record-id').value = '';
+        document.getElementById('bank-gift-date').value = '';
+        document.getElementById('bank-gift-date-deposited').value = '';
+        document.getElementById('bank-gift-date-updated').value = '';
+        document.getElementById('bank-gift-amount').value = '';
+        document.getElementById('bank-gift-submit-btn').setAttribute('name', 'add_bank_gift');
+        modal.style.display = 'block';
+    });
+
+    document.getElementById('cancel-bank-gift').addEventListener('click', () => {
+        document.getElementById('bank-gift-modal').style.display = 'none';
+    });
+
+    document.querySelectorAll('.edit-btn[data-type="bank-gifts"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('bank-gift-modal');
+            document.getElementById('bank-gift-modal-title').textContent = 'Edit Bank Gift';
+            document.getElementById('bank-gift-record-id').value = btn.dataset.id;
+            document.getElementById('bank-gift-date').value = btn.dataset.date;
+            document.getElementById('bank-gift-date-deposited').value = btn.dataset.dateDeposited;
+            document.getElementById('bank-gift-date-updated').value = btn.dataset.dateUpdated;
+            document.getElementById('bank-gift-amount').value = btn.dataset.amount;
+            document.getElementById('bank-gift-submit-btn').setAttribute('name', 'edit_bank_gift');
+            modal.style.display = 'block';
+        });
+    });
+
+    // Specified Gifts Form Handling
+    document.getElementById('add-specified-gift-btn').addEventListener('click', () => {
+        const modal = document.getElementById('specified-gift-modal');
+        document.getElementById('specified-gift-modal-title').textContent = 'Add New Specified Gift';
+        document.getElementById('specified-gift-record-id').value = '';
+        document.getElementById('specified-gift-date').value = '';
+        document.getElementById('specified-gift-category').value = '';
+        document.getElementById('specified-gift-amount').value = '';
+        document.getElementById('specified-gift-submit-btn').setAttribute('name', 'add_specified_gift');
+        modal.style.display = 'block';
+    });
+
+    document.getElementById('cancel-specified-gift').addEventListener('click', () => {
+        document.getElementById('specified-gift-modal').style.display = 'none';
+    });
+
+    document.querySelectorAll('.edit-btn[data-type="specified-gifts"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('specified-gift-modal');
+            document.getElementById('specified-gift-modal-title').textContent = 'Edit Specified Gift';
+            document.getElementById('specified-gift-record-id').value = btn.dataset.id;
+            document.getElementById('specified-gift-date').value = btn.dataset.date;
+            document.getElementById('specified-gift-category').value = btn.dataset.category;
+            document.getElementById('specified-gift-amount').value = btn.dataset.amount;
+            document.getElementById('specified-gift-submit-btn').setAttribute('name', 'edit_specified_gift');
+            modal.style.display = 'block';
+        });
+    });
+
+    // Delete Confirmation Handling
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = document.getElementById('delete-modal');
+            document.getElementById('delete-record-id').value = btn.dataset.id;
+            document.getElementById('delete-record-type').value = btn.dataset.type;
+            modal.style.display = 'block';
+        });
+    });
+
+    document.getElementById('cancel-delete').addEventListener('click', () => {
+        document.getElementById('delete-modal').style.display = 'none';
+    });
+
+    // Prediction Chart
+    const predictionCtx = document.getElementById('predictionChart').getContext('2d');
+    new Chart(predictionCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Predicted Income'],
+            datasets: [{
+                label: 'Amount',
+                data: [predictedMonthly],
+                backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                borderColor: 'rgba(0, 100, 0, 1)',
+                borderWidth: 1
+            }, {
+                label: 'Range Low',
+                data: [predictionLower],
+                backgroundColor: 'rgba(255, 165, 0, 0.6)',
+                borderColor: 'rgba(255, 140, 0, 1)',
+                borderWidth: 1
+            }, {
+                label: 'Range High',
+                data: [predictionUpper],
+                backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Amount'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
+                title: {
+                    display: true,
+                    text: 'Next Month Income Prediction'
+                }
+            }
+        }
+    });
+
+    // Trend Chart
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    
+    // Check if we have historical data
+    if (historicalData && Object.keys(historicalData).length > 0) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: Object.keys(historicalData),
+                datasets: [{
+                    label: 'Monthly Income',
+                    data: Object.values(historicalData),
+                    fill: false,
+                    borderColor: 'rgba(0, 139, 30, 1)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Monthly Income History and Prediction'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return (context.raw || 0).toFixed(2);
-                                }
-                            }
+                            text: 'Amount'
                         }
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(2);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-            console.log('Prediction chart created successfully');
-        } catch (error) {
-            console.error('Error creating prediction chart:', error);
-        }
-    }
-
-    function createTrendChart() {
-        const trendCtx = document.getElementById('trendChart');
-        if (!trendCtx) {
-            console.error('Trend chart canvas not found');
-            return;
-        }
-
-        try {
-            // Destroy existing chart if it exists
-            if (window.trendChart) {
-                window.trendChart.destroy();
-            }
-
-            // Create new chart
-            window.trendChart = new Chart(trendCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Tithes', 'Offerings', 'Bank Gifts', 'Specified Gifts'],
-                    datasets: [{
-                        label: 'Average Weekly Amount',
-                        data: [
-                            avgWeeklyTithes || 0,
-                            avgWeeklyOfferings || 0,
-                            avgWeeklyBankGifts || 0,
-                            avgWeeklySpecifiedGifts || 0
-                        ],
-                        backgroundColor: [
-                            'rgba(0, 139, 30, 0.7)',
-                            'rgba(0, 112, 9, 0.7)',
-                            'rgba(0, 85, 0, 0.7)',
-                            'rgba(0, 60, 0, 0.7)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
+                    x: {
                         title: {
                             display: true,
-                            text: 'Average Weekly Income by Source'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return (context.raw || 0).toFixed(2);
-                                }
-                            }
+                            text: 'Month'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Historical Income Trend (Last 6 Months)'
+                    }
+                }
+            }
+        });
+    } else {
+        console.error('No historical data available for trend chart');
+        // Create a placeholder chart or show message
+        trendCtx.canvas.style.display = 'none';
+        const chartContainer = trendCtx.canvas.parentElement;
+        chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No historical data available. Please add some tithes and offerings records.</p>';
+    }
+
+    // Monthly Income Predictions Chart
+    const predictionCtx2025 = document.getElementById('predictionChart2025').getContext('2d');
+    
+    // Check if we have prediction data
+    if (prophetPredictions && prophetPredictions.length > 0) {
+        new Chart(predictionCtx2025, {
+            type: 'bar',
+            data: {
+                labels: prophetPredictions.map(p => p.date_formatted || p.month),
+                datasets: [{
+                    label: 'Predicted Amount',
+                    data: prophetPredictions.map(p => p.yhat),
+                    backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                    borderColor: 'rgba(0, 100, 0, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Confidence Range (Lower)',
+                    data: prophetPredictions.map(p => p.yhat_lower),
+                    backgroundColor: 'rgba(255, 165, 0, 0.6)',
+                    borderColor: 'rgba(255, 140, 0, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Confidence Range (Upper)',
+                    data: prophetPredictions.map(p => p.yhat_upper),
+                    backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount (₱)'
                         }
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(2);
-                                }
-                            }
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
                         }
                     }
-                }
-            });
-            console.log('Trend chart created successfully');
-        } catch (error) {
-            console.error('Error creating trend chart:', error);
-        }
-    }
-
-    // Modal Functions
-    function openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = "block";
-        }
-    }
-
-    function closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.style.display = "none";
-        }
-    }
-
-    // Add click handlers for all modal open buttons
-    document.getElementById('add-tithes-btn').addEventListener('click', function() {
-        openModal('tithes-modal');
-    });
-
-    document.getElementById('add-offering-btn').addEventListener('click', function() {
-        openModal('offerings-modal');
-    });
-
-    document.getElementById('add-bank-gift-btn').addEventListener('click', function() {
-        openModal('bank-gifts-modal');
-    });
-
-    document.getElementById('add-specified-gift-btn').addEventListener('click', function() {
-        openModal('specified-gifts-modal');
-    });
-
-    // Close modal when clicking the X
-    document.querySelectorAll('.close').forEach(function(closeBtn) {
-        closeBtn.addEventListener('click', function() {
-            const modal = this.closest('.modal');
-            if (modal) {
-                closeModal(modal.id);
-            }
-        });
-    });
-
-    // Close modal when clicking outside
-    window.addEventListener('click', function(event) {
-        if (event.target.classList.contains('modal')) {
-            closeModal(event.target.id);
-        }
-    });
-
-    // Handle category selection for specified gifts
-    const categorySelect = document.getElementById('category');
-    if (categorySelect) {
-        categorySelect.addEventListener('change', function() {
-            const otherGroup = document.getElementById('other_category_group');
-            if (otherGroup) {
-                if (this.value === 'other') {
-                    otherGroup.style.display = 'block';
-                    document.getElementById('other_category').required = true;
-                } else {
-                    otherGroup.style.display = 'none';
-                    document.getElementById('other_category').required = false;
-                }
-            }
-        });
-    }
-
-    // Handle specified gifts form submission
-    const specifiedGiftsForm = document.getElementById('specified-gifts-form');
-    if (specifiedGiftsForm) {
-        specifiedGiftsForm.addEventListener('submit', function(e) {
-            const category = document.getElementById('category');
-            if (category && category.value === 'other') {
-                const otherCategory = document.getElementById('other_category');
-                if (otherCategory && otherCategory.value.trim() === '') {
-                    e.preventDefault();
-                    alert('Please specify the category');
-                    return;
-                }
-                category.value = otherCategory.value;
-            }
-        });
-    }
-
-    // Add delete functionality
-    document.querySelectorAll('.delete-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            if (confirm('Are you sure you want to delete this record?')) {
-                const id = this.getAttribute('data-id');
-                const type = this.getAttribute('data-type');
-                
-                // Create and submit form
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = window.location.href;
-                
-                const idInput = document.createElement('input');
-                idInput.type = 'hidden';
-                idInput.name = 'record_id';
-                idInput.value = id;
-                
-                const typeInput = document.createElement('input');
-                typeInput.type = 'hidden';
-                typeInput.name = 'record_type';
-                typeInput.value = type;
-                
-                const actionInput = document.createElement('input');
-                actionInput.type = 'hidden';
-                actionInput.name = 'delete_record';
-                actionInput.value = '1';
-                
-                form.appendChild(idInput);
-                form.appendChild(typeInput);
-                form.appendChild(actionInput);
-                document.body.appendChild(form);
-                form.submit();
-            }
-        });
-    });
-
-    // Add view functionality
-    document.querySelectorAll('.view-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            const type = this.getAttribute('data-type');
-            // Implement view functionality here
-            console.log('View record:', id, type);
-        });
-    });
-
-    // Add edit functionality
-    document.querySelectorAll('.edit-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const id = this.getAttribute('data-id');
-            const type = this.getAttribute('data-type');
-            // Implement edit functionality here
-            console.log('Edit record:', id, type);
-        });
-    });
-
-    // Auto-hide success messages after 3 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            alert.style.opacity = '0';
-            setTimeout(() => {
-                alert.style.display = 'none';
-            }, 300);
-        }, 3000);
-    });
-
-    // Handle category selection for specified gifts
-    document.addEventListener('DOMContentLoaded', function() {
-        const categorySelect = document.getElementById('category');
-        const otherGroup = document.getElementById('other_category_group');
-        const otherCategory = document.getElementById('other_category');
-
-        if (categorySelect) {
-            categorySelect.addEventListener('change', function() {
-                if (this.value === 'other') {
-                    otherGroup.style.display = 'block';
-                    otherCategory.required = true;
-                } else {
-                    otherGroup.style.display = 'none';
-                    otherCategory.required = false;
-                }
-            });
-        }
-
-        // Handle specified gifts form submission
-        const specifiedGiftsForm = document.getElementById('specified-gifts-form');
-        if (specifiedGiftsForm) {
-            specifiedGiftsForm.addEventListener('submit', function(e) {
-                const category = document.getElementById('category');
-                if (category && category.value === 'other') {
-                    const otherCategory = document.getElementById('other_category');
-                    if (otherCategory && otherCategory.value.trim() === '') {
-                        e.preventDefault();
-                        alert('Please specify the category');
-                        return;
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Monthly Income Predictions'
                     }
-                    // Set the category value to the other category input value
-                    category.value = otherCategory.value;
                 }
-            });
+            }
+        });
+    } else {
+        console.error('No prediction data available for chart');
+        // Create a placeholder chart or show message
+        predictionCtx2025.canvas.style.display = 'none';
+        const chartContainer = predictionCtx2025.canvas.parentElement;
+        chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available. Please ensure you have sufficient tithes and offerings data.</p>';
+    }
+
+    // Helper to format 'YYYY-MM' to 'Month 01, YYYY'
+    function formatMonthLabel(ym) {
+        const [year, month] = ym.split('-');
+        const date = new Date(year, parseInt(month, 10) - 1, 1);
+        const monthName = date.toLocaleString('default', { month: 'long' });
+        return `${monthName} 01, ${year}`;
+    }
+
+    // Actual vs Predicted Chart
+    (function() {
+        // Check if we have prediction data
+        if (!prophetPredictions || prophetPredictions.length === 0) {
+            console.error('No prediction data available for Actual vs Predicted chart');
+            const ctx = document.getElementById('actualVsPredictedChart');
+            if (ctx) {
+                ctx.style.display = 'none';
+                const chartContainer = ctx.parentElement;
+                chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available for comparison.</p>';
+            }
+            return;
         }
+        
+        // Use all months from prophetPredictions
+        const months = prophetPredictions.map(p => p.month);
+        // Prepare data arrays
+        const actualData = months.map(m => historicalData[m] !== undefined ? historicalData[m] : 0);
+        const predictedData = prophetPredictions.map(p => p.yhat);
+        // Format labels using date_formatted if available
+        const labels = prophetPredictions.map(p => p.date_formatted || formatMonthLabel(p.month));
+        
+        // Draw chart
+        const ctx = document.getElementById('actualVsPredictedChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Actual Income',
+                        data: actualData,
+                        backgroundColor: 'rgba(255, 140, 0, 0.85)', // dark orange
+                        borderColor: 'rgba(255, 140, 0, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Predicted Amount',
+                        data: predictedData,
+                        backgroundColor: 'rgba(0, 100, 0, 0.85)', // dark green
+                        borderColor: 'rgba(0, 100, 0, 1)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount (₱)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Actual Income vs Predicted Amount'
+                    }
+                }
+            }
+        });
+    })();
+
+    // DataTables Initialization (jQuery version)
+    $(document).ready(function() {
+        ['tithes-tbody', 'offerings-tbody', 'bank-gifts-tbody', 'specified-gifts-tbody'].forEach(function(tbodyId) {
+            var $tbody = $('#' + tbodyId);
+            if ($tbody.length) {
+                var $table = $tbody.closest('table');
+                if ($table.length) {
+                    $table.DataTable({
+                        responsive: true,
+                        paging: true,
+                        pageLength: 10,
+                        lengthMenu: [5, 10, 25, 50, 100],
+                        searching: true,
+                        ordering: true,
+                        info: true,
+                        language: {
+                            search: 'Search:',
+                            lengthMenu: 'Show _MENU_ entries',
+                            info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                            paginate: {
+                                previous: 'Prev',
+                                next: 'Next'
+                            }
+                        }
+                    });
+                }
+            }
+        });
     });
 </script>
 </body>

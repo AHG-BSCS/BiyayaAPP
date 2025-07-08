@@ -14,7 +14,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 }
 
 // Check if user is an admin
-$is_admin = ($_SESSION["user"] === "admin");
+$is_admin = ($_SESSION["user_role"] === "Administrator");
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
@@ -33,8 +33,22 @@ try {
     $result = $conn->query("SELECT COUNT(*) as total FROM membership_records");
     $row = $result->fetch_assoc();
     $total_members = $row['total'];
+
+    // Get gender statistics
+    $gender_stats = $conn->query("SELECT sex, COUNT(*) as count FROM membership_records GROUP BY sex");
+    $male_count = 0;
+    $female_count = 0;
+    while ($row = $gender_stats->fetch_assoc()) {
+        if ($row['sex'] === 'Male') {
+            $male_count = $row['count'];
+        } else if ($row['sex'] === 'Female') {
+            $female_count = $row['count'];
+        }
+    }
 } catch(Exception $e) {
     $total_members = 0;
+    $male_count = 0;
+    $female_count = 0;
 }
 
 // Dashboard statistics
@@ -318,7 +332,7 @@ $dashboard_stats = [
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
@@ -362,7 +376,109 @@ $dashboard_stats = [
                     <p><?php echo $dashboard_stats["pending_prayers"]; ?></p>
                 </div>
             </div>
+
+            <!-- Gender Distribution Chart -->
+            <div style="width: calc(33.33% - 14px); margin-top: 20px;">
+                <div class="card">
+                    <i class="fas fa-venus-mars"></i>
+                    <h3>Congregational Gender Split</h3>
+                    <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="genderChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script>
+                const ctx = document.getElementById('genderChart').getContext('2d');
+                const genderChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Male', 'Female'],
+                        datasets: [{
+                            data: [<?php echo $male_count; ?>, <?php echo $female_count; ?>],
+                            backgroundColor: [
+                                'rgba(54, 162, 235, 0.8)',
+                                'rgba(255, 99, 132, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 99, 132, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        }
+                    }
+                });
+            </script>
         </main>
     </div>
+
+    <script>
+    console.log('Inactivity timer script loaded');
+    
+    let inactivityTimeout;
+    let logoutWarningShown = false;
+
+    function resetInactivityTimer() {
+        console.log('Activity detected, resetting timer');
+        clearTimeout(inactivityTimeout);
+        if (logoutWarningShown) {
+            const warning = document.getElementById('logout-warning');
+            if (warning) warning.remove();
+            logoutWarningShown = false;
+        }
+        inactivityTimeout = setTimeout(() => {
+            console.log('Inactivity detected: showing warning and logging out soon.');
+            showLogoutWarning();
+            setTimeout(() => {
+                console.log('Redirecting to logout.php');
+                window.location.href = 'logout.php';
+            }, 2000);
+        }, 20000); // 20 seconds for testing (change back to 60000 for production)
+    }
+
+    function showLogoutWarning() {
+        if (!logoutWarningShown) {
+            console.log('Creating logout warning');
+            const warning = document.createElement('div');
+            warning.id = 'logout-warning';
+            warning.style.position = 'fixed';
+            warning.style.top = '30px';
+            warning.style.right = '30px';
+            warning.style.background = '#f44336';
+            warning.style.color = 'white';
+            warning.style.padding = '20px 30px';
+            warning.style.borderRadius = '8px';
+            warning.style.fontSize = '18px';
+            warning.style.zIndex = '9999';
+            warning.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+            warning.innerHTML = '<i class="fas fa-lock"></i> Logging out due to inactivity...';
+            document.body.appendChild(warning);
+            logoutWarningShown = true;
+        }
+    }
+
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, setting up inactivity timer');
+        
+        ['mousemove', 'keydown', 'mousedown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, resetInactivityTimer, true);
+        });
+
+        resetInactivityTimer();
+        console.log('Inactivity timer initialized');
+    });
+    </script>
 </body>
 </html>

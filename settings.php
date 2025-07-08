@@ -5,7 +5,7 @@ require_once 'config.php';
 require_once 'user_functions.php';
 
 // Check if user is logged in and is admin
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user"] !== "admin") {
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Administrator") {
     header("Location: login.php");
     exit;
 }
@@ -31,17 +31,20 @@ if (isset($_GET['ajax_search'])) {
     $users = [];
     
     if (!empty($search_query)) {
-        $search_sql = "SELECT user_id, username, email, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ?";
+        $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
         $search_param = "%$search_query%";
         $stmt = $conn->prepare($search_sql);
-        $stmt->bind_param("ss", $search_param, $search_param);
+        $stmt->bind_param("sss", $search_param, $search_param, $search_param);
         $stmt->execute();
         $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
             $users[] = [
                 'id' => $row['user_id'],
                 'username' => $row['username'],
+                'full_name' => $row['full_name'],
                 'email' => $row['email'],
+                'contact_number' => $row['contact_number'],
+                'address' => $row['address'],
                 'role' => $row['role'],
                 'created_at' => $row['created_at']
             ];
@@ -54,30 +57,36 @@ if (isset($_GET['ajax_search'])) {
 }
 
 if (!empty($search_query)) {
-    $search_sql = "SELECT user_id, username, email, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ?";
+    $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
     $search_param = "%$search_query%";
     $stmt = $conn->prepare($search_sql);
-    $stmt->bind_param("ss", $search_param, $search_param);
+    $stmt->bind_param("sss", $search_param, $search_param, $search_param);
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $users[] = [
             'id' => $row['user_id'],
             'username' => $row['username'],
+            'full_name' => $row['full_name'],
             'email' => $row['email'],
+            'contact_number' => $row['contact_number'],
+            'address' => $row['address'],
             'role' => $row['role'],
             'created_at' => $row['created_at']
         ];
     }
 } else {
     // Get all users
-    $sql = "SELECT user_id, username, email, role, created_at FROM user_profiles";
+    $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
     $result = $conn->query($sql);
     while ($row = $result->fetch_assoc()) {
         $users[] = [
             'id' => $row['user_id'],
             'username' => $row['username'],
+            'full_name' => $row['full_name'],
             'email' => $row['email'],
+            'contact_number' => $row['contact_number'],
+            'address' => $row['address'],
             'role' => $row['role'],
             'created_at' => $row['created_at']
         ];
@@ -87,29 +96,33 @@ if (!empty($search_query)) {
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["add_user"])) {
         $username = trim($_POST["new_username"]);
+        $full_name = trim($_POST["new_full_name"]);
         $email = trim($_POST["new_email"]);
+        $contact_number = trim($_POST["new_contact_number"]);
+        $address = trim($_POST["new_address"]);
         $password = password_hash($_POST["new_password"], PASSWORD_DEFAULT);
         $role = $_POST["new_role"];
+        $user_id = strtolower(str_replace(' ', '', $username)) . rand(100, 999); // Generate a unique user_id
 
         // Check if username or email already exists
-        $check_sql = "SELECT * FROM user_profiles WHERE username = ? OR email = ?";
+        $check_sql = "SELECT * FROM user_profiles WHERE username = ? OR email = ? OR user_id = ?";
         $stmt = $conn->prepare($check_sql);
-        $stmt->bind_param("ss", $username, $email);
+        $stmt->bind_param("sss", $username, $email, $user_id);
         $stmt->execute();
         $result = $stmt->get_result();
 
         if ($result->num_rows > 0) {
-            $message = "Username or email already exists!";
+            $message = "Username, email, or generated ID already exists!";
             $messageType = "danger";
         } else {
             // Insert new user
-            $insert_sql = "INSERT INTO user_profiles (username, email, password, role, created_at) VALUES (?, ?, ?, ?, NOW())";
+            $insert_sql = "INSERT INTO user_profiles (user_id, username, full_name, email, contact_number, address, password, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             $stmt = $conn->prepare($insert_sql);
-            $stmt->bind_param("ssss", $username, $email, $password, $role);
+            $stmt->bind_param("ssssssss", $user_id, $username, $full_name, $email, $contact_number, $address, $password, $role);
             
             if ($stmt->execute()) {
-        $message = "User added successfully!";
-        $messageType = "success";
+                $message = "User added successfully!";
+                $messageType = "success";
             } else {
                 $message = "Error adding user: " . $conn->error;
                 $messageType = "danger";
@@ -118,7 +131,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } elseif (isset($_POST["edit_user"])) {
         $user_id = $_POST["edit_user_id"];
         $username = trim($_POST["edit_username"]);
+        $full_name = trim($_POST["edit_full_name"]);
         $email = trim($_POST["edit_email"]);
+        $contact_number = trim($_POST["edit_contact_number"]);
+        $address = trim($_POST["edit_address"]);
         $role = $_POST["edit_role"];
 
         // Check if username or email already exists for other users
@@ -133,9 +149,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $messageType = "danger";
         } else {
             // Update user
-            $update_sql = "UPDATE user_profiles SET username = ?, email = ?, role = ?, updated_at = NOW() WHERE user_id = ?";
+            $update_sql = "UPDATE user_profiles SET username = ?, full_name = ?, email = ?, contact_number = ?, address = ?, role = ?, updated_at = NOW() WHERE user_id = ?";
             $stmt = $conn->prepare($update_sql);
-            $stmt->bind_param("ssss", $username, $email, $role, $user_id);
+            $stmt->bind_param("sssssss", $username, $full_name, $email, $contact_number, $address, $role, $user_id);
             
             if ($stmt->execute()) {
         $message = "User updated successfully!";
@@ -168,7 +184,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } elseif (isset($_POST["update_profile"])) {
         $profile_data = [
             'username' => $_POST['username'],
+            'full_name' => $_POST['full_name'],
             'email' => $_POST['email'],
+            'contact_number' => $_POST['contact_number'],
+            'address' => $_POST['address'],
             'profile_picture' => $user_profile['profile_picture'] // Keep existing picture by default
         ];
 
@@ -274,6 +293,7 @@ $church_logo = getChurchLogo($conn);
     <title>Settings | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -480,6 +500,25 @@ $church_logo = getChurchLogo($conn);
             display: block;
         }
         
+        /* Prevent table movement */
+        #users-table {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+        }
+        
+        #users-table * {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+        }
+        
+        .table-responsive {
+            animation: none !important;
+            transition: none !important;
+            transform: translateZ(0) !important;
+        }
+        
         .action-bar {
             display: flex;
             justify-content: space-between;
@@ -556,12 +595,18 @@ $church_logo = getChurchLogo($conn);
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            min-height: 400px;
+            transform: translateZ(0);
+            will-change: auto;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 800px;
+            min-width: 1000px;
+            table-layout: fixed;
+            position: relative;
         }
         
         table th, table td {
@@ -569,16 +614,37 @@ $church_logo = getChurchLogo($conn);
             text-align: left;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
+            word-wrap: break-word;
+            overflow: hidden;
         }
         
         table th {
             background-color: #f8f9fa;
             font-weight: 600;
             color: #333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        table tr {
+            position: relative;
         }
         
         table tr:hover {
             background-color: #f5f5f5;
+        }
+        
+        .address-cell {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .address-cell:hover {
+            white-space: normal;
+            word-wrap: break-word;
         }
         
         .status-badge {
@@ -992,7 +1058,7 @@ $church_logo = getChurchLogo($conn);
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Member Contributions</span></a></li>
+                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
@@ -1029,31 +1095,31 @@ $church_logo = getChurchLogo($conn);
             <div class="settings-content">
                 <div class="tab-navigation">
                     <a href="#user-management" class="active" data-tab="user-management">User Management</a>
-                    <a href="#roles-permissions" data-tab="roles-permissions">Roles & Permissions</a>
                     <a href="#site-settings" data-tab="site-settings">Site Settings</a>
-                    <a href="#email-settings" data-tab="email-settings">Email Settings</a>
                     <a href="#profile-settings" data-tab="profile-settings">Profile Settings</a>
                 </div>
                 
                 <div class="tab-content">
                     <div class="tab-pane active" id="user-management">
                         <div class="action-bar">
-                            <form action="" method="get" class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input type="text" id="search-input" name="search" placeholder="Search users..." value="<?php echo htmlspecialchars($search_query); ?>">
-                            </form>
+                            <!-- Removed custom search box, DataTables provides its own search UI -->
+                        </div>
+                        <div style="margin-bottom: 15px; text-align: right;">
                             <button class="btn" id="add-user-btn">
                                 <i class="fas fa-user-plus"></i> Add New User
                             </button>
                         </div>
                         
                         <div class="table-responsive">
-                            <table>
+                            <table id="users-table">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
                                         <th>Username</th>
+                                        <th>Full Name</th>
                                         <th>Email</th>
+                                        <th>Contact Number</th>
+                                        <th>Address</th>
                                         <th>Role</th>
                                         <th>Created On</th>
                                         <th>Actions</th>
@@ -1064,7 +1130,10 @@ $church_logo = getChurchLogo($conn);
                                         <tr>
                                             <td><?php echo htmlspecialchars($user['id'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($user['username'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($user['full_name'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($user['email'] ?? ''); ?></td>
+                                            <td><?php echo htmlspecialchars($user['contact_number'] ?? ''); ?></td>
+                                            <td class="address-cell"><?php echo htmlspecialchars($user['address'] ?? ''); ?></td>
                                             <td>
                                                 <span class="role-badge <?php echo strtolower($user['role']); ?>">
                                                     <?php echo htmlspecialchars($user['role'] ?? ''); ?>
@@ -1074,7 +1143,7 @@ $church_logo = getChurchLogo($conn);
                                             <td>
                                                 <?php if (isset($user['id']) && $user['id'] !== 'admin'): ?>
                                                 <div class="action-buttons">
-                                                        <button type="button" class="action-btn edit-btn" onclick="editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')">
+                                                        <button type="button" class="action-btn edit-btn" onclick="editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['full_name']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['contact_number']); ?>', '<?php echo htmlspecialchars($user['address']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                         <button type="button" class="action-btn delete-btn" onclick="deleteUser('<?php echo htmlspecialchars($user['id']); ?>')">
@@ -1088,76 +1157,9 @@ $church_logo = getChurchLogo($conn);
                                 </tbody>
                             </table>
                         </div>
-                        
-                        <div class="pagination">
-                            <a href="#"><i class="fas fa-angle-left"></i></a>
-                            <a href="#" class="active">1</a>
-                            <a href="#">2</a>
-                            <a href="#">3</a>
-                            <a href="#"><i class="fas fa-angle-right"></i></a>
-                        </div>
                     </div>
                     
-                    <div class="tab-pane" id="roles-permissions">
-                        <h3>Roles & Permissions</h3>
-                        <p>Manage user roles and their permissions.</p>
-                        
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Role Name</th>
-                                        <th>Description</th>
-                                        <th>Access Rights</th>
-                                        <th>Users</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Administrator</td>
-                                        <td>Full access to all features and system settings</td>
-                                        <td>
-                                            <ul style="list-style: none; padding: 0; margin: 0;">
-                                                <li><i class="fas fa-check text-success"></i> All Dashboard Features</li>
-                                                <li><i class="fas fa-check text-success"></i> User Management</li>
-                                                <li><i class="fas fa-check text-success"></i> Site Settings</li>
-                                                <li><i class="fas fa-check text-success"></i> All Member Features</li>
-                                            </ul>
-                                        </td>
-                                        <td>1</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Pastor</td>
-                                        <td>Church management and member access</td>
-                                        <td>
-                                            <ul style="list-style: none; padding: 0; margin: 0;">
-                                                <li><i class="fas fa-check text-success"></i> Member Dashboard</li>
-                                                <li><i class="fas fa-check text-success"></i> Member Events</li>
-                                                <li><i class="fas fa-check text-success"></i> Member Prayers</li>
-                                                <li><i class="fas fa-times text-danger"></i> User Management</li>
-                                                <li><i class="fas fa-times text-danger"></i> Site Settings</li>
-                                            </ul>
-                                        </td>
-                                        <td>1</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Member</td>
-                                        <td>Basic member access</td>
-                                        <td>
-                                            <ul style="list-style: none; padding: 0; margin: 0;">
-                                                <li><i class="fas fa-check text-success"></i> Member Dashboard</li>
-                                                <li><i class="fas fa-check text-success"></i> Member Events</li>
-                                                <li><i class="fas fa-check text-success"></i> Member Prayers</li>
-                                                <li><i class="fas fa-times text-danger"></i> User Management</li>
-                                                <li><i class="fas fa-times text-danger"></i> Site Settings</li>
-                                            </ul>
-                                        </td>
-                                        <td>2</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <!-- Removed Roles & Permissions tab-pane -->
                     
                     <div class="tab-pane" id="site-settings">
                         <h3>Site Settings</h3>
@@ -1257,70 +1259,6 @@ $church_logo = getChurchLogo($conn);
                         </form>
                     </div>
                     
-                    <div class="tab-pane" id="email-settings">
-                        <h3>Email Settings</h3>
-                        <p>Configure email notifications and templates.</p>
-                        
-                        <form action="" method="post">
-                            <div class="form-group">
-                                <label for="smtp_server">SMTP Server</label>
-                                <input type="text" id="smtp_server" name="smtp_server" class="form-control" value="smtp.gmail.com">
-                            </div>
-                            
-                            <div class="form-row">
-                                <div class="form-col">
-                                    <div class="form-group">
-                                        <label for="smtp_port">SMTP Port</label>
-                                        <input type="text" id="smtp_port" name="smtp_port" class="form-control" value="587">
-                                    </div>
-                                </div>
-                                <div class="form-col">
-                                    <div class="form-group">
-                                        <label for="smtp_security">Security Type</label>
-                                        <select id="smtp_security" name="smtp_security" class="form-control">
-                                            <option value="tls" selected>TLS</option>
-                                            <option value="ssl">SSL</option>
-                                            <option value="none">None</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="form-row">
-                                <div class="form-col">
-                                    <div class="form-group">
-                                        <label for="smtp_username">SMTP Username</label>
-                                        <input type="email" id="smtp_username" name="smtp_username" class="form-control" value="cocd1910@gmail.com">
-                                    </div>
-                                </div>
-                                <div class="form-col">
-                                    <div class="form-group">
-                                        <label for="smtp_password">SMTP Password</label>
-                                        <input type="password" id="smtp_password" name="smtp_password" class="form-control" value="********">
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="sender_name">Sender Name</label>
-                                <input type="text" id="sender_name" name="sender_name" class="form-control" value="Church of Christ-Disciples">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="sender_email">Sender Email</label>
-                                <input type="email" id="sender_email" name="sender_email" class="form-control" value="cocd1910@gmail.com">
-                            </div>
-                            
-                            <button type="submit" class="btn" name="save_email_settings">
-                                <i class="fas fa-save"></i> Save Email Settings
-                            </button>
-                            
-                            <button type="button" class="btn btn-outline" style="margin-left: 10px;">
-                                <i class="fas fa-paper-plane"></i> Send Test Email
-                            </button>
-                        </form>
-                    </div>
-                    
                     <div class="tab-pane" id="profile-settings">
                         <h3>Profile Settings</h3>
                         <p>Update your profile details and picture.</p>
@@ -1335,10 +1273,30 @@ $church_logo = getChurchLogo($conn);
                                 </div>
                                 <div class="form-col">
                             <div class="form-group">
+                                <label for="full_name">Full Name</label>
+                                        <input type="text" id="full_name" name="full_name" class="form-control" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
+                            </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-col">
+                            <div class="form-group">
                                 <label for="email">Email</label>
                                         <input type="email" id="email" name="email" class="form-control" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
                             </div>
                                 </div>
+                                <div class="form-col">
+                            <div class="form-group">
+                                <label for="contact_number">Contact Number</label>
+                                        <input type="text" id="contact_number" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($user_profile['contact_number']); ?>" required>
+                            </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="address">Address</label>
+                                <textarea id="address" name="address" class="form-control" rows="3" required><?php echo htmlspecialchars($user_profile['address']); ?></textarea>
                             </div>
 
                             <div class="form-row">
@@ -1410,10 +1368,30 @@ $church_logo = getChurchLogo($conn);
                     </div>
                     <div class="form-col">
                         <div class="form-group">
+                            <label for="new_full_name">Full Name</label>
+                            <input type="text" id="new_full_name" name="new_full_name" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
                             <label for="new_email">Email</label>
                             <input type="email" id="new_email" name="new_email" class="form-control" required>
                         </div>
                     </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="new_contact_number">Contact Number</label>
+                            <input type="text" id="new_contact_number" name="new_contact_number" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new_address">Address</label>
+                    <textarea id="new_address" name="new_address" class="form-control" rows="3" required></textarea>
                 </div>
                 
                 <div class="form-row">
@@ -1431,17 +1409,13 @@ $church_logo = getChurchLogo($conn);
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label for="new_role">Role</label>
-                            <select id="new_role" name="new_role" class="form-control" required>
-                                <option value="Member">Member</option>
-                                <option value="Pastor">Pastor</option>
-                                <option value="Administrator">Administrator</option>
-                            </select>
-                        </div>
-                    </div>
+                <div class="form-group">
+                    <label for="new_role">Role</label>
+                    <select id="new_role" name="new_role" class="form-control" required>
+                        <option value="Member">Member</option>
+                        <option value="Pastor">Pastor</option>
+                        <option value="Administrator">Administrator</option>
+                    </select>
                 </div>
                 
                 <div class="modal-footer">
@@ -1471,10 +1445,30 @@ $church_logo = getChurchLogo($conn);
                     </div>
                     <div class="form-col">
                         <div class="form-group">
+                            <label for="edit_full_name">Full Name</label>
+                            <input type="text" id="edit_full_name" name="edit_full_name" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
                             <label for="edit_email">Email</label>
                             <input type="email" id="edit_email" name="edit_email" class="form-control" required>
                         </div>
                     </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="edit_contact_number">Contact Number</label>
+                            <input type="text" id="edit_contact_number" name="edit_contact_number" class="form-control" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_address">Address</label>
+                    <textarea id="edit_address" name="edit_address" class="form-control" rows="3" required></textarea>
                 </div>
                 
                 <div class="form-row">
@@ -1485,15 +1479,6 @@ $church_logo = getChurchLogo($conn);
                                 <option value="Member">Member</option>
                                 <option value="Pastor">Pastor</option>
                                 <option value="Administrator">Administrator</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-col">
-                        <div class="form-group">
-                            <label for="edit_status">Status</label>
-                            <select id="edit_status" name="edit_status" class="form-control" required>
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
                             </select>
                         </div>
                     </div>
@@ -1525,8 +1510,29 @@ $church_logo = getChurchLogo($conn);
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // DataTable initialization for users table
+            if (window.jQuery) {
+                $('#users-table').DataTable({
+                    columnDefs: [
+                        { width: '7%', targets: 0 }, // ID
+                        { width: '12%', targets: 1 }, // Username
+                        { width: '15%', targets: 2 }, // Full Name
+                        { width: '15%', targets: 3 }, // Email
+                        { width: '12%', targets: 4 }, // Contact Number
+                        { width: '15%', targets: 5 }, // Address
+                        { width: '8%', targets: 6 }, // Role
+                        { width: '10%', targets: 7 }, // Created On
+                        { width: '8%', targets: 8 }  // Actions
+                    ],
+                    autoWidth: false,
+                    responsive: true
+                });
+            }
+            
             // Tab navigation
             const tabLinks = document.querySelectorAll('.tab-navigation a');
             const tabPanes = document.querySelectorAll('.tab-pane');
@@ -1600,11 +1606,14 @@ $church_logo = getChurchLogo($conn);
         });
 
         // Edit user function
-        function editUser(id, username, email, role) {
+        function editUser(id, username, full_name, email, contact_number, address, role) {
             const modal = document.getElementById('edit-user-modal');
             document.getElementById('edit_user_id').value = id;
             document.getElementById('edit_username').value = username;
+            document.getElementById('edit_full_name').value = full_name;
             document.getElementById('edit_email').value = email;
+            document.getElementById('edit_contact_number').value = contact_number;
+            document.getElementById('edit_address').value = address;
             document.getElementById('edit_role').value = role;
             modal.classList.add('show');
         }
@@ -1614,50 +1623,6 @@ $church_logo = getChurchLogo($conn);
             const modal = document.getElementById('delete-user-modal');
             document.getElementById('delete_user_id').value = id;
             modal.classList.add('show');
-        }
-
-        // Search functionality
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) {
-            let searchTimeout;
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                const searchQuery = this.value.trim();
-                
-                searchTimeout = setTimeout(() => {
-                    fetch(`settings.php?ajax_search=1&search=${encodeURIComponent(searchQuery)}`)
-                        .then(response => response.json())
-                        .then(users => {
-                            const tbody = document.querySelector('.table-responsive tbody');
-                            tbody.innerHTML = users.map(user => `
-                                <tr>
-                                    <td>${user.id || ''}</td>
-                                    <td>${user.username || ''}</td>
-                                    <td>${user.email || ''}</td>
-                                    <td>
-                                        <span class="role-badge ${user.role.toLowerCase()}">
-                                            ${user.role || ''}
-                                        </span>
-                                    </td>
-                                    <td>${user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</td>
-                                    <td>
-                                        ${user.id !== 'admin' ? `
-                                            <div class="action-buttons">
-                                                <button type="button" class="action-btn edit-btn" onclick="editUser('${user.id}', '${user.username}', '${user.email}', '${user.role}')">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button type="button" class="action-btn delete-btn" onclick="deleteUser('${user.id}')">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        ` : ''}
-                                    </td>
-                                </tr>
-                            `).join('');
-                        })
-                        .catch(error => console.error('Error:', error));
-                }, 300);
-            });
         }
     </script>
 </body>
