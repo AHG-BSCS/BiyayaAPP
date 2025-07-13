@@ -23,6 +23,14 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
+// Helper function to format dates
+function formatDate($date) {
+    if (empty($date) || $date == '0000-00-00') {
+        return '';
+    }
+    return date('F j, Y', strtotime($date));
+}
+
 // Initialize session arrays if not set
 if (!isset($_SESSION['membership_records'])) {
     $_SESSION['membership_records'] = [];
@@ -31,30 +39,33 @@ if (!isset($_SESSION['baptismal_records'])) {
     $_SESSION['baptismal_records'] = [];
 }
 if (!isset($_SESSION['marriage_records'])) {
-    $_SESSION['marriage_records'] = [
-        ["id" => "W001", "couple" => "Al John & Beep", "marriage_date" => "2030-01-01", "venue" => "Jollibee"]
-    ];
+    $_SESSION['marriage_records'] = [];
 }
 if (!isset($_SESSION['child_dedication_records'])) {
-    $_SESSION['child_dedication_records'] = [
-        ["id" => "C001", "child_name" => "Baby John", "dedication_date" => "2024-01-15", "parents" => "John & Mary"]
-    ];
+    $_SESSION['child_dedication_records'] = [];
 }
 
 // Initialize visitor records if not set
 if (!isset($_SESSION['visitor_records'])) {
-    $_SESSION['visitor_records'] = [
-        [
-            "id" => "V001",
-            "name" => "John Doe",
-            "visit_date" => "2024-03-15",
-            "contact" => "09123456789",
-            "address" => "123 Main St",
-            "purpose" => "Sunday Service",
-            "invited_by" => "Pastor James",
-            "status" => "First Time"
-        ]
-    ];
+    $_SESSION['visitor_records'] = [];
+}
+
+// Fetch visitor records from database
+try {
+    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Check if table exists first
+    $stmt = $conn->query("SHOW TABLES LIKE 'visitor_records'");
+    if ($stmt->rowCount() > 0) {
+        $stmt = $conn->query("SELECT * FROM visitor_records ORDER BY id");
+        $visitor_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $visitor_records = [];
+    }
+} catch(PDOException $e) {
+    $visitor_records = [];
+    // Don't show error message for missing table
 }
 
 // Fetch membership records from database
@@ -82,6 +93,58 @@ try {
     $messageType = "danger";
 }
 
+// Fetch marriage records from database
+try {
+    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $stmt = $conn->query("SELECT * FROM marriage_records ORDER BY id");
+    $marriage_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $marriage_records = [];
+    $message = "Error fetching marriage records: " . $e->getMessage();
+    $messageType = "danger";
+}
+
+// Fetch child dedication records from database
+try {
+    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Check if table exists first
+    $stmt = $conn->query("SHOW TABLES LIKE 'child_dedication_records'");
+    if ($stmt->rowCount() > 0) {
+        $stmt = $conn->query("SELECT * FROM child_dedication_records ORDER BY id");
+        $child_dedication_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $child_dedication_records = [];
+    }
+} catch(PDOException $e) {
+    $child_dedication_records = [];
+    // Don't show error message for missing table
+}
+
+// Fetch burial records from database
+try {
+    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Check if table exists first
+    $stmt = $conn->query("SHOW TABLES LIKE 'burial_records'");
+    if ($stmt->rowCount() > 0) {
+        $stmt = $conn->query("SELECT * FROM burial_records ORDER BY id");
+        $burial_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Debug: Log the burial records
+        error_log("Burial records fetched: " . print_r($burial_records, true));
+    } else {
+        $burial_records = [];
+        error_log("Burial records table does not exist");
+    }
+} catch(PDOException $e) {
+    $burial_records = [];
+    error_log("Error fetching burial records: " . $e->getMessage());
+    // Don't show error message for missing table
+}
+
 // Handle form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $is_admin) {
     // Database connection
@@ -101,7 +164,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
 
         // Store POST values in variables
         $name = $_POST['name'];
-        $join_date = date('Y-m-d');
+        $join_date = $_POST['membership_class_date']; // Use the membership class date as join date
         $status = 'Active';
         $nickname = $_POST['nickname'];
         $address = $_POST['address'];
@@ -126,18 +189,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $how_know = $_POST['how_know'];
         $attendance_duration = $_POST['attendance_duration'];
         $previous_church = $_POST['previous_church'];
+        $membership_class_officiant = $_POST['membership_class_officiant']; // new
 
         // Prepare SQL statement
         $sql = "INSERT INTO membership_records (
             id, name, join_date, status, nickname, address, telephone, cellphone, 
             email, civil_status, sex, birthday, father_name, mother_name, children, 
             education, course, school, year, company, position, business, 
-            spiritual_birthday, inviter, how_know, attendance_duration, previous_church
+            spiritual_birthday, inviter, how_know, attendance_duration, previous_church, membership_class_officiant
         ) VALUES (
             :id, :name, :join_date, :status, :nickname, :address, :telephone, :cellphone,
             :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children,
             :education, :course, :school, :year, :company, :position, :business,
-            :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church
+            :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :membership_class_officiant
         )";
 
         $stmt = $conn->prepare($sql);
@@ -170,6 +234,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $stmt->bindParam(':how_know', $how_know);
         $stmt->bindParam(':attendance_duration', $attendance_duration);
         $stmt->bindParam(':previous_church', $previous_church);
+        $stmt->bindParam(':membership_class_officiant', $membership_class_officiant);
 
         // Execute the statement
         $stmt->execute();
@@ -177,8 +242,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $message = "New member added successfully!";
     $messageType = "success";
 
-        // Refresh the page to show the new record and stay on baptismal tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+        // Refresh the page to show the new record and stay on membership tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#membership");
         exit();
 
     } catch(PDOException $e) {
@@ -202,7 +267,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
         // Store POST values in variables
         $id = $_POST['id'];
         $name = $_POST['name'];
-        $join_date = $_POST['join_date'];
+        $join_date = $_POST['membership_class_date']; // Use membership class date as join date
         $status = $_POST['status'];
         $nickname = $_POST['nickname'];
         $address = $_POST['address'];
@@ -227,6 +292,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
         $how_know = $_POST['how_know'];
         $attendance_duration = $_POST['attendance_duration'];
         $previous_church = $_POST['previous_church'];
+        $membership_class_officiant = $_POST['membership_class_officiant'];
 
         // Prepare SQL statement
         $sql = "UPDATE membership_records SET 
@@ -255,7 +321,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
                 inviter = :inviter,
                 how_know = :how_know,
                 attendance_duration = :attendance_duration,
-                previous_church = :previous_church
+                previous_church = :previous_church,
+                membership_class_officiant = :membership_class_officiant
                 WHERE id = :id";
 
         $stmt = $conn->prepare($sql);
@@ -288,6 +355,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
         $stmt->bindParam(':how_know', $how_know);
         $stmt->bindParam(':attendance_duration', $attendance_duration);
         $stmt->bindParam(':previous_church', $previous_church);
+        $stmt->bindParam(':membership_class_officiant', $membership_class_officiant);
 
         // Execute the statement
         $stmt->execute();
@@ -326,17 +394,69 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             exit();
         } else if ($type === 'membership') {
             // Existing membership delete logic
-            $stmt = $conn->prepare("SELECT name FROM membership_records WHERE id = :id");
-            $stmt->bindParam(':id', $id);
-            $stmt->execute();
-            $member = $stmt->fetch(PDO::FETCH_ASSOC);
-            $memberName = $member ? $member['name'] : 'Unknown Member';
+        $stmt = $conn->prepare("SELECT name FROM membership_records WHERE id = :id");
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        $member = $stmt->fetch(PDO::FETCH_ASSOC);
+        $memberName = $member ? $member['name'] : 'Unknown Member';
             $stmt = $conn->prepare("DELETE FROM membership_records WHERE id = :id");
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        $message = "✅ Member record for <strong>{$memberName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+        $messageType = "success";
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
+        } else if ($type === 'marriage') {
+            $stmt = $conn->prepare("SELECT couple FROM marriage_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
-            $message = "✅ Member record for <strong>{$memberName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+            $marriage = $stmt->fetch(PDO::FETCH_ASSOC);
+            $coupleName = $marriage ? $marriage['couple'] : 'Unknown Couple';
+            $stmt = $conn->prepare("DELETE FROM marriage_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "✅ Marriage record for <strong>{$coupleName}</strong> (ID: {$id}) has been successfully deleted from the system.";
             $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF']);
+            header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+            exit();
+        } else if ($type === 'child_dedication') {
+            $stmt = $conn->prepare("SELECT child_name FROM child_dedication_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $child = $stmt->fetch(PDO::FETCH_ASSOC);
+            $childName = $child ? $child['child_name'] : 'Unknown Child';
+            $stmt = $conn->prepare("DELETE FROM child_dedication_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "✅ Child dedication record for <strong>{$childName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
+            exit();
+        } else if ($type === 'visitor') {
+            $stmt = $conn->prepare("SELECT name FROM visitor_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $visitor = $stmt->fetch(PDO::FETCH_ASSOC);
+            $visitorName = $visitor ? $visitor['name'] : 'Unknown Visitor';
+            $stmt = $conn->prepare("DELETE FROM visitor_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "✅ Visitor record for <strong>{$visitorName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
+            exit();
+        } else if ($type === 'burial') {
+            $stmt = $conn->prepare("SELECT deceased_name FROM burial_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $burial = $stmt->fetch(PDO::FETCH_ASSOC);
+            $deceasedName = $burial ? $burial['deceased_name'] : 'Unknown Deceased';
+            $stmt = $conn->prepare("DELETE FROM burial_records WHERE id = :id");
+            $stmt->bindParam(':id', $id);
+            $stmt->execute();
+            $message = "✅ Burial record for <strong>{$deceasedName}</strong> (ID: {$id}) has been successfully deleted from the system.";
+            $messageType = "success";
+            header("Location: " . $_SERVER['PHP_SELF'] . "#burial");
             exit();
         }
         // ... handle other types as needed ...
@@ -347,66 +467,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
     $conn = null;
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_admin) {
-    $id = htmlspecialchars(trim($_POST["id"]));
-    $password = htmlspecialchars(trim($_POST["password"]));
-    $record_type = htmlspecialchars(trim($_POST["type"]));
-    
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password_db = "";
-    $dbname = "church_db";
 
-    try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password_db);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Get admin's hashed password from database
-        $stmt = $conn->prepare("SELECT password FROM users WHERE username = :username");
-        $stmt->bindParam(':username', $_SESSION["user"]);
-        $stmt->execute();
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($result && password_verify($password, $result['password'])) {
-            switch($record_type) {
-                case 'membership':
-                    $_SESSION['membership_records'] = array_filter($_SESSION['membership_records'], function($record) use ($id) {
-                        return $record['id'] !== $id;
-                    });
-                    $_SESSION['membership_records'] = array_values($_SESSION['membership_records']);
-                    break;
-                case 'baptismal':
-                    $_SESSION['baptismal_records'] = array_filter($_SESSION['baptismal_records'], function($record) use ($id) {
-                        return $record['id'] !== $id;
-                    });
-                    $_SESSION['baptismal_records'] = array_values($_SESSION['baptismal_records']);
-                    break;
-                case 'marriage':
-                    $_SESSION['marriage_records'] = array_filter($_SESSION['marriage_records'], function($record) use ($id) {
-                        return $record['id'] !== $id;
-                    });
-                    $_SESSION['marriage_records'] = array_values($_SESSION['marriage_records']);
-                    break;
-                case 'child_dedication':
-                    $_SESSION['child_dedication_records'] = array_filter($_SESSION['child_dedication_records'], function($record) use ($id) {
-                        return $record['id'] !== $id;
-                    });
-                    $_SESSION['child_dedication_records'] = array_values($_SESSION['child_dedication_records']);
-                    break;
-            }
-            $message = "Record deleted successfully!";
-            $messageType = "success";
-        } else {
-            $message = "Invalid password. Record not deleted.";
-            $messageType = "danger";
-        }
-    } catch(PDOException $e) {
-        $message = "Error: " . $e->getMessage();
-        $messageType = "danger";
-    }
-    $conn = null;
-}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $is_admin) {
     // Database connection
@@ -457,70 +518,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
     $conn = null;
 }
 
-// Handle visitor record additions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_visitor"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
-    try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Get the next ID
-        $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM visitor_records");
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        $next_id = "V" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
-
-        // Store POST values in variables
-        $name = $_POST['name'];
-        $visit_date = $_POST['visit_date'];
-        $contact = $_POST['contact'];
-        $address = $_POST['address'];
-        $purpose = $_POST['purpose'];
-        $invited_by = $_POST['invited_by'];
-        $status = $_POST['status'];
-
-        // Prepare SQL statement
-        $sql = "INSERT INTO visitor_records (
-            id, name, visit_date, contact, address, purpose, invited_by, status
-        ) VALUES (
-            :id, :name, :visit_date, :contact, :address, :purpose, :invited_by, :status
-        )";
-
-        $stmt = $conn->prepare($sql);
-        
-        // Bind parameters
-        $stmt->bindParam(':id', $next_id);
-        $stmt->bindParam(':name', $name);
-        $stmt->bindParam(':visit_date', $visit_date);
-        $stmt->bindParam(':contact', $contact);
-        $stmt->bindParam(':address', $address);
-        $stmt->bindParam(':purpose', $purpose);
-        $stmt->bindParam(':invited_by', $invited_by);
-        $stmt->bindParam(':status', $status);
-
-        // Execute the statement
-        $stmt->execute();
-
-        $message = "New visitor record added successfully!";
-        $messageType = "success";
-
-        // Refresh the page to show the new record
-        header("Location: " . $_SERVER['PHP_SELF']);
-        exit();
-
-    } catch(PDOException $e) {
-        $message = "Error: " . $e->getMessage();
-        $messageType = "danger";
-    }
-    $conn = null;
-}
-
-// Handle visitor record edits
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_visitor"]) && $is_admin) {
+// Handle visitor record save (add or edit)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is_admin) {
     // Database connection
     $servername = "localhost";
     $username = "root";
@@ -541,37 +540,62 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_visitor"]) && $is
         $invited_by = $_POST['invited_by'];
         $status = $_POST['status'];
 
-        // Prepare SQL statement
-        $sql = "UPDATE visitor_records SET 
-                name = :name,
-                visit_date = :visit_date,
-                contact = :contact,
-                address = :address,
-                purpose = :purpose,
-                invited_by = :invited_by,
-                status = :status
-                WHERE id = :id";
+        // Check if this is an add (empty id) or edit (existing id) operation
+        if (empty($id)) {
+            // Add new visitor record
+            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM visitor_records");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $next_id = "V" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
-        $stmt = $conn->prepare($sql);
-        
-        // Bind parameters
-        $stmt->bindParam(':id', $id);
-        $stmt->bindParam(':name', $name);
-        $stmt->bindParam(':visit_date', $visit_date);
-        $stmt->bindParam(':contact', $contact);
-        $stmt->bindParam(':address', $address);
-        $stmt->bindParam(':purpose', $purpose);
-        $stmt->bindParam(':invited_by', $invited_by);
-        $stmt->bindParam(':status', $status);
+            // Prepare SQL statement for INSERT
+            $sql = "INSERT INTO visitor_records (
+                id, name, visit_date, contact, address, purpose, invited_by, status
+            ) VALUES (
+                :id, :name, :visit_date, :contact, :address, :purpose, :invited_by, :status
+            )";
 
-        // Execute the statement
-        $stmt->execute();
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':id', $next_id);
+            $stmt->bindParam(':name', $name);
+            $stmt->bindParam(':visit_date', $visit_date);
+            $stmt->bindParam(':contact', $contact);
+            $stmt->bindParam(':address', $address);
+            $stmt->bindParam(':purpose', $purpose);
+            $stmt->bindParam(':invited_by', $invited_by);
+            $stmt->bindParam(':status', $status);
 
-        $message = "Visitor record updated successfully!";
+            $stmt->execute();
+            $message = "New visitor record added successfully!";
+        } else {
+            // Update existing visitor record
+            $sql = "UPDATE visitor_records SET 
+                    name = :name,
+                    visit_date = :visit_date,
+                    contact = :contact,
+                    address = :address,
+                    purpose = :purpose,
+                    invited_by = :invited_by,
+                    status = :status
+                    WHERE id = :id";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':id', $id);
+            $stmt->bindParam(':name', $name);
+            $stmt->bindParam(':visit_date', $visit_date);
+            $stmt->bindParam(':contact', $contact);
+            $stmt->bindParam(':address', $address);
+            $stmt->bindParam(':purpose', $purpose);
+            $stmt->bindParam(':invited_by', $invited_by);
+            $stmt->bindParam(':status', $status);
+
+            $stmt->execute();
+            $message = "Visitor record updated successfully!";
+        }
+
         $messageType = "success";
 
-        // Refresh the page to show the updated record
-        header("Location: " . $_SERVER['PHP_SELF']);
+        // Refresh the page to show the updated record and stay on visitor tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
         exit();
 
     } catch(PDOException $e) {
@@ -609,8 +633,480 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         $message = "Visitor record deleted successfully!";
         $messageType = "success";
 
-        // Refresh the page to show the updated records
-        header("Location: " . $_SERVER['PHP_SELF']);
+        // Refresh the page to show the updated records and stay on visitor tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle burial record save (add or edit)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Store POST values in variables
+        $id = $_POST['id'];
+        $deceased_name = $_POST['deceased_name'];
+        $burial_date = $_POST['burial_date'];
+        $officiant = $_POST['officiant'];
+        $venue = $_POST['venue'];
+
+        // Check if this is an add (empty id) or edit (existing id) operation
+        if (empty($id)) {
+            // Add new burial record
+            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM burial_records");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $next_id = "B" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
+
+            // Prepare SQL statement for INSERT
+            $sql = "INSERT INTO burial_records (
+                id, deceased_name, burial_date, officiant, venue
+            ) VALUES (
+                :id, :deceased_name, :burial_date, :officiant, :venue
+            )";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':id', $next_id);
+            $stmt->bindParam(':deceased_name', $deceased_name);
+            $stmt->bindParam(':burial_date', $burial_date);
+            $stmt->bindParam(':officiant', $officiant);
+            $stmt->bindParam(':venue', $venue);
+
+            $stmt->execute();
+            $message = "New burial record added successfully!";
+        } else {
+            // Update existing burial record
+            $sql = "UPDATE burial_records SET 
+                    deceased_name = :deceased_name,
+                    burial_date = :burial_date,
+                    officiant = :officiant,
+                    venue = :venue
+                    WHERE id = :id";
+
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':id', $id);
+            $stmt->bindParam(':deceased_name', $deceased_name);
+            $stmt->bindParam(':burial_date', $burial_date);
+            $stmt->bindParam(':officiant', $officiant);
+            $stmt->bindParam(':venue', $venue);
+
+            $stmt->execute();
+            $message = "Burial record updated successfully!";
+        }
+
+        $messageType = "success";
+
+        // Refresh the page to show the updated record and stay on burial tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#burial");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle burial record deletions
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Store POST values in variables
+        $id = $_POST['id'];
+
+        // Prepare SQL statement
+        $sql = "DELETE FROM burial_records WHERE id = :id";
+        $stmt = $conn->prepare($sql);
+        
+        // Bind parameters
+        $stmt->bindParam(':id', $id);
+
+        // Execute the statement
+        $stmt->execute();
+
+        $message = "Burial record deleted successfully!";
+        $messageType = "success";
+
+        // Refresh the page to show the updated records and stay on burial tab
+        header("Location: " . $_SERVER['PHP_SELF'] . "#burial");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle marriage form submissions
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Get the next ID
+        $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM marriage_records");
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $next_id = "M" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
+
+        // Store POST values in variables
+        $marriage_date = $_POST['marriage_date'];
+        $marriage_license_no = $_POST['marriage_license_no'];
+        $husband_name = $_POST['husband_name'];
+        $husband_age = $_POST['husband_age'];
+        $husband_birthdate = $_POST['husband_birthdate'];
+        $husband_birthplace = $_POST['husband_birthplace'];
+        $husband_nationality = $_POST['husband_nationality'];
+        $husband_residence = $_POST['husband_residence'];
+        $husband_parents = $_POST['husband_parents'];
+        $husband_parents_nationality = $_POST['husband_parents_nationality'];
+        $wife_name = $_POST['wife_name'];
+        $wife_age = $_POST['wife_age'];
+        $wife_birthdate = $_POST['wife_birthdate'];
+        $wife_birthplace = $_POST['wife_birthplace'];
+        $wife_nationality = $_POST['wife_nationality'];
+        $wife_residence = $_POST['wife_residence'];
+        $wife_parents = $_POST['wife_parents'];
+        $wife_parents_nationality = $_POST['wife_parents_nationality'];
+        $witnesses = $_POST['witnesses'];
+        $officiated_by = $_POST['officiated_by'];
+
+        // Create couple name for display
+        $couple_name = $husband_name . " & " . $wife_name;
+
+        // Prepare SQL statement
+        $sql = "INSERT INTO marriage_records (
+            id, couple, marriage_date, marriage_license_no, husband_name, husband_age, 
+            husband_birthdate, husband_birthplace, husband_nationality, husband_residence, 
+            husband_parents, husband_parents_nationality, wife_name, wife_age, wife_birthdate, 
+            wife_birthplace, wife_nationality, wife_residence, wife_parents, wife_parents_nationality, 
+            witnesses, officiated_by
+        ) VALUES (
+            :id, :couple, :marriage_date, :marriage_license_no, :husband_name, :husband_age,
+            :husband_birthdate, :husband_birthplace, :husband_nationality, :husband_residence,
+            :husband_parents, :husband_parents_nationality, :wife_name, :wife_age, :wife_birthdate,
+            :wife_birthplace, :wife_nationality, :wife_residence, :wife_parents, :wife_parents_nationality,
+            :witnesses, :officiated_by
+        )";
+
+        $stmt = $conn->prepare($sql);
+        
+        // Bind parameters
+        $stmt->bindParam(':id', $next_id);
+        $stmt->bindParam(':couple', $couple_name);
+        $stmt->bindParam(':marriage_date', $marriage_date);
+        $stmt->bindParam(':marriage_license_no', $marriage_license_no);
+        $stmt->bindParam(':husband_name', $husband_name);
+        $stmt->bindParam(':husband_age', $husband_age);
+        $stmt->bindParam(':husband_birthdate', $husband_birthdate);
+        $stmt->bindParam(':husband_birthplace', $husband_birthplace);
+        $stmt->bindParam(':husband_nationality', $husband_nationality);
+        $stmt->bindParam(':husband_residence', $husband_residence);
+        $stmt->bindParam(':husband_parents', $husband_parents);
+        $stmt->bindParam(':husband_parents_nationality', $husband_parents_nationality);
+        $stmt->bindParam(':wife_name', $wife_name);
+        $stmt->bindParam(':wife_age', $wife_age);
+        $stmt->bindParam(':wife_birthdate', $wife_birthdate);
+        $stmt->bindParam(':wife_birthplace', $wife_birthplace);
+        $stmt->bindParam(':wife_nationality', $wife_nationality);
+        $stmt->bindParam(':wife_residence', $wife_residence);
+        $stmt->bindParam(':wife_parents', $wife_parents);
+        $stmt->bindParam(':wife_parents_nationality', $wife_parents_nationality);
+        $stmt->bindParam(':witnesses', $witnesses);
+        $stmt->bindParam(':officiated_by', $officiated_by);
+
+        // Execute the statement
+        $stmt->execute();
+
+        $message = "New marriage record added successfully!";
+        $messageType = "success";
+
+        // Refresh the page to show the new record
+        header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle marriage record edits
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Store POST values in variables
+        $id = $_POST['id'];
+        $marriage_date = $_POST['marriage_date'];
+        $marriage_license_no = $_POST['marriage_license_no'];
+        $husband_name = $_POST['husband_name'];
+        $husband_age = $_POST['husband_age'];
+        $husband_birthdate = $_POST['husband_birthdate'];
+        $husband_birthplace = $_POST['husband_birthplace'];
+        $husband_nationality = $_POST['husband_nationality'];
+        $husband_residence = $_POST['husband_residence'];
+        $husband_parents = $_POST['husband_parents'];
+        $husband_parents_nationality = $_POST['husband_parents_nationality'];
+        $wife_name = $_POST['wife_name'];
+        $wife_age = $_POST['wife_age'];
+        $wife_birthdate = $_POST['wife_birthdate'];
+        $wife_birthplace = $_POST['wife_birthplace'];
+        $wife_nationality = $_POST['wife_nationality'];
+        $wife_residence = $_POST['wife_residence'];
+        $wife_parents = $_POST['wife_parents'];
+        $wife_parents_nationality = $_POST['wife_parents_nationality'];
+        $witnesses = $_POST['witnesses'];
+        $officiated_by = $_POST['officiated_by'];
+
+        // Create couple name for display
+        $couple_name = $husband_name . " & " . $wife_name;
+
+        // Prepare SQL statement
+        $sql = "UPDATE marriage_records SET 
+                couple = :couple,
+                marriage_date = :marriage_date,
+                marriage_license_no = :marriage_license_no,
+                husband_name = :husband_name,
+                husband_age = :husband_age,
+                husband_birthdate = :husband_birthdate,
+                husband_birthplace = :husband_birthplace,
+                husband_nationality = :husband_nationality,
+                husband_residence = :husband_residence,
+                husband_parents = :husband_parents,
+                husband_parents_nationality = :husband_parents_nationality,
+                wife_name = :wife_name,
+                wife_age = :wife_age,
+                wife_birthdate = :wife_birthdate,
+                wife_birthplace = :wife_birthplace,
+                wife_nationality = :wife_nationality,
+                wife_residence = :wife_residence,
+                wife_parents = :wife_parents,
+                wife_parents_nationality = :wife_parents_nationality,
+                witnesses = :witnesses,
+                officiated_by = :officiated_by
+                WHERE id = :id";
+
+        $stmt = $conn->prepare($sql);
+        
+        // Bind parameters
+        $stmt->bindParam(':id', $id);
+        $stmt->bindParam(':couple', $couple_name);
+        $stmt->bindParam(':marriage_date', $marriage_date);
+        $stmt->bindParam(':marriage_license_no', $marriage_license_no);
+        $stmt->bindParam(':husband_name', $husband_name);
+        $stmt->bindParam(':husband_age', $husband_age);
+        $stmt->bindParam(':husband_birthdate', $husband_birthdate);
+        $stmt->bindParam(':husband_birthplace', $husband_birthplace);
+        $stmt->bindParam(':husband_nationality', $husband_nationality);
+        $stmt->bindParam(':husband_residence', $husband_residence);
+        $stmt->bindParam(':husband_parents', $husband_parents);
+        $stmt->bindParam(':husband_parents_nationality', $husband_parents_nationality);
+        $stmt->bindParam(':wife_name', $wife_name);
+        $stmt->bindParam(':wife_age', $wife_age);
+        $stmt->bindParam(':wife_birthdate', $wife_birthdate);
+        $stmt->bindParam(':wife_birthplace', $wife_birthplace);
+        $stmt->bindParam(':wife_nationality', $wife_nationality);
+        $stmt->bindParam(':wife_residence', $wife_residence);
+        $stmt->bindParam(':wife_parents', $wife_parents);
+        $stmt->bindParam(':wife_parents_nationality', $wife_parents_nationality);
+        $stmt->bindParam(':witnesses', $witnesses);
+        $stmt->bindParam(':officiated_by', $officiated_by);
+
+        // Execute the statement
+        $stmt->execute();
+
+        $message = "Marriage record updated successfully!";
+        $messageType = "success";
+
+        // Refresh the page to show the updated record
+        header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle child dedication form submissions
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Get the next ID
+        $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM child_dedication_records");
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $next_id = "C" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
+
+        // Store POST values in variables
+        $dedication_date = $_POST['dedication_date'];
+        $child_name = $_POST['child_name'];
+        $child_birthdate = $_POST['child_birthdate'];
+        $child_birthplace = $_POST['child_birthplace'];
+        $father_name = $_POST['father_name'];
+        $mother_name = $_POST['mother_name'];
+        $address = $_POST['address'];
+        $grandparents = $_POST['grandparents'];
+        $witnesses = $_POST['witnesses'];
+        $officiated_by = $_POST['officiated_by'];
+
+        // Create parents name for display
+        $parents_name = $father_name . " & " . $mother_name;
+
+        // Prepare SQL statement
+        $sql = "INSERT INTO child_dedication_records (
+            id, dedication_date, child_name, child_birthdate, child_birthplace, 
+            father_name, mother_name, parents, address, grandparents, 
+            witnesses, officiated_by
+        ) VALUES (
+            :id, :dedication_date, :child_name, :child_birthdate, :child_birthplace,
+            :father_name, :mother_name, :parents, :address, :grandparents,
+            :witnesses, :officiated_by
+        )";
+
+        $stmt = $conn->prepare($sql);
+        
+        // Bind parameters
+        $stmt->bindParam(':id', $next_id);
+        $stmt->bindParam(':dedication_date', $dedication_date);
+        $stmt->bindParam(':child_name', $child_name);
+        $stmt->bindParam(':child_birthdate', $child_birthdate);
+        $stmt->bindParam(':child_birthplace', $child_birthplace);
+        $stmt->bindParam(':father_name', $father_name);
+        $stmt->bindParam(':mother_name', $mother_name);
+        $stmt->bindParam(':parents', $parents_name);
+        $stmt->bindParam(':address', $address);
+        $stmt->bindParam(':grandparents', $grandparents);
+        $stmt->bindParam(':witnesses', $witnesses);
+        $stmt->bindParam(':officiated_by', $officiated_by);
+
+        // Execute the statement
+        $stmt->execute();
+
+        $message = "New child dedication record added successfully!";
+        $messageType = "success";
+
+        // Refresh the page to show the new record
+        header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
+        exit();
+
+    } catch(PDOException $e) {
+        $message = "Error: " . $e->getMessage();
+        $messageType = "danger";
+    }
+    $conn = null;
+}
+
+// Handle child dedication record edits
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"]) && $is_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Store POST values in variables
+        $id = $_POST['id'];
+        $dedication_date = $_POST['dedication_date'];
+        $child_name = $_POST['child_name'];
+        $child_birthdate = $_POST['child_birthdate'];
+        $child_birthplace = $_POST['child_birthplace'];
+        $father_name = $_POST['father_name'];
+        $mother_name = $_POST['mother_name'];
+        $address = $_POST['address'];
+        $grandparents = $_POST['grandparents'];
+        $witnesses = $_POST['witnesses'];
+        $officiated_by = $_POST['officiated_by'];
+
+        // Create parents name for display
+        $parents_name = $father_name . " & " . $mother_name;
+
+        // Prepare SQL statement
+        $sql = "UPDATE child_dedication_records SET 
+                dedication_date = :dedication_date,
+                child_name = :child_name,
+                child_birthdate = :child_birthdate,
+                child_birthplace = :child_birthplace,
+                father_name = :father_name,
+                mother_name = :mother_name,
+                parents = :parents,
+                address = :address,
+                grandparents = :grandparents,
+                witnesses = :witnesses,
+                officiated_by = :officiated_by
+                WHERE id = :id";
+
+        $stmt = $conn->prepare($sql);
+        
+        // Bind parameters
+        $stmt->bindParam(':id', $id);
+        $stmt->bindParam(':dedication_date', $dedication_date);
+        $stmt->bindParam(':child_name', $child_name);
+        $stmt->bindParam(':child_birthdate', $child_birthdate);
+        $stmt->bindParam(':child_birthplace', $child_birthplace);
+        $stmt->bindParam(':father_name', $father_name);
+        $stmt->bindParam(':mother_name', $mother_name);
+        $stmt->bindParam(':parents', $parents_name);
+        $stmt->bindParam(':address', $address);
+        $stmt->bindParam(':grandparents', $grandparents);
+        $stmt->bindParam(':witnesses', $witnesses);
+        $stmt->bindParam(':officiated_by', $officiated_by);
+
+        // Execute the statement
+        $stmt->execute();
+
+        $message = "Child dedication record updated successfully!";
+        $messageType = "success";
+
+        // Refresh the page to show the updated record
+        header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
         exit();
 
     } catch(PDOException $e) {
@@ -849,11 +1345,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         }
 
         .sidebar-header img {
             height: 60px;
             margin-bottom: 10px;
+            transition: 0.3s;
         }
 
         .sidebar-header h3 {
@@ -878,7 +1376,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             padding: 12px 20px;
             color: var(--white);
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-size: 16px;
         }
 
         .sidebar-menu a:hover {
@@ -890,9 +1389,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         }
 
         .sidebar-menu i {
-            margin-right: 10px;
+            margin-right: 15px;
             width: 20px;
             text-align: center;
+            font-size: 20px;
+        }
+
+        .sidebar-menu span {
+            margin-left: 10px;
         }
 
         .content-area {
@@ -1533,6 +2037,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         .view-btn:hover {
             background-color: rgb(0, 112, 9);
         }
+
+        /* Form Layout Styles */
+        .form-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+
+        .form-col {
+            flex: 1;
+        }
+
+        .form-section h5 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .form-section h5 i {
+            margin-right: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .form-section {
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1545,13 +2089,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             <div class="sidebar-menu">
                 <ul>
                     <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                    <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
+                    <li><a href="events.php" class="<?php echo $current_page == 'events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="messages.php" class="<?php echo $current_page == 'messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
                     <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
                     <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -1613,6 +2158,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                         <th>Name</th>
                                         <th>Join Date</th>
                                         <th>Status</th>
+                                        <th>Officiant</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1621,12 +2167,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                         <tr>
                                             <td><?php echo htmlspecialchars($record['id']); ?></td>
                                             <td><?php echo htmlspecialchars($record['name']); ?></td>
-                                            <td><?php echo htmlspecialchars($record['join_date']); ?></td>
+                                            <td><?php echo formatDate($record['join_date']); ?></td>
                                             <td>
                                                 <span class="status-badge <?php echo strtolower($record['status']) === 'active' ? 'status-active' : 'status-inactive'; ?>">
                                                     <?php echo htmlspecialchars($record['status']); ?>
                                                 </span>
                                             </td>
+                                            <td><?php echo htmlspecialchars($record['membership_class_officiant'] ?? ''); ?></td>
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="membership-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
@@ -1675,7 +2222,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                         <tr>
                                             <td><?php echo $record['id']; ?></td>
                                             <td><?php echo $record['name']; ?></td>
-                                            <td><?php echo $record['baptism_date']; ?></td>
+                                            <td><?php echo formatDate($record['baptism_date']); ?></td>
                                             <td><?php echo $record['officiant']; ?></td>
                                             <td><?php echo isset($record['venue']) ? $record['venue'] : ''; ?></td>
                                             <td>
@@ -1683,11 +2230,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                                     <button class="action-btn view-btn" id="baptismal-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
                                                         <button class="action-btn edit-btn" id="baptismal-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
-<<<<<<< HEAD
-                                                        <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
-=======
                                                         <button class="action-btn delete-btn" id="baptismal-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1714,23 +2257,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                         <th>ID</th>
                                         <th>Couple</th>
                                         <th>Marriage Date</th>
-                                        <th>Venue</th>
+                                        <th>Officiated By</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($_SESSION['marriage_records'] as $record): ?>
+                                    <?php foreach ($marriage_records as $record): ?>
                                         <tr>
-                                            <td><?php echo $record['id']; ?></td>
-                                            <td><?php echo $record['couple']; ?></td>
-                                            <td><?php echo $record['marriage_date']; ?></td>
-                                            <td><?php echo $record['venue']; ?></td>
+                                            <td><?php echo htmlspecialchars($record['id']); ?></td>
+                                            <td><strong><?php echo htmlspecialchars($record['couple']); ?></strong></td>
+                                            <td><?php echo formatDate($record['marriage_date']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['officiated_by']); ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" id="marriage-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="marriage-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" id="marriage-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" id="marriage-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="marriage-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="marriage-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1758,22 +2301,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                         <th>Child Name</th>
                                         <th>Dedication Date</th>
                                         <th>Parents</th>
+                                        <th>Officiated By</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($_SESSION['child_dedication_records'] as $record): ?>
+                                    <?php foreach ($child_dedication_records as $record): ?>
                                         <tr>
-                                            <td><?php echo $record['id']; ?></td>
-                                            <td><?php echo $record['child_name']; ?></td>
-                                            <td><?php echo $record['dedication_date']; ?></td>
-                                            <td><?php echo $record['parents']; ?></td>
+                                            <td><?php echo htmlspecialchars($record['id']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['child_name']); ?></td>
+                                            <td><?php echo formatDate($record['dedication_date']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['parents']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['officiated_by']); ?></td>
                                             <td>
                                                 <div class="action-buttons">
-                                                    <button class="action-btn view-btn" id="child-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-eye"></i></button>
+                                                    <button class="action-btn view-btn" id="child-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-eye"></i></button>
                                                     <?php if ($is_admin): ?>
-                                                        <button class="action-btn edit-btn" id="child-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-edit"></i></button>
-                                                        <button class="action-btn delete-btn" id="child-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="child"><i class="fas fa-trash"></i></button>
+                                                        <button class="action-btn edit-btn" id="child-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="child-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
@@ -1808,11 +2353,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($_SESSION['visitor_records'] as $record): ?>
+                                    <?php foreach ($visitor_records as $record): ?>
                                         <tr>
                                             <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($record['name'] ?? ''); ?></td>
-                                            <td><?php echo htmlspecialchars($record['visit_date'] ?? ''); ?></td>
+                                            <td><?php echo formatDate($record['visit_date'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($record['contact'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($record['purpose'] ?? ''); ?></td>
                                             <td><?php echo htmlspecialchars($record['invited_by'] ?? ''); ?></td>
@@ -1859,7 +2404,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- Burial records will be listed here. You can populate this with PHP or JS as needed. -->
+                                    <?php foreach ($burial_records as $record): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($record['id']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['deceased_name']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['burial_date']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['officiant']); ?></td>
+                                            <td><?php echo htmlspecialchars($record['venue']); ?></td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="action-btn view-btn" id="burial-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-eye"></i></button>
+                                                    <?php if ($is_admin): ?>
+                                                        <button class="action-btn edit-btn" id="burial-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-edit"></i></button>
+                                                        <button class="action-btn delete-btn" id="burial-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-trash"></i></button>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -1978,6 +2540,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <div class="form-group">
                             <label for="previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
                             <input type="text" id="previous_church" name="previous_church" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="membership_class_date">Date of Membership Class</label>
+                            <input type="date" id="membership_class_date" name="membership_class_date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="membership_class_officiant">Officiant (Pastor who led the membership class)</label>
+                            <input type="text" id="membership_class_officiant" name="membership_class_officiant" class="form-control" required>
                         </div>
                         <div class="modal-buttons">
                             <button type="submit" class="btn" name="add_membership">
@@ -2107,6 +2677,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <label>Previous Church Membership?/Dating miembro ng anong simbahan?</label>
                         <div class="view-field" id="view-membership-previous_church"></div>
                     </div>
+                    <div class="form-group">
+                        <label>Date of Membership Class</label>
+                        <div class="view-field" id="view-membership-class-date"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Officiant (Pastor who led the membership class)</label>
+                        <div class="view-field" id="view-membership-class-officiant"></div>
+                    </div>
                     <div class="modal-buttons">
                         <button type="button" class="btn print-btn" id="print-membership-btn">
                             <i class="fas fa-print"></i> Print
@@ -2133,7 +2711,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                             <input type="text" id="edit-membership-name" name="name" class="form-control" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-membership-join_date">Join Date</label>
+                            <label for="edit-membership-join_date">Date of being Recorded</label>
                             <input type="date" id="edit-membership-join_date" name="join_date" class="form-control" required>
                         </div>
                         <div class="form-group">
@@ -2241,6 +2819,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <div class="form-group">
                             <label for="edit-membership-previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
                             <input type="text" id="edit-membership-previous_church" name="previous_church" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-membership-class-date">Date of Membership Class</label>
+                            <input type="date" id="edit-membership-class-date" name="membership_class_date" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-membership-class-officiant">Officiant (Pastor who led the membership class)</label>
+                            <input type="text" id="edit-membership-class-officiant" name="membership_class_officiant" class="form-control">
                         </div>
                         <div class="modal-buttons">
                             <button type="submit" class="btn" name="edit_membership">
@@ -2445,30 +3031,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
                     <form id="edit-baptismal-form" method="POST">
                         <input type="hidden" name="edit_baptismal" value="1">
-                        <input type="hidden" name="id" id="edit_bap_id">
+                        <input type="hidden" name="edit_bap_id" id="edit_bap_id">
                         <div class="form-group">
                             <label for="edit_bap_name">Name/Pangalan</label>
-                            <input type="text" id="edit_bap_name" name="name" class="form-control" required>
+                            <input type="text" id="edit_bap_name" name="edit_bap_name" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_nickname">Nickname/Palayaw</label>
-                            <input type="text" id="edit_bap_nickname" name="nickname" class="form-control">
+                            <input type="text" id="edit_bap_nickname" name="edit_bap_nickname" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_address">Address/Tirahan</label>
-                            <input type="text" id="edit_bap_address" name="address" class="form-control" required>
+                            <input type="text" id="edit_bap_address" name="edit_bap_address" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_telephone">Telephone No./Telepono</label>
-                            <input type="tel" id="edit_bap_telephone" name="telephone" class="form-control">
+                            <input type="tel" id="edit_bap_telephone" name="edit_bap_telephone" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_cellphone">Cellphone No.</label>
-                            <input type="tel" id="edit_bap_cellphone" name="cellphone" class="form-control" required>
+                            <input type="tel" id="edit_bap_cellphone" name="edit_bap_cellphone" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_email">E-mail</label>
-                            <input type="email" id="edit_bap_email" name="email" class="form-control">
+                            <input type="email" id="edit_bap_email" name="edit_bap_email" class="form-control">
                         </div>
                         <div class="form-group">
                             <label>Civil Status</label>
@@ -2487,79 +3073,79 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_birthday">Birthday/Kaarawan</label>
-                            <input type="date" id="edit_bap_birthday" name="birthday" class="form-control" required>
+                            <input type="date" id="edit_bap_birthday" name="edit_bap_birthday" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_father_name">Father's Name/Pangalan ng Tatay</label>
-                            <input type="text" id="edit_bap_father_name" name="father_name" class="form-control">
+                            <input type="text" id="edit_bap_father_name" name="edit_bap_father_name" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_mother_name">Mother's Name/Pangalan ng Nanay</label>
-                            <input type="text" id="edit_bap_mother_name" name="mother_name" class="form-control">
+                            <input type="text" id="edit_bap_mother_name" name="edit_bap_mother_name" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_children">Name of Children/Pangalan ng Anak</label>
-                            <textarea id="edit_bap_children" name="children" class="form-control" rows="3"></textarea>
+                            <textarea id="edit_bap_children" name="edit_bap_children" class="form-control" rows="3"></textarea>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_education">Educational Attainment/Antas na natapos</label>
-                            <input type="text" id="edit_bap_education" name="education" class="form-control">
+                            <input type="text" id="edit_bap_education" name="edit_bap_education" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_course">Course/Kurso</label>
-                            <input type="text" id="edit_bap_course" name="course" class="form-control">
+                            <input type="text" id="edit_bap_course" name="edit_bap_course" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_school">School/Paaralan</label>
-                            <input type="text" id="edit_bap_school" name="school" class="form-control">
+                            <input type="text" id="edit_bap_school" name="edit_bap_school" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_year">Year/Taon</label>
-                            <input type="text" id="edit_bap_year" name="year" class="form-control">
+                            <input type="text" id="edit_bap_year" name="edit_bap_year" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit_bap_company">If employed, what company/Pangalan ng kompanya</label>
-                            <input type="text" id="edit_bap_company" name="company" class="form-control">
+                            <label for="edit_bap_company">Company/Kumpanya</label>
+                            <input type="text" id="edit_bap_company" name="edit_bap_company" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit_bap_position">Position/Title/Trabaho</label>
-                            <input type="text" id="edit_bap_position" name="position" class="form-control">
+                            <label for="edit_bap_position">Position/Posisyon</label>
+                            <input type="text" id="edit_bap_position" name="edit_bap_position" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit_bap_business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
-                            <input type="text" id="edit_bap_business" name="business" class="form-control">
+                            <label for="edit_bap_business">Business/Negosyo</label>
+                            <input type="text" id="edit_bap_business" name="edit_bap_business" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_spiritual_birthday">Spiritual Birthday</label>
-                            <input type="date" id="edit_bap_spiritual_birthday" name="spiritual_birthday" class="form-control">
+                            <input type="date" id="edit_bap_spiritual_birthday" name="edit_bap_spiritual_birthday" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit_bap_inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
-                            <input type="text" id="edit_bap_inviter" name="inviter" class="form-control">
+                            <label for="edit_bap_inviter">Inviter/Nag-anyaya</label>
+                            <input type="text" id="edit_bap_inviter" name="edit_bap_inviter" class="form-control">
                         </div>
                         <div class="form-group">
-                            <label for="edit_bap_how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
-                            <textarea id="edit_bap_how_know" name="how_know" class="form-control" rows="3"></textarea>
+                            <label for="edit_bap_how_know">How did you know COCD?/Paano mo nakilala ang COCD?</label>
+                            <input type="text" id="edit_bap_how_know" name="edit_bap_how_know" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
-                            <input type="text" id="edit_bap_attendance_duration" name="attendance_duration" class="form-control">
+                            <input type="text" id="edit_bap_attendance_duration" name="edit_bap_attendance_duration" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
-                            <input type="text" id="edit_bap_previous_church" name="previous_church" class="form-control">
+                            <input type="text" id="edit_bap_previous_church" name="edit_bap_previous_church" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_baptism_date">Date of Baptism</label>
-                            <input type="date" id="edit_bap_baptism_date" name="baptism_date" class="form-control" required>
+                            <input type="date" id="edit_bap_baptism_date" name="edit_bap_baptism_date" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_officiant">Officiating Pastor</label>
-                            <input type="text" id="edit_bap_officiant" name="officiant" class="form-control" required>
+                            <input type="text" id="edit_bap_officiant" name="edit_bap_officiant" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_venue">Venue of Baptismal</label>
-                            <input type="text" id="edit_bap_venue" name="venue" class="form-control" required>
+                            <input type="text" id="edit_bap_venue" name="edit_bap_venue" class="form-control" required>
                         </div>
                         <div class="modal-buttons">
                             <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -2616,7 +3202,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                             </select>
                         </div>
                         <div class="modal-buttons">
-                            <button type="submit" class="btn" name="add_visitor">
+                            <button type="submit" class="btn" name="save_visitor" id="save-visitor-btn">
                                 <i class="fas fa-save"></i> Save
                             </button>
                             <button type="button" class="btn exit-btn" id="visitor-exit-btn">
@@ -2624,6 +3210,946 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Add/Edit Burial Modal -->
+            <div class="modal" id="burial-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Burial Record Form</h4>
+                    </div>
+                    <form action="" method="post">
+                        <input type="hidden" id="burial_id" name="id">
+                        <div class="form-group">
+                            <label for="deceased_name">Name of Deceased</label>
+                            <input type="text" id="deceased_name" name="deceased_name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="burial_date">Date of Burial</label>
+                            <input type="date" id="burial_date" name="burial_date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="officiant">Officiant</label>
+                            <input type="text" id="officiant" name="officiant" class="form-control" placeholder="Name of officiating pastor/minister" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="venue">Venue</label>
+                            <input type="text" id="venue" name="venue" class="form-control" placeholder="Burial location/cemetery" required>
+                        </div>
+                        <div class="modal-buttons">
+                            <button type="submit" class="btn" name="save_burial">
+                                <i class="fas fa-save"></i> Submit
+                            </button>
+                            <button type="button" class="btn exit-btn" id="burial-exit-btn">
+                                <i class="fas fa-times"></i> Exit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+                
+                <!-- Add New Marriage Modal -->
+                <div class="modal" id="marriage-modal">
+                    <div class="modal-content">
+                        <div class="form-header">
+                            <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                            <p>25 Artemio B. Fule St., San Pablo City</p>
+                            <h4>Marriage Application Form</h4>
+                        </div>
+                        <form action="" method="post">
+                            <input type="hidden" name="add_marriage" value="1">
+                            
+                            <!-- Marriage Details Section -->
+                            <div class="form-section">
+                                <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                    <i class="fas fa-heart"></i> Marriage Details
+                                </h5>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="marriage_date">Date of Marriage</label>
+                                            <input type="date" id="marriage_date" name="marriage_date" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="marriage_license_no">Marriage License No.</label>
+                                            <input type="text" id="marriage_license_no" name="marriage_license_no" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Husband Information Section -->
+                            <div class="form-section">
+                                <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                    <i class="fas fa-male"></i> Husband Information
+                                </h5>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_name">Name of Husband</label>
+                                            <input type="text" id="husband_name" name="husband_name" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_age">Age</label>
+                                            <input type="number" id="husband_age" name="husband_age" class="form-control" min="18" max="120" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_birthdate">Birthdate</label>
+                                            <input type="date" id="husband_birthdate" name="husband_birthdate" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_birthplace">Birthplace</label>
+                                            <input type="text" id="husband_birthplace" name="husband_birthplace" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_nationality">Nationality</label>
+                                            <input type="text" id="husband_nationality" name="husband_nationality" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_residence">Residence</label>
+                                            <input type="text" id="husband_residence" name="husband_residence" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_parents">Parents</label>
+                                            <input type="text" id="husband_parents" name="husband_parents" class="form-control" placeholder="Father's Name & Mother's Name" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="husband_parents_nationality">Nationality of Parents</label>
+                                            <input type="text" id="husband_parents_nationality" name="husband_parents_nationality" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Wife Information Section -->
+                            <div class="form-section">
+                                <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                    <i class="fas fa-female"></i> Wife Information
+                                </h5>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_name">Name of Wife</label>
+                                            <input type="text" id="wife_name" name="wife_name" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_age">Age</label>
+                                            <input type="number" id="wife_age" name="wife_age" class="form-control" min="18" max="120" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_birthdate">Birthdate</label>
+                                            <input type="date" id="wife_birthdate" name="wife_birthdate" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_birthplace">Birthplace</label>
+                                            <input type="text" id="wife_birthplace" name="wife_birthplace" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_nationality">Nationality</label>
+                                            <input type="text" id="wife_nationality" name="wife_nationality" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_residence">Residence</label>
+                                            <input type="text" id="wife_residence" name="wife_residence" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_parents">Parents</label>
+                                            <input type="text" id="wife_parents" name="wife_parents" class="form-control" placeholder="Father's Name & Mother's Name" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="wife_parents_nationality">Nationality of Parents</label>
+                                            <input type="text" id="wife_parents_nationality" name="wife_parents_nationality" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Additional Marriage Details -->
+                            <div class="form-section">
+                                <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                    <i class="fas fa-church"></i> Ceremony Details
+                                </h5>
+                                <div class="form-row">
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="witnesses">Witnesses</label>
+                                            <textarea id="witnesses" name="witnesses" class="form-control" rows="3" placeholder="Enter names of witnesses" required></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="form-col">
+                                        <div class="form-group">
+                                            <label for="officiated_by">Officiated By</label>
+                                            <input type="text" id="officiated_by" name="officiated_by" class="form-control" placeholder="Name of officiating pastor/minister" required>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div class="modal-buttons">
+                                <button type="submit" class="btn" name="add_marriage">
+                                    <i class="fas fa-save"></i> Submit
+                                </button>
+                                <button type="button" class="btn exit-btn" id="marriage-exit-btn">
+                                    <i class="fas fa-times"></i> Exit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            <!-- Edit Marriage Modal -->
+            <div class="modal" id="edit-marriage-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Edit Marriage Record</h4>
+                    </div>
+                    <form action="" method="post">
+                        <input type="hidden" id="edit-marriage-id" name="id">
+                        <input type="hidden" name="edit_marriage" value="1">
+                        
+                        <!-- Marriage Details Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-heart"></i> Marriage Details
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-marriage-date">Date of Marriage</label>
+                                        <input type="date" id="edit-marriage-date" name="marriage_date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-marriage-license-no">Marriage License No.</label>
+                                        <input type="text" id="edit-marriage-license-no" name="marriage_license_no" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Husband Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-male"></i> Husband Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-name">Name of Husband</label>
+                                        <input type="text" id="edit-husband-name" name="husband_name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-age">Age</label>
+                                        <input type="number" id="edit-husband-age" name="husband_age" class="form-control" min="18" max="120" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-birthdate">Birthdate</label>
+                                        <input type="date" id="edit-husband-birthdate" name="husband_birthdate" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-birthplace">Birthplace</label>
+                                        <input type="text" id="edit-husband-birthplace" name="husband_birthplace" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-nationality">Nationality</label>
+                                        <input type="text" id="edit-husband-nationality" name="husband_nationality" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-residence">Residence</label>
+                                        <input type="text" id="edit-husband-residence" name="husband_residence" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-parents">Parents</label>
+                                        <input type="text" id="edit-husband-parents" name="husband_parents" class="form-control" placeholder="Father's Name & Mother's Name" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-husband-parents-nationality">Nationality of Parents</label>
+                                        <input type="text" id="edit-husband-parents-nationality" name="husband_parents_nationality" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wife Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-female"></i> Wife Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-name">Name of Wife</label>
+                                        <input type="text" id="edit-wife-name" name="wife_name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-age">Age</label>
+                                        <input type="number" id="edit-wife-age" name="wife_age" class="form-control" min="18" max="120" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-birthdate">Birthdate</label>
+                                        <input type="date" id="edit-wife-birthdate" name="wife_birthdate" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-birthplace">Birthplace</label>
+                                        <input type="text" id="edit-wife-birthplace" name="wife_birthplace" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-nationality">Nationality</label>
+                                        <input type="text" id="edit-wife-nationality" name="wife_nationality" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-residence">Residence</label>
+                                        <input type="text" id="edit-wife-residence" name="wife_residence" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-parents">Parents</label>
+                                        <input type="text" id="edit-wife-parents" name="wife_parents" class="form-control" placeholder="Father's Name & Mother's Name" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-wife-parents-nationality">Nationality of Parents</label>
+                                        <input type="text" id="edit-wife-parents-nationality" name="wife_parents_nationality" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Marriage Details -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-church"></i> Ceremony Details
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-witnesses">Witnesses</label>
+                                        <textarea id="edit-witnesses" name="witnesses" class="form-control" rows="3" placeholder="Enter names of witnesses" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-officiated-by">Officiated By</label>
+                                        <input type="text" id="edit-officiated-by" name="officiated_by" class="form-control" placeholder="Name of officiating pastor/minister" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button type="submit" class="btn" name="edit_marriage">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                            <button type="button" class="btn exit-btn" id="edit-marriage-exit-btn">
+                                <i class="fas fa-times"></i> Exit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- View Marriage Modal -->
+            <div class="modal" id="view-marriage-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Marriage Record</h4>
+                    </div>
+                    
+                    <!-- Marriage Details Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-heart"></i> Marriage Details
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>ID</label>
+                                    <div class="view-field" id="view-marriage-id"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Date of Marriage</label>
+                                    <div class="view-field" id="view-marriage-date"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Marriage License No.</label>
+                            <div class="view-field" id="view-marriage-license"></div>
+                        </div>
+                    </div>
+
+                    <!-- Husband Information Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-male"></i> Husband Information
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Name</label>
+                                    <div class="view-field" id="view-marriage-husband-name"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Age</label>
+                                    <div class="view-field" id="view-marriage-husband-age"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Birthdate</label>
+                                    <div class="view-field" id="view-marriage-husband-birthdate"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Birthplace</label>
+                                    <div class="view-field" id="view-marriage-husband-birthplace"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Nationality</label>
+                                    <div class="view-field" id="view-marriage-husband-nationality"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Residence</label>
+                                    <div class="view-field" id="view-marriage-husband-residence"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Parents</label>
+                                    <div class="view-field" id="view-marriage-husband-parents"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Parents' Nationality</label>
+                                    <div class="view-field" id="view-marriage-husband-parents-nationality"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Wife Information Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-female"></i> Wife Information
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Name</label>
+                                    <div class="view-field" id="view-marriage-wife-name"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Age</label>
+                                    <div class="view-field" id="view-marriage-wife-age"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Birthdate</label>
+                                    <div class="view-field" id="view-marriage-wife-birthdate"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Birthplace</label>
+                                    <div class="view-field" id="view-marriage-wife-birthplace"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Nationality</label>
+                                    <div class="view-field" id="view-marriage-wife-nationality"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Residence</label>
+                                    <div class="view-field" id="view-marriage-wife-residence"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Parents</label>
+                                    <div class="view-field" id="view-marriage-wife-parents"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Parents' Nationality</label>
+                                    <div class="view-field" id="view-marriage-wife-parents-nationality"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ceremony Details Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-church"></i> Ceremony Details
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Witnesses</label>
+                                    <div class="view-field" id="view-marriage-witnesses"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Officiated By</label>
+                                    <div class="view-field" id="view-marriage-officiated-by"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-buttons">
+                        <button type="button" class="btn print-btn" id="print-marriage-btn">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                        <button type="button" class="btn exit-btn" id="view-marriage-exit-btn">
+                            <i class="fas fa-times"></i> Exit
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Child Dedication Modal -->
+            <div class="modal" id="child-dedication-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Child Dedication Application Form</h4>
+                    </div>
+                    <form action="" method="post">
+                        <input type="hidden" name="add_child_dedication" value="1">
+                        
+                        <!-- Child Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-baby"></i> Child Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="dedication_date">Date of Dedication</label>
+                                        <input type="date" id="dedication_date" name="dedication_date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="child_name">Name of Child</label>
+                                        <input type="text" id="child_name" name="child_name" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="child_birthdate">Date of Birth</label>
+                                        <input type="date" id="child_birthdate" name="child_birthdate" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="child_birthplace">Place of Birth</label>
+                                        <input type="text" id="child_birthplace" name="child_birthplace" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Parents Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-users"></i> Parents Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="father_name">Name of Father</label>
+                                        <input type="text" id="father_name" name="father_name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="mother_name">Name of Mother</label>
+                                        <input type="text" id="mother_name" name="mother_name" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="address">Address</label>
+                                <input type="text" id="address" name="address" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <!-- Additional Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-info-circle"></i> Additional Information
+                            </h5>
+                            <div class="form-group">
+                                <label for="grandparents">Grandparents</label>
+                                <textarea id="grandparents" name="grandparents" class="form-control" rows="3" placeholder="Enter names of grandparents"></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="witnesses">Witnesses</label>
+                                        <textarea id="witnesses" name="witnesses" class="form-control" rows="3" placeholder="Enter names of witnesses" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="officiated_by">Officiated By</label>
+                                        <input type="text" id="officiated_by" name="officiated_by" class="form-control" placeholder="Name of officiating pastor/minister" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button type="submit" class="btn" name="add_child_dedication">
+                                <i class="fas fa-save"></i> Submit
+                            </button>
+                            <button type="button" class="btn exit-btn" id="child-dedication-exit-btn">
+                                <i class="fas fa-times"></i> Exit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Edit Child Dedication Modal -->
+            <div class="modal" id="edit-child-dedication-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Edit Child Dedication Record</h4>
+                    </div>
+                    <form action="" method="post">
+                        <input type="hidden" id="edit-child-dedication-id" name="id">
+                        <input type="hidden" name="edit_child_dedication" value="1">
+                        
+                        <!-- Child Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-baby"></i> Child Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-dedication-date">Date of Dedication</label>
+                                        <input type="date" id="edit-dedication-date" name="dedication_date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-child-name">Name of Child</label>
+                                        <input type="text" id="edit-child-name" name="child_name" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-child-birthdate">Date of Birth</label>
+                                        <input type="date" id="edit-child-birthdate" name="child_birthdate" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-child-birthplace">Place of Birth</label>
+                                        <input type="text" id="edit-child-birthplace" name="child_birthplace" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Parents Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-users"></i> Parents Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-father-name">Name of Father</label>
+                                        <input type="text" id="edit-father-name" name="father_name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-mother-name">Name of Mother</label>
+                                        <input type="text" id="edit-mother-name" name="mother_name" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-address">Address</label>
+                                <input type="text" id="edit-address" name="address" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <!-- Additional Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-info-circle"></i> Additional Information
+                            </h5>
+                            <div class="form-group">
+                                <label for="edit-grandparents">Grandparents</label>
+                                <textarea id="edit-grandparents" name="grandparents" class="form-control" rows="3" placeholder="Enter names of grandparents"></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-witnesses">Witnesses</label>
+                                        <textarea id="edit-witnesses" name="witnesses" class="form-control" rows="3" placeholder="Enter names of witnesses" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="edit-officiated-by">Officiated By</label>
+                                        <input type="text" id="edit-officiated-by" name="officiated_by" class="form-control" placeholder="Name of officiating pastor/minister" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button type="submit" class="btn" name="edit_child_dedication">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                            <button type="button" class="btn exit-btn" id="edit-child-dedication-exit-btn">
+                                <i class="fas fa-times"></i> Exit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- View Child Dedication Modal -->
+            <div class="modal" id="view-child-dedication-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Child Dedication Record</h4>
+                    </div>
+                    
+                    <!-- Child Information Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-baby"></i> Child Information
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>ID</label>
+                                    <div class="view-field" id="view-child-dedication-id"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Name of Child</label>
+                                    <div class="view-field" id="view-child-dedication-child_name"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Date of Dedication</label>
+                                    <div class="view-field" id="view-child-dedication-dedication_date"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Date of Birth</label>
+                                    <div class="view-field" id="view-child-dedication-child_birthdate"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Place of Birth</label>
+                            <div class="view-field" id="view-child-dedication-child_birthplace"></div>
+                        </div>
+                    </div>
+
+                    <!-- Parents Information Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-users"></i> Parents Information
+                        </h5>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Name of Father</label>
+                                    <div class="view-field" id="view-child-dedication-father_name"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Name of Mother</label>
+                                    <div class="view-field" id="view-child-dedication-mother_name"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Address</label>
+                            <div class="view-field" id="view-child-dedication-address"></div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Information Section -->
+                    <div class="form-section">
+                        <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                            <i class="fas fa-info-circle"></i> Additional Information
+                        </h5>
+                        <div class="form-group">
+                            <label>Grandparents</label>
+                            <div class="view-field" id="view-child-dedication-grandparents"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Witnesses</label>
+                                    <div class="view-field" id="view-child-dedication-witnesses"></div>
+                                </div>
+                            </div>
+                            <div class="form-col">
+                                <div class="form-group">
+                                    <label>Officiated By</label>
+                                    <div class="view-field" id="view-child-dedication-officiated_by"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-buttons">
+                        <button type="button" class="btn print-btn" id="print-child-dedication-btn">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                        <button type="button" class="btn exit-btn" id="view-child-dedication-exit-btn">
+                            <i class="fas fa-times"></i> Exit
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -2677,6 +4203,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
                 </div>
             </div>
+
+            <!-- View Burial Modal -->
+            <div class="modal" id="view-burial-modal">
+                <div class="modal-content">
+                    <div class="form-header">
+                        <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
+                        <p>25 Artemio B. Fule St., San Pablo City</p>
+                        <h4>Burial Record</h4>
+                    </div>
+                    <div class="form-group">
+                        <label>ID</label>
+                        <div class="view-field" id="view-burial-id"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Name of Deceased</label>
+                        <div class="view-field" id="view-burial-deceased-name"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Date of Burial</label>
+                        <div class="view-field" id="view-burial-date"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Officiant</label>
+                        <div class="view-field" id="view-burial-officiant"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Venue</label>
+                        <div class="view-field" id="view-burial-venue"></div>
+                    </div>
+                    <div class="modal-buttons">
+                        <button type="button" class="btn exit-btn" id="view-burial-exit-btn">
+                            <i class="fas fa-times"></i> Exit
+                        </button>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -2709,9 +4271,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
         // View Records Functionality
         function setupViewButtons(recordType) {
-            document.querySelectorAll(`.view-btn[data-type="${recordType}"]`).forEach(btn => {
+            console.log('Setting up view buttons for:', recordType);
+            const buttons = document.querySelectorAll(`.view-btn[data-type="${recordType}"]`);
+            console.log('Found buttons:', buttons.length);
+            buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.getAttribute('data-id');
+                    console.log('View button clicked for:', recordType, 'id:', id);
                     let records;
                     let record;
                     
@@ -2747,6 +4313,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 document.getElementById('view-membership-how_know').textContent = record.how_know || '';
                                 document.getElementById('view-membership-attendance_duration').textContent = record.attendance_duration || '';
                                 document.getElementById('view-membership-previous_church').textContent = record.previous_church || '';
+                                document.getElementById('view-membership-class-date').textContent = record.membership_class_date || '';
+                                document.getElementById('view-membership-class-officiant').textContent = record.membership_class_officiant || '';
                                 openModal('view-membership-modal');
                             }
                             break;
@@ -2787,39 +4355,83 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                             }
                             break;
                         case 'marriage':
-                            records = <?php echo json_encode($_SESSION['marriage_records']); ?>;
+                            records = <?php echo json_encode($marriage_records); ?>;
                             record = records.find(r => r.id === id);
                             if (record) {
-                                document.getElementById('view-marriage-id').textContent = record.id;
-                                document.getElementById('view-marriage-couple').textContent = record.couple;
-                                document.getElementById('view-marriage-marriage_date').textContent = record.marriage_date;
-                                document.getElementById('view-marriage-venue').textContent = record.venue;
+                                const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value || ''; };
+                                fill('view-marriage-id', record.id);
+                                fill('view-marriage-date', record.marriage_date);
+                                fill('view-marriage-license', record.marriage_license_no);
+                                fill('view-marriage-husband-name', record.husband_name);
+                                fill('view-marriage-husband-age', record.husband_age);
+                                fill('view-marriage-husband-birthdate', record.husband_birthdate);
+                                fill('view-marriage-husband-birthplace', record.husband_birthplace);
+                                fill('view-marriage-husband-nationality', record.husband_nationality);
+                                fill('view-marriage-husband-residence', record.husband_residence);
+                                fill('view-marriage-husband-parents', record.husband_parents);
+                                fill('view-marriage-husband-parents-nationality', record.husband_parents_nationality);
+                                fill('view-marriage-wife-name', record.wife_name);
+                                fill('view-marriage-wife-age', record.wife_age);
+                                fill('view-marriage-wife-birthdate', record.wife_birthdate);
+                                fill('view-marriage-wife-birthplace', record.wife_birthplace);
+                                fill('view-marriage-wife-nationality', record.wife_nationality);
+                                fill('view-marriage-wife-residence', record.wife_residence);
+                                fill('view-marriage-wife-parents', record.wife_parents);
+                                fill('view-marriage-wife-parents-nationality', record.wife_parents_nationality);
+                                fill('view-marriage-witnesses', record.witnesses);
+                                fill('view-marriage-officiated-by', record.officiated_by);
                                 openModal('view-marriage-modal');
                             }
                             break;
                         case 'child_dedication':
-                            records = <?php echo json_encode($_SESSION['child_dedication_records']); ?>;
+                            console.log('Child dedication case triggered');
+                            records = <?php echo json_encode($child_dedication_records); ?>;
+                            console.log('Child dedication records:', records);
                             record = records.find(r => r.id === id);
+                            console.log('Found record:', record);
                             if (record) {
-                                document.getElementById('view-child-dedication-id').textContent = record.id;
-                                document.getElementById('view-child-dedication-child_name').textContent = record.child_name;
-                                document.getElementById('view-child-dedication-dedication_date').textContent = record.dedication_date;
-                                document.getElementById('view-child-dedication-parents').textContent = record.parents;
+                                const fill = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value || ''; };
+                                fill('view-child-dedication-id', record.id);
+                                fill('view-child-dedication-child_name', record.child_name);
+                                fill('view-child-dedication-dedication_date', record.dedication_date);
+                                fill('view-child-dedication-child_birthdate', record.child_birthdate);
+                                fill('view-child-dedication-child_birthplace', record.child_birthplace);
+                                fill('view-child-dedication-father_name', record.father_name);
+                                fill('view-child-dedication-mother_name', record.mother_name);
+                                fill('view-child-dedication-address', record.address);
+                                fill('view-child-dedication-grandparents', record.grandparents);
+                                fill('view-child-dedication-witnesses', record.witnesses);
+                                fill('view-child-dedication-officiated_by', record.officiated_by);
                                 openModal('view-child-dedication-modal');
+                            } else {
+                                console.log('No record found for id:', id);
                             }
                             break;
                         case 'visitor':
-                            records = <?php echo json_encode($_SESSION['visitor_records']); ?>;
+                            records = <?php echo json_encode($visitor_records); ?>;
                             record = records.find(r => r.id === id);
                             if (record) {
                                 document.getElementById('view-visitor-id').textContent = record.id;
                                 document.getElementById('view-visitor-name').textContent = record.name;
-                                document.getElementById('view-visitor-visit_date').textContent = record.visit_date;
+                                document.getElementById('view-visitor-date').textContent = record.visit_date;
                                 document.getElementById('view-visitor-contact').textContent = record.contact;
+                                document.getElementById('view-visitor-address').textContent = record.address;
                                 document.getElementById('view-visitor-purpose').textContent = record.purpose;
-                                document.getElementById('view-visitor-invited_by').textContent = record.invited_by;
+                                document.getElementById('view-visitor-invited').textContent = record.invited_by;
                                 document.getElementById('view-visitor-status').textContent = record.status;
                                 openModal('view-visitor-modal');
+                            }
+                            break;
+                        case 'burial':
+                            records = <?php echo json_encode($burial_records); ?>;
+                            record = records.find(r => r.id === id);
+                            if (record) {
+                                document.getElementById('view-burial-id').textContent = record.id;
+                                document.getElementById('view-burial-deceased-name').textContent = record.deceased_name;
+                                document.getElementById('view-burial-date').textContent = record.burial_date;
+                                document.getElementById('view-burial-officiant').textContent = record.officiant;
+                                document.getElementById('view-burial-venue').textContent = record.venue;
+                                openModal('view-burial-modal');
                             }
                             break;
                     }
@@ -2829,9 +4441,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
         // Edit Records Functionality
         function setupEditButtons(recordType) {
-            document.querySelectorAll(`.edit-btn[data-type="${recordType}"]`).forEach(btn => {
+            console.log('Setting up edit buttons for:', recordType);
+            const buttons = document.querySelectorAll(`.edit-btn[data-type="${recordType}"]`);
+            console.log('Found edit buttons:', buttons.length);
+            buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.getAttribute('data-id');
+                    console.log('Edit button clicked for:', recordType, 'id:', id);
                     let records;
                     let record;
                     switch(recordType) {
@@ -2866,6 +4482,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 document.getElementById('edit-membership-how_know').value = record.how_know || '';
                                 document.getElementById('edit-membership-attendance_duration').value = record.attendance_duration || '';
                                 document.getElementById('edit-membership-previous_church').value = record.previous_church || '';
+                                document.getElementById('edit-membership-class-date').value = record.membership_class_date || '';
+                                document.getElementById('edit-membership-class-officiant').value = record.membership_class_officiant || '';
                                 openModal('edit-membership-modal');
                             }
                             break;
@@ -2908,39 +4526,89 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                             }
                             break;
                         case 'marriage':
-                            records = <?php echo json_encode($_SESSION['marriage_records']); ?>;
+                            records = <?php echo json_encode($marriage_records); ?>;
                             record = records.find(r => r.id === id);
                             if (record) {
                                 document.getElementById('edit-marriage-id').value = record.id;
-                                document.getElementById('edit-marriage-couple').value = record.couple;
-                                document.getElementById('edit-marriage-marriage_date').value = record.marriage_date;
-                                document.getElementById('edit-marriage-venue').value = record.venue;
+                                document.getElementById('edit-marriage-date').value = record.marriage_date;
+                                document.getElementById('edit-marriage-license-no').value = record.marriage_license_no;
+                                document.getElementById('edit-husband-name').value = record.husband_name;
+                                document.getElementById('edit-husband-age').value = record.husband_age;
+                                document.getElementById('edit-husband-birthdate').value = record.husband_birthdate;
+                                document.getElementById('edit-husband-birthplace').value = record.husband_birthplace;
+                                document.getElementById('edit-husband-nationality').value = record.husband_nationality;
+                                document.getElementById('edit-husband-residence').value = record.husband_residence;
+                                document.getElementById('edit-husband-parents').value = record.husband_parents;
+                                document.getElementById('edit-husband-parents-nationality').value = record.husband_parents_nationality;
+                                document.getElementById('edit-wife-name').value = record.wife_name;
+                                document.getElementById('edit-wife-age').value = record.wife_age;
+                                document.getElementById('edit-wife-birthdate').value = record.wife_birthdate;
+                                document.getElementById('edit-wife-birthplace').value = record.wife_birthplace;
+                                document.getElementById('edit-wife-nationality').value = record.wife_nationality;
+                                document.getElementById('edit-wife-residence').value = record.wife_residence;
+                                document.getElementById('edit-wife-parents').value = record.wife_parents;
+                                document.getElementById('edit-wife-parents-nationality').value = record.wife_parents_nationality;
+                                document.getElementById('edit-witnesses').value = record.witnesses;
+                                document.getElementById('edit-officiated-by').value = record.officiated_by;
                                 openModal('edit-marriage-modal');
                             }
                             break;
                         case 'child_dedication':
-                            records = <?php echo json_encode($_SESSION['child_dedication_records']); ?>;
+                            console.log('Child dedication edit case triggered');
+                            records = <?php echo json_encode($child_dedication_records); ?>;
+                            console.log('Child dedication edit records:', records);
                             record = records.find(r => r.id === id);
+                            console.log('Found edit record:', record);
                             if (record) {
-                                document.getElementById('edit-child-dedication-id').value = record.id;
-                                document.getElementById('edit-child-dedication-child_name').value = record.child_name;
-                                document.getElementById('edit-child-dedication-dedication_date').value = record.dedication_date;
-                                document.getElementById('edit-child-dedication-parents').value = record.parents;
+                                const fill = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
+                                fill('edit-child-dedication-id', record.id);
+                                fill('edit-dedication-date', record.dedication_date);
+                                fill('edit-child-name', record.child_name);
+                                fill('edit-child-birthdate', record.child_birthdate);
+                                fill('edit-child-birthplace', record.child_birthplace);
+                                fill('edit-father-name', record.father_name);
+                                fill('edit-mother-name', record.mother_name);
+                                fill('edit-address', record.address);
+                                fill('edit-grandparents', record.grandparents);
+                                fill('edit-witnesses', record.witnesses);
+                                fill('edit-officiated-by', record.officiated_by);
                                 openModal('edit-child-dedication-modal');
+                            } else {
+                                console.log('No edit record found for id:', id);
                             }
                             break;
                         case 'visitor':
-                            records = <?php echo json_encode($_SESSION['visitor_records']); ?>;
+                            records = <?php echo json_encode($visitor_records); ?>;
                             record = records.find(r => r.id === id);
                             if (record) {
-                                document.getElementById('edit-visitor-id').value = record.id;
-                                document.getElementById('edit-visitor-name').value = record.name;
-                                document.getElementById('edit-visitor-visit_date').value = record.visit_date;
-                                document.getElementById('edit-visitor-contact').value = record.contact;
-                                document.getElementById('edit-visitor-purpose').value = record.purpose;
-                                document.getElementById('edit-visitor-invited_by').value = record.invited_by;
-                                document.getElementById('edit-visitor-status').value = record.status;
-                                openModal('edit-visitor-modal');
+                                document.getElementById('visitor-id').value = record.id;
+                                document.getElementById('visitor-name').value = record.name;
+                                document.getElementById('visitor-date').value = record.visit_date;
+                                document.getElementById('visitor-contact').value = record.contact;
+                                document.getElementById('visitor-address').value = record.address;
+                                document.getElementById('visitor-purpose').value = record.purpose;
+                                document.getElementById('visitor-invited').value = record.invited_by;
+                                document.getElementById('visitor-status').value = record.status;
+                                
+                                openModal('visitor-modal');
+                            }
+                            break;
+                        case 'burial':
+                            console.log('Burial edit case triggered');
+                            records = <?php echo json_encode($burial_records); ?>;
+                            console.log('Burial records:', records);
+                            record = records.find(r => r.id === id);
+                            console.log('Found burial record:', record);
+                            if (record) {
+                                document.getElementById('burial_id').value = record.id;
+                                document.getElementById('deceased_name').value = record.deceased_name;
+                                document.getElementById('burial_date').value = record.burial_date;
+                                document.getElementById('officiant').value = record.officiant;
+                                document.getElementById('venue').value = record.venue;
+                                
+                                openModal('burial-modal');
+                            } else {
+                                console.log('No burial record found for id:', id);
                             }
                             break;
                     }
@@ -2950,9 +4618,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
         // Delete Records Functionality
         function setupDeleteButtons(recordType) {
-            document.querySelectorAll(`.delete-btn[data-type="${recordType}"]`).forEach(btn => {
+            console.log('Setting up delete buttons for:', recordType);
+            const buttons = document.querySelectorAll(`.delete-btn[data-type="${recordType}"]`);
+            console.log('Found delete buttons:', buttons.length);
+            buttons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const id = btn.getAttribute('data-id');
+                    console.log('Delete button clicked for:', recordType, 'id:', id);
                     const row = btn.closest('tr');
                     const memberName = row ? row.cells[1].textContent : 'Unknown Member';
                     
@@ -3022,23 +4694,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
         // Initialize all functionality
         function initializeAllHandlers() {
+            console.log('Initializing all handlers...');
             setupViewButtons('membership');
             setupViewButtons('baptismal');
             setupViewButtons('marriage');
             setupViewButtons('child_dedication');
             setupViewButtons('visitor');
+            setupViewButtons('burial');
 
             setupEditButtons('membership');
             setupEditButtons('baptismal');
             setupEditButtons('marriage');
             setupEditButtons('child_dedication');
             setupEditButtons('visitor');
+            setupEditButtons('burial');
 
             setupDeleteButtons('membership');
             setupDeleteButtons('baptismal');
             setupDeleteButtons('marriage');
             setupDeleteButtons('child_dedication');
             setupDeleteButtons('visitor');
+            setupDeleteButtons('burial');
 
             setupSearch('membership-table', 'search-members');
             setupSearch('baptismal-table', 'search-baptismal');
@@ -3056,7 +4732,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
             // Add Visitor Modal
             document.getElementById('add-visitor-btn')?.addEventListener('click', () => {
+                // Reset form for adding new visitor
+                document.getElementById('visitor-id').value = '';
+                document.getElementById('visitor-name').value = '';
+                document.getElementById('visitor-date').value = '';
+                document.getElementById('visitor-contact').value = '';
+                document.getElementById('visitor-address').value = '';
+                document.getElementById('visitor-purpose').value = 'Sunday Service';
+                document.getElementById('visitor-invited').value = '';
+                document.getElementById('visitor-status').value = 'First Time';
+                
                 openModal('visitor-modal');
+            });
+
+            // Add Burial Modal
+            document.getElementById('add-burial-btn')?.addEventListener('click', () => {
+                // Reset form for adding new burial
+                document.getElementById('burial_id').value = '';
+                document.getElementById('deceased_name').value = '';
+                document.getElementById('burial_date').value = '';
+                document.getElementById('officiant').value = '';
+                document.getElementById('venue').value = '';
+                openModal('burial-modal');
             });
 
             // Add Baptismal Modal
@@ -3067,8 +4764,71 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                 closeModal('baptismal-modal');
             });
 
+            // Add Marriage Modal
+            document.getElementById('add-marriage-btn')?.addEventListener('click', () => {
+                openModal('marriage-modal');
+            });
+            document.getElementById('marriage-exit-btn')?.addEventListener('click', () => {
+                closeModal('marriage-modal');
+            });
+
+            // Add Child Dedication Modal
+            document.getElementById('add-child-dedication-btn')?.addEventListener('click', () => {
+                openModal('child-dedication-modal');
+            });
+            document.getElementById('child-dedication-exit-btn')?.addEventListener('click', () => {
+                closeModal('child-dedication-modal');
+            });
+
+            document.getElementById('edit-marriage-exit-btn')?.addEventListener('click', () => {
+                closeModal('edit-marriage-modal');
+            });
+
+            document.getElementById('view-child-dedication-exit-btn')?.addEventListener('click', () => {
+                closeModal('view-child-dedication-modal');
+            });
+
+            document.getElementById('edit-child-dedication-exit-btn')?.addEventListener('click', () => {
+                closeModal('edit-child-dedication-modal');
+            });
+
             document.getElementById('view-visitor-exit-btn')?.addEventListener('click', () => {
                 closeModal('view-visitor-modal');
+            });
+
+            document.getElementById('view-burial-exit-btn')?.addEventListener('click', () => {
+                closeModal('view-burial-modal');
+            });
+
+            // Visitor modal exit button
+            document.getElementById('visitor-exit-btn')?.addEventListener('click', () => {
+                closeModal('visitor-modal');
+            });
+
+            // Burial modal exit button
+            document.getElementById('burial-exit-btn')?.addEventListener('click', () => {
+                closeModal('burial-modal');
+            });
+
+            // Marriage modal event listeners
+            document.getElementById('view-marriage-exit-btn')?.addEventListener('click', () => {
+                closeModal('view-marriage-modal');
+            });
+
+            document.getElementById('print-marriage-btn')?.addEventListener('click', () => {
+                const marriageId = document.getElementById('view-marriage-id').textContent;
+                const printFrame = document.createElement('iframe');
+                printFrame.style.display = 'none';
+                document.body.appendChild(printFrame);
+                
+                printFrame.onload = function() {
+                    printFrame.contentWindow.print();
+                    setTimeout(() => {
+                        document.body.removeChild(printFrame);
+                    }, 1000);
+                };
+                
+                printFrame.src = `marriage_certificate_template.php?id=${marriageId}`;
             });
 
             // Print visitor record
@@ -3086,6 +4846,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                 };
                 
                 printFrame.src = `visitor_certificate_template.php?id=${visitorId}`;
+            });
+
+            // Print child dedication record
+            document.getElementById('print-child-dedication-btn')?.addEventListener('click', () => {
+                const childId = document.getElementById('view-child-dedication-id').textContent;
+                const printFrame = document.createElement('iframe');
+                printFrame.style.display = 'none';
+                document.body.appendChild(printFrame);
+                
+                printFrame.onload = function() {
+                    printFrame.contentWindow.print();
+                    setTimeout(() => {
+                        document.body.removeChild(printFrame);
+                    }, 1000);
+                };
+                
+                printFrame.src = `child_dedication_certificate_template.php?id=${childId}`;
             });
 
             // Stay on baptismal tab if hash is present
@@ -3299,9 +5076,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             $('#marriage-table').DataTable();
             $('#child-dedication-table').DataTable();
             $('#visitor-table').DataTable();
+            $('#burial-table').DataTable(); // Add this line for burial tab
         });
     </script>
-<<<<<<< HEAD
     <!-- Add this modal at the end of the file before </body> -->
     <div class="modal" id="delete-baptismal-modal">
         <div class="modal-content">
@@ -3386,13 +5163,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         <div class="modal-content">
             <div class="form-header">
                 <h3>Church of Christ-Disciples (Lopez Jaena) Inc.</h3>
-                <p>25 Artemio B. Fule St., San Pablo City</p>
+                <p>25 Artemio B. Fule St.   , San Pablo City</p>
                 <h4>Baptismal Record</h4>
             </div>
         </div>
-    </div>
-    
-=======
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
+    </div>   
 </body>
 </html>

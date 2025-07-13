@@ -36,71 +36,146 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Simulated events storage (replace with database in production)
-if (!isset($_SESSION['events'])) {
-    $_SESSION['events'] = [
-        ["id" => 1, "title" => "AMEN Prayer Meeting", "category" => "AMEN Fellowship", "date" => "2025-03-25", "time" => "18:00", "description" => "Monthly prayer meeting for men."],
-        ["id" => 2, "title" => "WOW Bible Study", "category" => "WOW Fellowship", "date" => "2025-03-26", "time" => "19:00", "description" => "Women's Bible study session."],
-        ["id" => 3, "title" => "Youth Night", "category" => "Youth Fellowship", "date" => "2025-03-27", "time" => "17:00", "description" => "Fun night for the youth."],
-        ["id" => 4, "title" => "Sunday School Picnic", "category" => "Sunday School", "date" => "2025-03-28", "time" => "10:00", "description" => "Outreach event for kids."]
-    ];
+// Initialize message variables
+$message = null;
+$messageType = null;
+
+// Function to get all events from database
+function getAllEvents($conn) {
+    $events = [];
+    $sql = "SELECT * FROM events ORDER BY event_date ASC, event_time ASC";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $events[] = [
+                'id' => $row['id'],
+                'title' => $row['title'],
+                'category' => $row['category'],
+                'date' => $row['event_date'],
+                'time' => $row['event_time'],
+                'description' => $row['description'],
+                'is_pinned' => $row['is_pinned'],
+                'created_by' => $row['created_by'],
+                'created_at' => $row['created_at']
+            ];
+        }
+    }
+    return $events;
+}
+
+// Function to get pinned event
+function getPinnedEvent($conn) {
+    $sql = "SELECT * FROM events WHERE is_pinned = 1 ORDER BY event_date ASC, event_time ASC LIMIT 1";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        return [
+            'id' => $row['id'],
+            'title' => $row['title'],
+            'category' => $row['category'],
+            'date' => $row['event_date'],
+            'time' => $row['event_time'],
+            'description' => $row['description'],
+            'is_pinned' => $row['is_pinned'],
+            'created_by' => $row['created_by'],
+            'created_at' => $row['created_at']
+        ];
+    }
+    return null;
 }
 
 // Handle event submission (Add) - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_event"]) && $is_admin) {
-    $new_event = [
-        "id" => count($_SESSION['events']) + 1,
-        "title" => htmlspecialchars(trim($_POST["title"])),
-        "category" => htmlspecialchars(trim($_POST["category"])),
-        "date" => date("Y-m-d", strtotime($_POST["datetime"])),
-        "time" => date("H:i", strtotime($_POST["datetime"])),
-        "description" => htmlspecialchars(trim($_POST["description"]))
-    ];
-    $_SESSION['events'][] = $new_event;
-    $message = "Event added successfully!";
-    $messageType = "success";
+    $title = htmlspecialchars(trim($_POST["title"]));
+    $category = htmlspecialchars(trim($_POST["category"]));
+    $event_date = date("Y-m-d", strtotime($_POST["datetime"]));
+    $event_time = date("H:i:s", strtotime($_POST["datetime"]));
+    $description = htmlspecialchars(trim($_POST["description"]));
+    $created_by = $_SESSION["user"];
+
+    $sql = "INSERT INTO events (title, category, event_date, event_time, description, created_by) VALUES (?, ?, ?, ?, ?, ?)";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssssss", $title, $category, $event_date, $event_time, $description, $created_by);
+    
+    if ($stmt->execute()) {
+        $message = "Event added successfully!";
+        $messageType = "success";
+    } else {
+        $message = "Error adding event: " . $conn->error;
+        $messageType = "danger";
+    }
 }
 
 // Handle event removal - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["remove_event"]) && $is_admin) {
     $event_id = (int)$_POST["event_id"];
-    if (isset($_SESSION['pinned_event_id']) && $_SESSION['pinned_event_id'] === $event_id) {
-        unset($_SESSION['pinned_event_id']);
+    
+    $sql = "DELETE FROM events WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $event_id);
+    
+    if ($stmt->execute()) {
+        $message = "Event removed successfully!";
+        $messageType = "success";
+    } else {
+        $message = "Error removing event: " . $conn->error;
+        $messageType = "danger";
     }
-    $_SESSION['events'] = array_filter($_SESSION['events'], function($event) use ($event_id) {
-        return $event['id'] !== $event_id;
-    });
-    $_SESSION['events'] = array_values($_SESSION['events']);
-    $message = "Event removed successfully!";
-    $messageType = "success";
 }
 
 // Handle event edit - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_event"]) && $is_admin) {
     $event_id = (int)$_POST["event_id"];
-    foreach ($_SESSION['events'] as &$event) {
-        if ($event['id'] === $event_id) {
-            $event['title'] = htmlspecialchars(trim($_POST["title"]));
-            $event['category'] = htmlspecialchars(trim($_POST["category"]));
-            $event['date'] = date("Y-m-d", strtotime($_POST["datetime"]));
-            $event['time'] = date("H:i", strtotime($_POST["datetime"]));
-            $event['description'] = htmlspecialchars(trim($_POST["description"]));
-            break;
-        }
+    $title = htmlspecialchars(trim($_POST["title"]));
+    $category = htmlspecialchars(trim($_POST["category"]));
+    $event_date = date("Y-m-d", strtotime($_POST["datetime"]));
+    $event_time = date("H:i:s", strtotime($_POST["datetime"]));
+    $description = htmlspecialchars(trim($_POST["description"]));
+
+    $sql = "UPDATE events SET title = ?, category = ?, event_date = ?, event_time = ?, description = ? WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssssi", $title, $category, $event_date, $event_time, $description, $event_id);
+    
+    if ($stmt->execute()) {
+        $message = "Event updated successfully!";
+        $messageType = "success";
+    } else {
+        $message = "Error updating event: " . $conn->error;
+        $messageType = "danger";
     }
-    unset($event);
-    $message = "Event updated successfully!";
-    $messageType = "success";
 }
 
 // Handle pinning event - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["pin_event"]) && $is_admin) {
     $event_id = (int)$_POST["event_id"];
-    if (isset($_SESSION['pinned_event_id']) && $_SESSION['pinned_event_id'] === $event_id) {
-        unset($_SESSION['pinned_event_id']);
+    
+    // Check if the event is already pinned
+    $check_sql = "SELECT is_pinned FROM events WHERE id = ?";
+    $check_stmt = $conn->prepare($check_sql);
+    $check_stmt->bind_param("i", $event_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    $event = $check_result->fetch_assoc();
+    
+    if ($event && $event['is_pinned']) {
+        // Event was pinned, so unpin it
+        $sql = "UPDATE events SET is_pinned = 0 WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $event_id);
+        $stmt->execute();
         $message = "Event unpinned successfully!";
     } else {
-        $_SESSION['pinned_event_id'] = $event_id;
+        // First, unpin all other events
+        $sql = "UPDATE events SET is_pinned = 0";
+        $conn->query($sql);
+        
+        // Then pin the selected event
+        $sql = "UPDATE events SET is_pinned = 1 WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $event_id);
+        $stmt->execute();
         $message = "Event pinned successfully!";
     }
     $messageType = "success";
@@ -110,20 +185,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["pin_event"]) && $is_ad
 $edit_event = null;
 if (isset($_POST["prepare_edit"]) && $is_admin) {
     $event_id = (int)$_POST["event_id"];
-    $edit_event = array_filter($_SESSION['events'], function($event) use ($event_id) {
-        return $event['id'] === $event_id;
-    });
-    $edit_event = reset($edit_event);
+    $sql = "SELECT * FROM events WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $event_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result && $result->num_rows > 0) {
+        $edit_event = $result->fetch_assoc();
+    }
 }
 
+// Get all events from database
+$events = getAllEvents($conn);
+
 // Get pinned event
-$pinned_event = null;
-if (isset($_SESSION['pinned_event_id'])) {
-    $pinned_event = array_filter($_SESSION['events'], function($event) {
-        return $event['id'] === $_SESSION['pinned_event_id'];
-    });
-    $pinned_event = reset($pinned_event);
-}
+$pinned_event = getPinnedEvent($conn);
 ?>
 
 <!DOCTYPE html>
@@ -134,7 +211,7 @@ if (isset($_SESSION['pinned_event_id'])) {
     <title>Events | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -179,11 +256,13 @@ if (isset($_SESSION['pinned_event_id'])) {
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         }
 
         .sidebar-header img {
             height: 60px;
             margin-bottom: 10px;
+            transition: 0.3s;
         }
 
         .sidebar-header h3 {
@@ -208,7 +287,8 @@ if (isset($_SESSION['pinned_event_id'])) {
             padding: 12px 20px;
             color: var(--white);
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-size: 16px;
         }
 
         .sidebar-menu a:hover {
@@ -220,9 +300,14 @@ if (isset($_SESSION['pinned_event_id'])) {
         }
 
         .sidebar-menu i {
-            margin-right: 10px;
+            margin-right: 15px;
             width: 20px;
             text-align: center;
+            font-size: 20px;
+        }
+
+        .sidebar-menu span {
+            margin-left: 10px;
         }
 
         .content-area {
@@ -282,8 +367,8 @@ if (isset($_SESSION['pinned_event_id'])) {
 
         .user-info p {
             font-size: 12px;
-            color: #666;
             margin: 0;
+            color: #666;
         }
 
         .logout-btn {
@@ -300,6 +385,50 @@ if (isset($_SESSION['pinned_event_id'])) {
             background-color: #e0e0e0;
         }
 
+        @media (max-width: 768px) {
+            .dashboard-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                padding-top: 10px;
+            }
+            .sidebar-menu {
+                display: flex;
+                padding: 0;
+                overflow-x: auto;
+            }
+            .sidebar-menu ul {
+                display: flex;
+                width: 100%;
+            }
+            .sidebar-menu li {
+                margin-bottom: 0;
+                flex: 1;
+            }
+            .sidebar-menu a {
+                padding: 10px;
+                justify-content: center;
+            }
+            .sidebar-menu i {
+                margin-right: 0;
+            }
+            
+            .content-area {
+                margin-left: 0;
+            }
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .user-profile {
+                margin-top: 10px;
+            }
+        }
+
+        /* Events specific styles */
         .events-content {
             margin-top: 20px;
         }
@@ -309,6 +438,8 @@ if (isset($_SESSION['pinned_event_id'])) {
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .search-box {
@@ -354,37 +485,8 @@ if (isset($_SESSION['pinned_event_id'])) {
             background-color: rgb(0, 112, 9);
         }
 
-        .btn-danger {
-            background-color: var(--danger-color);
-        }
-
-        .btn-danger:hover {
-            background-color: #d32f2f;
-        }
-
-        .btn-warning {
-            background-color: var(--warning-color);
-        }
-
-        .btn-warning:hover {
-            background-color: #e68a00;
-        }
-
-        .btn-info {
-            background-color: var(--info-color);
-        }
-
-        .btn-info:hover {
-            background-color: #1976d2;
-        }
-
         .btn i {
             margin-right: 5px;
-        }
-
-        .event-actions .btn {
-            padding: 6px 12px;
-            font-size: 12px;
         }
 
         .event-form {
@@ -435,50 +537,62 @@ if (isset($_SESSION['pinned_event_id'])) {
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-
-        .event-category:hover {
-            transform: translateY(-10px);
         }
 
         .event-category.pinned {
-            border: 3px solid var(--accent-color);
-            background-color: rgba(0, 139, 30, 0.05);
+            border: 2px solid var(--accent-color);
         }
 
         .event-category h3 {
-            color: var(--accent-color);
             margin-bottom: 15px;
-            font-size: 20px;
+            color: var(--primary-color);
+            font-size: 18px;
         }
 
         .event-item {
-            border-bottom: 1px solid #eeeeee;
-            padding: 10px 0;
-            text-align: left;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--accent-color);
         }
 
         .event-item:last-child {
-            border-bottom: none;
+            margin-bottom: 0;
         }
 
         .event-details h4 {
-            font-size: 16px;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            color: var(--primary-color);
         }
 
         .event-details p {
-            font-size: 14px;
-            color: #666;
             margin-bottom: 5px;
+            color: #666;
+        }
+
+        .event-details p i {
+            margin-right: 5px;
+            color: var(--accent-color);
         }
 
         .event-actions {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
             margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-warning {
+            background-color: var(--warning-color);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .btn-info {
+            background-color: var(--info-color);
         }
 
         .alert {
@@ -499,68 +613,9 @@ if (isset($_SESSION['pinned_event_id'])) {
             color: var(--success-color);
         }
 
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-            }
-            .sidebar-header h3, .sidebar-menu span {
-                display: none;
-            }
-            .content-area {
-                margin-left: 70px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
-            .action-bar {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .search-box {
-                width: 100%;
-            }
-            .event-actions {
-                flex-direction: column;
-                gap: 5px;
-            }
+        .alert-danger {
+            background-color: rgba(244, 67, 54, 0.1);
+            color: var(--danger-color);
         }
     </style>
 </head>
@@ -581,6 +636,7 @@ if (isset($_SESSION['pinned_event_id'])) {
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
                     <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -608,7 +664,7 @@ if (isset($_SESSION['pinned_event_id'])) {
 
             <div class="events-content">
                 <?php if (!empty($message) && $is_admin): ?>
-                    <div class="alert alert-<?php echo $messageType; ?>">
+                    <div class="alert alert-<?php echo $messageType; ?>" id="message-alert">
                         <i class="fas fa-info-circle"></i>
                         <?php echo $message; ?>
                     </div>
@@ -680,7 +736,7 @@ if (isset($_SESSION['pinned_event_id'])) {
                             </div>
                             <div class="form-group">
                                 <label for="edit_datetime">Date & Time</label>
-                                <input type="text" id="edit_datetime" name="datetime" class="form-control" value="<?php echo ($edit_event ? $edit_event['date'] . ' ' . $edit_event['time'] : ''); ?>" required>
+                                <input type="text" id="edit_datetime" name="datetime" class="form-control" value="<?php echo ($edit_event ? $edit_event['event_date'] . ' ' . $edit_event['event_time'] : ''); ?>" required>
                             </div>
                             <div class="form-group">
                                 <label for="edit_description">Description</label>
@@ -739,110 +795,87 @@ if (isset($_SESSION['pinned_event_id'])) {
                     $categories = ["AMEN Fellowship", "WOW Fellowship", "Youth Fellowship", "Sunday School Outreach"];
                     foreach ($categories as $category):
                         // Filter events for this category, excluding pinned event only if there are other events to show
-                        $category_events = array_filter($_SESSION['events'], function($event) use ($category) {
-                            return $event['category'] === $category && (!isset($_SESSION['pinned_event_id']) || $event['id'] !== $_SESSION['pinned_event_id']);
+                        $category_events = array_filter($events, function($event) use ($category, $pinned_event) {
+                            return $event['category'] === $category && (!$pinned_event || $event['id'] !== $pinned_event['id']);
                         });
                         // Check if there are any events in this category, including pinned event if it matches
-                        $all_category_events = array_filter($_SESSION['events'], function($event) use ($category) {
+                        $all_category_events = array_filter($events, function($event) use ($category) {
                             return $event['category'] === $category;
                         });
+                        
+                        // Only show category if it has events to display (not all pinned)
+                        if (!empty($category_events) || empty($all_category_events)):
                     ?>
                         <div class="event-category">
                             <h3><?php echo $category; ?></h3>
                             <?php if (empty($all_category_events)): ?>
                                 <p>No upcoming events in this category.</p>
                             <?php else: ?>
-                                <?php if (empty($category_events) && $pinned_event && $pinned_event['category'] === $category): ?>
-                                    <p>(Pinned event displayed above)</p>
-                                <?php else: ?>
-                                    <?php foreach ($category_events as $event): ?>
-                                        <div class="event-item">
-                                            <div class="event-details">
-                                                <h4><?php echo $event['title']; ?></h4>
-                                                <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
-                                                <p><?php echo $event['description']; ?></p>
-                                                <?php if ($is_admin): ?>
-                                                    <div class="event-actions">
-                                                        <form action="" method="post" style="display: inline;">
-                                                            <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                            <button type="submit" class="btn btn-warning" name="prepare_edit">
-                                                                <i class="fas fa-edit"></i> Edit
-                                                            </button>
-                                                        </form>
-                                                        <form action="" method="post" style="display: inline;">
-                                                            <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                            <button type="submit" class="btn btn-danger" name="remove_event">
-                                                                <i class="fas fa-trash"></i> Remove
-                                                            </button>
-                                                        </form>
-                                                        <form action="" method="post" style="display: inline;">
-                                                            <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                            <button type="submit" class="btn btn-info" name="pin_event">
-                                                                <i class="fas fa-thumbtack"></i> <?php echo (isset($_SESSION['pinned_event_id']) && $_SESSION['pinned_event_id'] === $event['id']) ? 'Unpin' : 'Pin'; ?>
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
+                                <?php foreach ($category_events as $event): ?>
+                                    <div class="event-item">
+                                        <div class="event-details">
+                                            <h4><?php echo $event['title']; ?></h4>
+                                            <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
+                                            <p><?php echo $event['description']; ?></p>
+                                            <?php if ($is_admin): ?>
+                                                <div class="event-actions">
+                                                    <form action="" method="post" style="display: inline;">
+                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                        <button type="submit" class="btn btn-warning" name="prepare_edit">
+                                                            <i class="fas fa-edit"></i> Edit
+                                                        </button>
+                                                    </form>
+                                                    <form action="" method="post" style="display: inline;">
+                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                        <button type="submit" class="btn btn-danger" name="remove_event">
+                                                            <i class="fas fa-trash"></i> Remove
+                                                        </button>
+                                                    </form>
+                                                    <form action="" method="post" style="display: inline;">
+                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                        <button type="submit" class="btn btn-info" name="pin_event">
+                                                            <i class="fas fa-thumbtack"></i> Pin
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
-                    <?php endforeach; ?>
+                    <?php 
+                        endif;
+                    endforeach; 
+                    ?>
                 </div>
             </div>
         </main>
     </div>
 
-    <?php if ($is_admin): ?>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const addEventBtn = document.getElementById('add-event-btn');
-            const addEventForm = document.getElementById('add-event-form');
-            const addCancelBtn = document.getElementById('add-cancel-btn');
-            const editEventForm = document.getElementById('edit-event-form');
-            const editCancelBtn = document.getElementById('edit-cancel-btn');
 
-            // Initialize Flatpickr for Add Event
-            flatpickr("#add_datetime", {
-                enableTime: true,
-                dateFormat: "Y-m-d H:i",
-                time_24hr: false,
-                minDate: "today",
-                defaultDate: new Date()
+        // Event form handling
+        $(document).ready(function() {
+            $('#add-event-btn').click(function() {
+                $('#add-event-form').addClass('active');
+                $('#edit-event-form').removeClass('active');
             });
 
-            // Initialize Flatpickr for Edit Event
-            flatpickr("#edit_datetime", {
-                enableTime: true,
-                dateFormat: "Y-m-d H:i",
-                time_24hr: false,
-                minDate: "today"
+            $('#add-cancel-btn').click(function() {
+                $('#add-event-form').removeClass('active');
             });
 
-            if (addEventBtn && addEventForm) {
-                addEventBtn.addEventListener('click', function() {
-                    addEventForm.classList.toggle('active');
-                    editEventForm.classList.remove('active');
-                });
-                addCancelBtn.addEventListener('click', function() {
-                    addEventForm.classList.remove('active');
-                });
-            }
+            $('#edit-cancel-btn').click(function() {
+                $('#edit-event-form').removeClass('active');
+            });
 
-            if (editEventForm) {
-                <?php if ($edit_event): ?>
-                    editEventForm.classList.add('active');
-                    addEventForm.classList.remove('active');
-                <?php endif; ?>
-                editCancelBtn.addEventListener('click', function() {
-                    editEventForm.classList.remove('active');
-                });
-            }
+            // Auto-hide alerts after 3 seconds
+            setTimeout(function() {
+                $('#message-alert').fadeOut();
+            }, 3000);
         });
     </script>
-    <?php endif; ?>
 </body>
 </html>

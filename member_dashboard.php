@@ -240,6 +240,13 @@ $recent_contributions = count(array_filter($donations, function($donation) {
             justify-content: center;
             font-weight: bold;
             margin-right: 10px;
+            overflow: hidden;
+        }
+        
+        .user-profile .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         
         .user-info {
@@ -446,6 +453,8 @@ $recent_contributions = count(array_filter($donations, function($donation) {
                     <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="member_messages.php" class="<?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_prayers.php" class="<?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
+                    <li><a href="member_financialreport.php" class="<?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
+                    <li><a href="member_settings.php" class="<?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -460,7 +469,11 @@ $recent_contributions = count(array_filter($donations, function($donation) {
                 </div>
                 <div class="user-profile">
                     <div class="avatar">
-                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php if (!empty($user_profile['profile_picture'])): ?>
+                            <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
+                        <?php else: ?>
+                            <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php endif; ?>
                     </div>
                     <div class="user-info">
                         <h4><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?></h4>
@@ -474,11 +487,7 @@ $recent_contributions = count(array_filter($donations, function($donation) {
             
             <div class="dashboard-content">
                 <div class="card">
-<<<<<<< HEAD
-                    <h3>Total Tithes</h3>
-=======
                     <h3>Total Amount</h3>
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                     <div class="amount-display">
                         <p id="amount-text">₱<?php echo number_format($total_donated, 2); ?></p>
                         <button id="toggle-amount" class="toggle-btn" title="Toggle amount visibility">

@@ -55,15 +55,21 @@ function getUserProfile($conn, $username) {
 function updateUserProfile($conn, $username, $profile_data) {
     $sql = "UPDATE user_profiles SET 
             username = ?,
+            full_name = ?,
             email = ?,
+            contact_number = ?,
+            address = ?,
             profile_picture = ?,
             updated_at = CURRENT_TIMESTAMP
             WHERE user_id = ?";
             
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssss", 
+    $stmt->bind_param("sssssss", 
         $profile_data['username'],
+        $profile_data['full_name'],
         $profile_data['email'],
+        $profile_data['contact_number'],
+        $profile_data['address'],
         $profile_data['profile_picture'],
         $username
     );

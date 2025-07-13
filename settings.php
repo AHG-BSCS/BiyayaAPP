@@ -123,6 +123,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->execute()) {
                 $message = "User added successfully!";
                 $messageType = "success";
+                
+                // Refresh the users array to include the new user
+                $users = [];
+                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+                $result = $conn->query($sql);
+                while ($row = $result->fetch_assoc()) {
+                    $users[] = [
+                        'id' => $row['user_id'],
+                        'username' => $row['username'],
+                        'full_name' => $row['full_name'],
+                        'email' => $row['email'],
+                        'contact_number' => $row['contact_number'],
+                        'address' => $row['address'],
+                        'role' => $row['role'],
+                        'created_at' => $row['created_at']
+                    ];
+                }
             } else {
                 $message = "Error adding user: " . $conn->error;
                 $messageType = "danger";
@@ -153,9 +170,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt = $conn->prepare($update_sql);
             $stmt->bind_param("sssssss", $username, $full_name, $email, $contact_number, $address, $role, $user_id);
             
-            if ($stmt->execute()) {
-        $message = "User updated successfully!";
-        $messageType = "success";
+                        if ($stmt->execute()) {
+                $message = "User updated successfully!";
+                $messageType = "success";
+                
+                // Refresh the users array to reflect the changes
+                $users = [];
+                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+                $result = $conn->query($sql);
+                while ($row = $result->fetch_assoc()) {
+                    $users[] = [
+                        'id' => $row['user_id'],
+                        'username' => $row['username'],
+                        'full_name' => $row['full_name'],
+                        'email' => $row['email'],
+                        'contact_number' => $row['contact_number'],
+                        'address' => $row['address'],
+                        'role' => $row['role'],
+                        'created_at' => $row['created_at']
+                    ];
+                }
             } else {
                 $message = "Error updating user: " . $conn->error;
                 $messageType = "danger";
@@ -174,12 +208,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("s", $user_id);
             
             if ($stmt->execute()) {
-        $message = "User deleted successfully!";
-        $messageType = "success";
-        } else {
+                $message = "User deleted successfully!";
+                $messageType = "success";
+                
+                // Refresh the users array to reflect the deletion
+                $users = [];
+                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+                $result = $conn->query($sql);
+                while ($row = $result->fetch_assoc()) {
+                    $users[] = [
+                        'id' => $row['user_id'],
+                        'username' => $row['username'],
+                        'full_name' => $row['full_name'],
+                        'email' => $row['email'],
+                        'contact_number' => $row['contact_number'],
+                        'address' => $row['address'],
+                        'role' => $row['role'],
+                        'created_at' => $row['created_at']
+                    ];
+                }
+            } else {
                 $message = "Error deleting user: " . $conn->error;
-            $messageType = "danger";
-        }
+                $messageType = "danger";
+            }
         }
     } elseif (isset($_POST["update_profile"])) {
         $profile_data = [
@@ -333,22 +384,24 @@ $church_logo = getChurchLogo($conn);
             height: 100vh;
             overflow-y: auto;
         }
-        
+
         .sidebar-header {
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         }
-        
+
         .sidebar-header img {
             height: 60px;
             margin-bottom: 10px;
+            transition: 0.3s;
         }
-        
+
         .sidebar-header h3 {
             font-size: 18px;
         }
-        
+
         .sidebar-menu {
             padding: 20px 0;
         }
@@ -367,7 +420,8 @@ $church_logo = getChurchLogo($conn);
             padding: 12px 20px;
             color: var(--white);
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-size: 16px;
         }
         
         .sidebar-menu a:hover {
@@ -379,9 +433,14 @@ $church_logo = getChurchLogo($conn);
         }
         
         .sidebar-menu i {
-            margin-right: 10px;
+            margin-right: 15px;
             width: 20px;
             text-align: center;
+            font-size: 20px;
+        }
+
+        .sidebar-menu span {
+            margin-left: 10px;
         }
         
         .content-area {
@@ -807,6 +866,7 @@ $church_logo = getChurchLogo($conn);
             border-radius: 5px;
             display: flex;
             align-items: center;
+            transition: opacity 0.3s ease;
         }
         
         .alert i {
@@ -895,11 +955,9 @@ $church_logo = getChurchLogo($conn);
                 overflow: visible;
             }
             
-            .sidebar-header h3 {
-                display: none;
-            }
+
             
-            .sidebar-menu span {
+            .sidebar-header h3, .sidebar-menu span {
                 display: none;
             }
             
@@ -924,9 +982,7 @@ $church_logo = getChurchLogo($conn);
                 position: relative;
             }
             
-            .sidebar-header {
-                padding: 10px;
-            }
+
             
             .sidebar-menu {
                 display: flex;
@@ -1060,6 +1116,7 @@ $church_logo = getChurchLogo($conn);
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
                     <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -1086,7 +1143,7 @@ $church_logo = getChurchLogo($conn);
             </div>
             
             <?php if (!empty($message)): ?>
-                <div class="alert alert-<?php echo $messageType; ?>">
+                <div class="alert alert-<?php echo $messageType; ?>" id="message-alert">
                     <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'); ?>"></i>
                     <?php echo $message; ?>
                 </div>
@@ -1513,8 +1570,18 @@ $church_logo = getChurchLogo($conn);
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-<<<<<<< HEAD
+        document.addEventListener('DOMContentLoaded', function() {    
+            // Auto-hide success messages after 3 seconds
+            const messageAlert = document.getElementById('message-alert');
+            if (messageAlert) {
+                setTimeout(function() {
+                    messageAlert.style.opacity = '0';
+                    setTimeout(function() {
+                        messageAlert.style.display = 'none';
+                    }, 300);
+                }, 3000);
+            }
+            
             // DataTable initialization for users table
             if (window.jQuery) {
                 $('#users-table').DataTable({
@@ -1531,7 +1598,8 @@ $church_logo = getChurchLogo($conn);
                     ],
                     autoWidth: false,
                     responsive: true
-=======
+                });
+            }
             // Prevent table movement
             const usersTable = document.getElementById('users-table');
             if (usersTable) {
@@ -1539,7 +1607,6 @@ $church_logo = getChurchLogo($conn);
                 usersTable.style.width = '100%';
                 usersTable.style.tableLayout = 'fixed';
                 usersTable.style.position = 'relative';
-                
                 // Prevent any dynamic changes
                 const observer = new MutationObserver(function(mutations) {
                     mutations.forEach(function(mutation) {
@@ -1551,53 +1618,42 @@ $church_logo = getChurchLogo($conn);
                         }
                     });
                 });
-                
                 observer.observe(usersTable, {
                     attributes: true,
                     attributeFilter: ['style']
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 });
             }
-            
             // Tab navigation
             const tabLinks = document.querySelectorAll('.tab-navigation a');
             const tabPanes = document.querySelectorAll('.tab-pane');
-            
             tabLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
-                    
                     // Remove active class from all tabs
                     tabLinks.forEach(function(link) {
                         link.classList.remove('active');
                     });
-                    
                     // Hide all tab panes
                     tabPanes.forEach(function(pane) {
                         pane.classList.remove('active');
                     });
-                    
                     // Add active class to clicked tab
                     this.classList.add('active');
-                    
                     // Show the corresponding tab pane
                     const tabId = this.getAttribute('data-tab');
                     document.getElementById(tabId).classList.add('active');
                 });
             });
-            
             // Modal functions
             const modals = document.querySelectorAll('.modal');
             const addUserBtn = document.getElementById('add-user-btn');
             const closeModalBtns = document.querySelectorAll('.modal-close, .modal-close-btn');
-            
             // Open add user modal
             if (addUserBtn) {
                 addUserBtn.addEventListener('click', function() {
                     document.getElementById('add-user-modal').classList.add('show');
                 });
             }
-            
             // Close modals
             closeModalBtns.forEach(function(btn) {
                 btn.addEventListener('click', function() {
@@ -1606,7 +1662,6 @@ $church_logo = getChurchLogo($conn);
                     });
                 });
             });
-            
             // Close modal when clicking outside the modal content
             modals.forEach(function(modal) {
                 modal.addEventListener('click', function(e) {
@@ -1615,14 +1670,12 @@ $church_logo = getChurchLogo($conn);
                     }
                 });
             });
-
             // Password confirmation validation
             const addUserForm = document.querySelector('#add-user-modal form');
             if (addUserForm) {
                 addUserForm.addEventListener('submit', function(e) {
                     const password = document.getElementById('new_password').value;
                     const confirmPassword = document.getElementById('new_confirm_password').value;
-                    
                     if (password !== confirmPassword) {
                         e.preventDefault();
                         alert('Passwords do not match!');
@@ -1650,8 +1703,6 @@ $church_logo = getChurchLogo($conn);
             document.getElementById('delete_user_id').value = id;
             modal.classList.add('show');
         }
-<<<<<<< HEAD
-=======
         
         // Restore search functionality
         const searchInput = document.getElementById('search-input');
@@ -1669,7 +1720,7 @@ $church_logo = getChurchLogo($conn);
                 }, 300);
             });
         }
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
+
     </script>
 </body>
 </html>

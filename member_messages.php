@@ -477,6 +477,12 @@ if (!isset($message['title']) || !isset($message['youtube_id']) || !isset($messa
             border-radius: 2px;
         }
 
+        .highlight {
+            background-color: #fff3cd;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -566,6 +572,8 @@ if (!isset($message['title']) || !isset($message['youtube_id']) || !isset($messa
                     <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="member_messages.php" class="<?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_prayers.php" class="<?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
+                    <li><a href="member_financialreport.php" class="<?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
+                    <li><a href="member_settings.php" class="<?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -591,7 +599,7 @@ if (!isset($message['title']) || !isset($message['youtube_id']) || !isset($messa
             </div>
             <div class="search-container">
                 <input type="text" id="search-input" placeholder="Search messages by title, date, or content..." required>
-                <button onclick="searchMessages()">Search</button>
+                <button id="search-btn">Search</button>
             </div>
             <div class="search-results" id="search-results"></div>
             <div class="video-container" id="videoContainer">
@@ -612,8 +620,22 @@ if (!isset($message['title']) || !isset($message['youtube_id']) || !isset($messa
                 <div class="message-outline" id="message-outline" style="display: none;">
                     <ul>
                         <?php foreach ($message['outline'] as $point): ?>
-                            <li class="<?php echo isset($point['bold']) && $point['bold'] ? 'bold' : ''; ?>">
-                                <?php echo htmlspecialchars($point['text']); ?>
+                            <li class="<?php 
+                                if (is_array($point) && isset($point['bold']) && $point['bold']) {
+                                    echo 'bold';
+                                } elseif (is_string($point) && (strpos($point, 'Main Point') !== false || strpos($point, 'I.') !== false || strpos($point, 'II.') !== false || strpos($point, 'III.') !== false || strpos($point, 'IV.') !== false || strpos($point,'V.') !== false || strpos($point, 'TEXT:') !== false)) {
+                                    echo 'bold';
+                                }
+                            ?>">
+                                <?php 
+                                if (is_array($point) && isset($point['text'])) {
+                                    echo htmlspecialchars($point['text']);
+                                } elseif (is_string($point)) {
+                                    echo htmlspecialchars($point);
+                                } else {
+                                    echo htmlspecialchars(json_encode($point));
+                                }
+                                ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>
@@ -627,103 +649,190 @@ if (!isset($message['title']) || !isset($message['youtube_id']) || !isset($messa
 
         // Toggle outline visibility
         function toggleOutline() {
+            console.log('Toggle outline function called');
             const outline = document.getElementById('message-outline');
             const toggleButton = document.querySelector('.outline-toggle');
             
+            console.log('Elements found:', {
+                outline: !!outline,
+                toggleButton: !!toggleButton
+            });
+            
             if (outline && toggleButton) {
+                console.log('Current outline display:', outline.style.display);
                 if (outline.style.display === 'none') {
                     outline.style.display = 'block';
                     toggleButton.textContent = 'Hide Outline';
+                    console.log('Outline shown');
                 } else {
                     outline.style.display = 'none';
                     toggleButton.textContent = 'Show Outline';
+                    console.log('Outline hidden');
                 }
+            } else {
+                console.error('Required elements not found for outline toggle');
             }
         }
 
         // Search functionality
         function searchMessages() {
+            console.log('Search function called');
             const searchInput = document.getElementById('search-input');
+            const searchTerm = searchInput.value.toLowerCase().trim();
             const searchResults = document.getElementById('search-results');
-            const videoContainer = document.getElementById('videoContainer');
             
-            if (!searchInput || !searchResults || !videoContainer) {
-                alert('Error: Required elements not found');
+            if (!searchInput || !searchResults) {
+                console.error('Required elements not found');
                 return;
             }
-
-            const searchTerm = searchInput.value.toLowerCase().trim();
             
             if (!searchTerm) {
-                alert('Please enter a search term');
+                searchInput.setCustomValidity('Please enter a search term');
+                searchInput.reportValidity();
                 return;
             }
-
-            // Hide video container and clear previous results
-            videoContainer.style.display = 'none';
-            searchResults.innerHTML = '';
             
-            // Search through messages
-            const foundMessages = messages.filter((message, index) => {
+            searchInput.setCustomValidity(''); // Clear any previous validation message
+
+            console.log('Search term:', searchTerm);
+            console.log('Messages data:', messages);
+            
+            let foundMessages = [];
+
+            for (let i = 0; i < messages.length; i++) {
+                const message = messages[i];
                 const title = message.title.toLowerCase();
                 const date = message.date.toLowerCase();
-                const outline = Array.isArray(message.outline) ? 
-                    message.outline.map(point => typeof point === 'object' ? point.text : point).join(' ').toLowerCase() : '';
                 
-                return title.includes(searchTerm) || 
-                       date.includes(searchTerm) || 
-                       outline.includes(searchTerm);
-            });
+                // Debug the outline for this message
+                console.log('Message outline:', message.outline);
+                
+                // Get all outline points as a single string for searching
+                const outlineText = Array.isArray(message.outline) ? 
+                    message.outline.map(point => {
+                        if (typeof point === 'object' && point.text) {
+                            return point.text;
+                        } else if (typeof point === 'string') {
+                            return point;
+                        }
+                        return '';
+                    }).join(' ').toLowerCase() : '';
+                
+                console.log('Outline text for searching:', outlineText);
+                
+                // Check if search term exists in any part of the message
+                const titleMatch = title.includes(searchTerm);
+                const dateMatch = date.includes(searchTerm);
+                const outlineMatch = outlineText.includes(searchTerm);
+                
+                console.log('Matches:', {
+                    titleMatch,
+                    dateMatch,
+                    outlineMatch,
+                    searchTerm,
+                    outlineText
+                });
+                
+                if (titleMatch || dateMatch || outlineMatch) {
+                    // Find all matching outline points
+                    let matchingOutlinePoints = [];
+                    if (outlineMatch && Array.isArray(message.outline)) {
+                        matchingOutlinePoints = message.outline.filter(point => {
+                            const pointText = typeof point === 'object' && point.text ? point.text : 
+                                            typeof point === 'string' ? point : '';
+                            return pointText.toLowerCase().includes(searchTerm);
+                        }).map(point => {
+                            return typeof point === 'object' && point.text ? point.text : 
+                                   typeof point === 'string' ? point : '';
+                        });
+                    }
+
+                    foundMessages.push({
+                        index: i,
+                        message: message,
+                        matchType: titleMatch ? 'title' : dateMatch ? 'date' : 'outline',
+                        matchingOutlinePoints: matchingOutlinePoints,
+                        fullOutline: outlineText
+                    });
+                }
+            }
+
+            console.log('Found messages:', foundMessages);
 
             if (foundMessages.length > 0) {
                 // Display search results
-                searchResults.innerHTML = foundMessages.map((message, index) => {
+                searchResults.innerHTML = foundMessages.map(result => {
+                    const message = result.message;
                     const thumbnailUrl = `https://img.youtube.com/vi/${message.youtube_id}/mqdefault.jpg`;
+                    
+                    // Show all matching outline points or first two points if no matches
+                    const outlinePreview = result.matchingOutlinePoints.length > 0 ?
+                        result.matchingOutlinePoints.join(' | ') :
+                        (Array.isArray(message.outline) ? message.outline.slice(0, 2).map(point => {
+                            if (typeof point === 'object' && point.text) {
+                                return point.text;
+                            } else if (typeof point === 'string') {
+                                return point;
+                            }
+                            return '';
+                        }).join(' ') : '');
+                    
                     return `
-                        <div class="search-result-item" onclick="location.href='member_messages.php?message=${index}'">
+                        <div class="search-result-item" onclick="location.href='member_messages.php?message=${result.index}'">
                             <div class="search-result-thumbnail">
                                 <img src="${thumbnailUrl}" alt="${message.title}">
                             </div>
                             <div class="search-result-content">
-                                <div class="search-result-title">${message.title}</div>
+                                <div class="search-result-title">${highlightText(message.title, searchTerm)}</div>
                                 <div class="search-result-date">${message.date}</div>
+                                <div class="search-result-outline">${highlightText(outlinePreview, searchTerm)}</div>
                             </div>
                         </div>
                     `;
                 }).join('');
                 
-                searchResults.style.display = 'block';
+                searchResults.classList.add('show');
+                // Hide video container when showing search results
+                document.getElementById('videoContainer').style.display = 'none';
             } else {
-                searchResults.innerHTML = '<div style="padding: 20px; text-align: center;">No messages found matching your search.</div>';
-                searchResults.style.display = 'block';
+                searchInput.setCustomValidity('No messages found matching your search');
+                searchInput.reportValidity();
+                searchResults.classList.remove('show');
+                // Show video container when no results
+                document.getElementById('videoContainer').style.display = 'block';
+                setTimeout(() => {
+                    searchInput.setCustomValidity('');
+                }, 2000);
             }
         }
 
-        // Add event listeners when the document is loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('search-input');
-            
-            if (searchInput) {
-                // Add enter key support for search
-                searchInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        searchMessages();
-                    }
-                });
+        // Function to highlight matching text
+        function highlightText(text, searchTerm) {
+            if (!searchTerm || !text) return text;
+            const regex = new RegExp(`(${searchTerm})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
 
-                // Clear search results when user starts typing
-                searchInput.addEventListener('input', function() {
-                    const searchResults = document.getElementById('search-results');
-                    const videoContainer = document.getElementById('videoContainer');
-                    
-                    if (searchResults) {
-                        searchResults.style.display = 'none';
-                    }
-                    if (videoContainer) {
-                        videoContainer.style.display = 'block';
-                    }
-                });
+        // Add enter key support for search
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchMessages();
+            }
+        });
+
+        // Add search button click handler
+        document.getElementById('search-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            searchMessages();
+        });
+
+        // Clear validation message and search results when user starts typing
+        document.getElementById('search-input').addEventListener('input', function() {
+            this.setCustomValidity('');
+            if (this.value.trim() === '') {
+                document.getElementById('search-results').classList.remove('show');
+                document.getElementById('videoContainer').style.display = 'block';
             }
         });
     </script>

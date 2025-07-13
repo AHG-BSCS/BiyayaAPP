@@ -208,18 +208,7 @@ $sql = "CREATE TABLE IF NOT EXISTS marriage_records (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )";
 
-if ($conn->query($sql) === TRUE) {
-    // Check if any records exist
-    $result = $conn->query("SELECT COUNT(*) as count FROM marriage_records");
-    $row = $result->fetch_assoc();
-    
-    if ($row['count'] == 0) {
-        // Insert sample record
-        $sql = "INSERT INTO marriage_records (id, couple, marriage_date, venue)
-                VALUES ('W001', 'Al John & Beep', '2030-01-01', 'Jollibee')";
-        $conn->query($sql);
-    }
-}
+$conn->query($sql);
 
 // Create child_dedication_records table if it doesn't exist
 $sql = "CREATE TABLE IF NOT EXISTS child_dedication_records (
@@ -240,6 +229,49 @@ $sql = "CREATE TABLE IF NOT EXISTS child_dedication_records (
     godparents TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+
+$conn->query($sql);
+
+// Create visitor_records table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS visitor_records (
+    id VARCHAR(10) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    visit_date DATE NOT NULL,
+    contact VARCHAR(100),
+    address TEXT,
+    purpose TEXT,
+    invited_by VARCHAR(255),
+    status ENUM('First Time', 'Returning', 'Regular') DEFAULT 'First Time',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+
+$conn->query($sql);
+
+// Create burial_records table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS burial_records (
+    id VARCHAR(10) PRIMARY KEY,
+    deceased_name VARCHAR(255) NOT NULL,
+    burial_date DATE NOT NULL,
+    officiant VARCHAR(255) NOT NULL,
+    venue VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+
+$conn->query($sql);
+
+// Create login_logs table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS login_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(255) NOT NULL,
+    login_time DATETIME NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    status ENUM('Success', 'Failed') NOT NULL,
+    failure_reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 
 $conn->query($sql);
@@ -338,6 +370,79 @@ $sql = "CREATE TABLE IF NOT EXISTS specified_gifts (
     PRIMARY KEY (id)
 )";
 $conn->query($sql);
+
+// Create prayer_requests table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS prayer_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    member_name VARCHAR(255) NOT NULL,
+    prayer_request TEXT NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    urgency ENUM('normal', 'urgent', 'emergency') DEFAULT 'normal',
+    anonymous BOOLEAN DEFAULT FALSE,
+    heart_reactions INT DEFAULT 0,
+    praying_reactions INT DEFAULT 0,
+    like_reactions INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+
+$conn->query($sql);
+
+// Insert sample prayer requests if table is empty
+$result = $conn->query("SELECT COUNT(*) as count FROM prayer_requests");
+$row = $result->fetch_assoc();
+
+if ($row['count'] == 0) {
+    $sample_requests = [
+        [
+            'member_name' => 'John Doe',
+            'prayer_request' => 'Please pray for my mother who is in the hospital. She\'s been diagnosed with pneumonia and needs strength to recover.',
+            'category' => 'Health',
+            'urgency' => 'urgent',
+            'anonymous' => 0,
+            'heart_reactions' => 3,
+            'praying_reactions' => 5,
+            'like_reactions' => 2
+        ],
+        [
+            'member_name' => 'Anonymous',
+            'prayer_request' => 'I\'m struggling with my finances and need prayer for God\'s provision. Please pray for wisdom in managing my resources.',
+            'category' => 'Financial',
+            'urgency' => 'normal',
+            'anonymous' => 1,
+            'heart_reactions' => 1,
+            'praying_reactions' => 4,
+            'like_reactions' => 1
+        ],
+        [
+            'member_name' => 'Sarah Smith',
+            'prayer_request' => 'My family is going through a difficult time. Please pray for unity, understanding, and God\'s peace to reign in our home.',
+            'category' => 'Family',
+            'urgency' => 'normal',
+            'anonymous' => 0,
+            'heart_reactions' => 2,
+            'praying_reactions' => 3,
+            'like_reactions' => 1
+        ]
+    ];
+    
+    foreach ($sample_requests as $request) {
+        $sql = "INSERT INTO prayer_requests (member_name, prayer_request, category, urgency, anonymous, heart_reactions, praying_reactions, like_reactions) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ssssiiii", 
+            $request['member_name'],
+            $request['prayer_request'],
+            $request['category'],
+            $request['urgency'],
+            $request['anonymous'],
+            $request['heart_reactions'],
+            $request['praying_reactions'],
+            $request['like_reactions']
+        );
+        $stmt->execute();
+    }
+}
 
 // Function to get site settings
 function getSiteSettings($conn) {

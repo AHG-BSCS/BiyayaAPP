@@ -144,11 +144,13 @@ $church_logo = getChurchLogo($conn);
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         }
 
         .sidebar-header img {
             height: 60px;
             margin-bottom: 10px;
+            transition: 0.3s;
         }
 
         .sidebar-header h3 {
@@ -173,7 +175,8 @@ $church_logo = getChurchLogo($conn);
             padding: 12px 20px;
             color: var(--white);
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-size: 16px;
         }
 
         .sidebar-menu a:hover {
@@ -185,9 +188,14 @@ $church_logo = getChurchLogo($conn);
         }
 
         .sidebar-menu i {
-            margin-right: 10px;
+            margin-right: 15px;
             width: 20px;
             text-align: center;
+            font-size: 20px;
+        }
+
+        .sidebar-menu span {
+            margin-left: 10px;
         }
 
         .content-area {
@@ -721,6 +729,7 @@ $church_logo = getChurchLogo($conn);
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
                     <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
                 </ul>
             </div>
         </aside>

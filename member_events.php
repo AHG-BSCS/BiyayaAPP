@@ -33,33 +33,89 @@ if (!$is_member) {
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Ensure events array exists
-if (!isset($_SESSION['events'])) {
-    $_SESSION['events'] = [];
+// Function to get all events from database
+function getAllEvents($conn) {
+    $events = [];
+    $sql = "SELECT * FROM events ORDER BY event_date ASC, event_time ASC";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $events[] = [
+                'id' => $row['id'],
+                'title' => $row['title'],
+                'category' => $row['category'],
+                'date' => $row['event_date'],
+                'time' => $row['event_time'],
+                'description' => $row['description'],
+                'is_pinned' => $row['is_pinned'],
+                'created_by' => $row['created_by'],
+                'created_at' => $row['created_at']
+            ];
+        }
+    }
+    return $events;
 }
+
+// Function to get pinned event
+function getPinnedEvent($conn) {
+    $sql = "SELECT * FROM events WHERE is_pinned = 1 ORDER BY event_date ASC, event_time ASC LIMIT 1";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        return [
+            'id' => $row['id'],
+            'title' => $row['title'],
+            'category' => $row['category'],
+            'date' => $row['event_date'],
+            'time' => $row['event_time'],
+            'description' => $row['description'],
+            'is_pinned' => $row['is_pinned'],
+            'created_by' => $row['created_by'],
+            'created_at' => $row['created_at']
+        ];
+    }
+    return null;
+}
+
+// Get all events from database
+$events = getAllEvents($conn);
 
 // Get pinned event
-$pinned_event = null;
-if (isset($_SESSION['pinned_event_id'])) {
-    $pinned_event = array_filter($_SESSION['events'], function($event) {
-        return $event['id'] === $_SESSION['pinned_event_id'];
-    });
-    $pinned_event = reset($pinned_event);
-}
-
-// Debugging: Log session events to console
-$debug_message = "Session events count: " . count($_SESSION['events']);
-if (empty($_SESSION['events'])) {
-    $debug_message .= " (No events in session)";
-} else {
-    $debug_message .= " (Events available)";
-}
+$pinned_event = getPinnedEvent($conn);
 
 // User-friendly message
-$user_message = empty($_SESSION['events']) ? "No upcoming events scheduled at this time." : "Check out our upcoming events below!";
+$user_message = empty($events) ? "No upcoming events scheduled at this time." : "";
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
+
+// Group events by day of the week
+$weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+$events_by_day = [];
+foreach ($weekdays as $day) {
+    $events_by_day[$day] = [];
+}
+
+// Populate events by day from database
+foreach ($events as $event) {
+    $event_date = new DateTime($event['date']);
+    $day_name = $event_date->format('l'); // Gets day name (Monday, Tuesday, etc.)
+    $time = date('H:i', strtotime($event['time']));
+    
+    $events_by_day[$day_name][] = [
+        'day' => $day_name,
+        'time' => $time,
+        'title' => $event['title'],
+        'category' => $event['category'],
+        'description' => $event['description'],
+        'date' => $event['date'],
+        'is_pinned' => $event['is_pinned']
+    ];
+}
+
+// No static events - only database events will be shown
 ?>
 
 <!DOCTYPE html>
@@ -81,6 +137,10 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
             --warning-color: #ff9800;
             --danger-color: #f44336;
             --info-color: #2196f3;
+            --schedule-bg: #f8f9fa;
+            --schedule-border: #e9ecef;
+            --schedule-text: #495057;
+            --schedule-accent: #007bff;
         }
 
         * {
@@ -91,8 +151,8 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
         }
 
         body {
-            background-color: #f5f5f5;
-            color: var(--primary-color);
+            background-color: var(--schedule-bg);
+            color: var(--schedule-text);
             line-height: 1.6;
         }
 
@@ -171,14 +231,16 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
             justify-content: space-between;
             align-items: center;
             background-color: var(--white);
-            padding: 15px 20px;
-            border-radius: 5px;
+            padding: 20px;
+            border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
 
         .top-bar h2 {
-            font-size: 24px;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary-color);
         }
 
         .user-profile {
@@ -187,8 +249,8 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
         }
 
         .user-profile .avatar {
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             background-color: var(--accent-color);
             color: var(--white);
@@ -196,136 +258,270 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            margin-right: 10px;
+            margin-right: 15px;
+            overflow: hidden;
+        }
+
+        .user-profile .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .user-info {
-            margin-right: 15px;
+            margin-right: 20px;
+        }
+
+        .user-info h4 {
+            font-size: 16px;
+            margin: 0;
+            color: var(--primary-color);
         }
 
         .user-info p {
             font-size: 14px;
             color: #666;
+            margin: 0;
         }
 
         .logout-btn {
-            background-color: #f0f0f0;
+            background-color: #f8f9fa;
             color: var(--primary-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            padding: 10px 20px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-weight: 500;
         }
 
         .logout-btn:hover {
-            background-color: #e0e0e0;
+            background-color: #e9ecef;
+            border-color: #adb5bd;
         }
 
-        .events-content {
-            margin-top: 20px;
+        /* Schedule Template Styles */
+        .schedule-container {
+            background: var(--white);
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
         }
 
-        .action-bar {
+        .schedule-header {
+            background: linear-gradient(135deg, var(--accent-color), #005a1f);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .schedule-header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .schedule-header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            min-height: 600px;
+        }
+
+        .time-column {
+            background: #f8f9fa;
+            border-right: 1px solid var(--schedule-border);
+            padding: 20px 0;
+        }
+
+        .time-slot {
+            height: 60px;
             display: flex;
-            justify-content: flex-start;
             align-items: center;
-            margin-bottom: 20px;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--schedule-text);
+            border-bottom: 1px solid var(--schedule-border);
+        }
+
+        .time-slot:last-child {
+            border-bottom: none;
+        }
+
+        .schedule-content {
+            padding: 20px;
+        }
+
+        .day-columns {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 15px;
+            height: 100%;
+        }
+
+        .day-column {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .day-header {
+            background: var(--accent-color);
+            color: white;
+            padding: 15px 10px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 10px;
+        }
+
+        .day-events {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .event-card {
+            background: white;
+            border: 1px solid var(--schedule-border);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .event-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: var(--accent-color);
+        }
+
+        .event-time {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-color);
+            margin-bottom: 3px;
+        }
+
+        .event-date {
+            font-size: 11px;
+            color: #6c757d;
+            margin-bottom: 5px;
+            font-style: italic;
+        }
+
+        .event-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 3px;
+            line-height: 1.3;
+        }
+
+        .event-category {
+            font-size: 11px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .event-description {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 5px;
+            line-height: 1.3;
+        }
+
+        .pinned-event {
+            border: 2px solid var(--accent-color);
+            background: linear-gradient(135deg, rgba(0, 139, 30, 0.05), rgba(0, 139, 30, 0.1));
+        }
+
+        .pinned-event .event-title::before {
+            content: "📌 ";
+        }
+
+        .notification {
+            background: linear-gradient(135deg, var(--accent-color), #005a1f);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0, 139, 30, 0.2);
+        }
+
+        .notification.no-events {
+            background: linear-gradient(135deg, var(--warning-color), #e68a00);
+        }
+
+        .notification i {
+            margin-right: 15px;
+            font-size: 24px;
+        }
+
+        .notification-text {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .search-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .search-box {
             display: flex;
             align-items: center;
-            background-color: #f0f0f0;
-            border-radius: 5px;
-            padding: 5px 15px;
-            width: 300px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px 15px;
+            transition: border-color 0.3s;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(0, 139, 30, 0.1);
         }
 
         .search-box input {
             border: none;
             background-color: transparent;
-            padding: 8px;
+            padding: 0;
             flex: 1;
-            font-size: 14px;
+            font-size: 16px;
+            color: var(--schedule-text);
         }
 
         .search-box input:focus {
             outline: none;
         }
 
+        .search-box input::placeholder {
+            color: #6c757d;
+        }
+
         .search-box i {
-            color: #666;
-        }
-
-        .events-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        .event-category {
-            background-color: var(--white);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-
-        .event-category:hover {
-            transform: translateY(-10px);
-        }
-
-        .event-category.pinned {
-            border: 3px solid var(--accent-color);
-            background-color: rgba(0, 139, 30, 0.05);
-        }
-
-        .event-category h3 {
             color: var(--accent-color);
-            margin-bottom: 15px;
-            font-size: 20px;
-        }
-
-        .event-item {
-            border-bottom: 1px solid #eeeeee;
-            padding: 10px 0;
-            text-align: left;
-        }
-
-        .event-item:last-child {
-            border-bottom: none;
-        }
-
-        .event-details h4 {
-            font-size: 16px;
-            margin-bottom: 5px;
-        }
-
-        .event-details p {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .notification {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
-            display: flex;
-            align-items: center;
-        }
-
-        .notification.no-events {
-            background-color: rgba(255, 152, 0, 0.1);
-            color: var(--warning-color);
-        }
-
-        .notification i {
             margin-right: 10px;
-            font-size: 20px;
+            font-size: 18px;
+        }
+
+        @media (max-width: 1200px) {
+            .day-columns {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
 
         @media (max-width: 992px) {
@@ -337,6 +533,9 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
             }
             .content-area {
                 margin-left: 70px;
+            }
+            .day-columns {
+                grid-template-columns: repeat(3, 1fr);
             }
         }
 
@@ -375,16 +574,32 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
             .top-bar {
                 flex-direction: column;
                 align-items: flex-start;
+                gap: 15px;
             }
             .user-profile {
                 margin-top: 10px;
             }
-            .action-bar {
-                flex-direction: column;
-                gap: 10px;
+            .day-columns {
+                grid-template-columns: repeat(2, 1fr);
             }
-            .search-box {
-                width: 100%;
+            .schedule-grid {
+                grid-template-columns: 80px 1fr;
+            }
+            .time-slot {
+                font-size: 12px;
+                height: 50px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .day-columns {
+                grid-template-columns: 1fr;
+            }
+            .schedule-grid {
+                grid-template-columns: 1fr;
+            }
+            .time-column {
+                display: none;
             }
         }
     </style>
@@ -402,6 +617,8 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                     <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
                     <li><a href="member_messages.php" class="<?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
                     <li><a href="member_prayers.php" class="<?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
+                    <li><a href="member_financialreport.php" class="<?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
+                    <li><a href="member_settings.php" class="<?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
                 </ul>
             </div>
         </aside>
@@ -427,81 +644,105 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                 </div>
             </div>
 
-            <div class="events-content">
-                <!-- User-Friendly Notification -->
-                <div class="notification <?php echo empty($_SESSION['events']) ? 'no-events' : ''; ?>">
-                    <i class="fas fa-<?php echo empty($_SESSION['events']) ? 'exclamation-circle' : 'calendar-alt'; ?>"></i>
-                    <?php echo $user_message; ?>
-                </div>
 
-                <!-- Action Bar with Search -->
-                <div class="action-bar">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" placeholder="Search events...">
+
+            <!-- Search -->
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search events by title, category, or description...">
+                </div>
+            </div>
+
+            <!-- Schedule Template -->
+            <div class="schedule-container">
+                <div class="schedule-header">
+                    <h1>Church Events Schedule</h1>
+                    <p>Join us for fellowship, worship, and spiritual growth</p>
+                </div>
+                
+                <div class="schedule-grid">
+                    <div class="time-column">
+                        <div class="time-slot">09:00</div>
+                        <div class="time-slot">09:30</div>
+                        <div class="time-slot">10:00</div>
+                        <div class="time-slot">10:30</div>
+                        <div class="time-slot">11:00</div>
+                        <div class="time-slot">11:30</div>
+                        <div class="time-slot">12:00</div>
+                        <div class="time-slot">12:30</div>
+                        <div class="time-slot">13:00</div>
+                        <div class="time-slot">13:30</div>
+                        <div class="time-slot">14:00</div>
+                        <div class="time-slot">14:30</div>
+                        <div class="time-slot">15:00</div>
+                        <div class="time-slot">15:30</div>
+                        <div class="time-slot">16:00</div>
+                        <div class="time-slot">16:30</div>
+                        <div class="time-slot">17:00</div>
+                        <div class="time-slot">17:30</div>
+                        <div class="time-slot">18:00</div>
+                        <div class="time-slot">18:30</div>
+                        <div class="time-slot">19:00</div>
+                        <div class="time-slot">19:30</div>
+                        <div class="time-slot">20:00</div>
                     </div>
-                </div>
-
-                <!-- Events Display -->
-                <div class="events-grid">
-                    <!-- Pinned Event Box -->
-                    <?php if ($pinned_event): ?>
-                        <div class="event-category pinned">
-                            <h3>Pinned Event</h3>
-                            <div class="event-item">
-                                <div class="event-details">
-                                    <h4><?php echo htmlspecialchars($pinned_event['title']); ?></h4>
-                                    <p><i class="fas fa-calendar-alt"></i> <?php echo htmlspecialchars($pinned_event['date']); ?> at <?php echo date("h:i A", strtotime($pinned_event['time'])); ?></p>
-                                    <p><i class="fas fa-folder"></i> <?php echo htmlspecialchars($pinned_event['category']); ?></p>
-                                    <p><?php echo htmlspecialchars($pinned_event['description']); ?></p>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Category Boxes -->
-                    <?php
-                    $categories = ["AMEN Fellowship", "WOW Fellowship", "Youth Fellowship", "Sunday School Outreach"];
-                    foreach ($categories as $category):
-                        // Filter events for this category, excluding pinned event
-                        $category_events = array_filter($_SESSION['events'], function($event) use ($category) {
-                            return $event['category'] === $category && (!isset($_SESSION['pinned_event_id']) || $event['id'] !== $_SESSION['pinned_event_id']);
-                        });
-                        // Check if there are any events in this category, including pinned event
-                        $all_category_events = array_filter($_SESSION['events'], function($event) use ($category) {
-                            return $event['category'] === $category;
-                        });
-                    ?>
-                        <div class="event-category">
-                            <h3><?php echo $category; ?></h3>
-                            <?php if (empty($all_category_events)): ?>
-                                <p>No upcoming events in this category.</p>
-                            <?php else: ?>
-                                <?php if (empty($category_events) && $pinned_event && $pinned_event['category'] === $category): ?>
-                                    <p>(Pinned event displayed above)</p>
-                                <?php else: ?>
-                                    <?php foreach ($category_events as $event): ?>
-                                        <div class="event-item">
-                                            <div class="event-details">
-                                                <h4><?php echo htmlspecialchars($event['title']); ?></h4>
-                                                <p><i class="fas fa-calendar-alt"></i> <?php echo htmlspecialchars($event['date']); ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
-                                                <p><i class="fas fa-folder"></i> <?php echo htmlspecialchars($event['category']); ?></p>
-                                                <p><?php echo htmlspecialchars($event['description']); ?></p>
+                    
+                    <div class="schedule-content">
+                        <div class="day-columns">
+                            <?php foreach ($weekdays as $day): ?>
+                                <div class="day-column">
+                                    <div class="day-header"><?php echo $day; ?></div>
+                                    <div class="day-events">
+                                        <?php 
+                                        $day_events = $events_by_day[$day];
+                                        if (empty($day_events)): ?>
+                                            <div class="event-card" style="opacity: 0.5; text-align: center; font-style: italic; color: #6c757d;">
+                                                No events
                                             </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <?php foreach ($day_events as $event): ?>
+                                                <div class="event-card <?php echo ($pinned_event && $pinned_event['title'] === $event['title']) ? 'pinned-event' : ''; ?>">
+                                                    <div class="event-time"><?php echo date("H:i", strtotime($event['time'])); ?></div>
+                                                    <div class="event-date"><?php echo date("M j, Y", strtotime($event['date'])); ?></div>
+                                                    <div class="event-title"><?php echo htmlspecialchars($event['title']); ?></div>
+                                                    <div class="event-category"><?php echo htmlspecialchars($event['category']); ?></div>
+                                                    <div class="event-description"><?php echo htmlspecialchars($event['description']); ?></div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Debug Output for Developers -->
     <script>
-        console.log(<?php echo json_encode($debug_message); ?>);
+        // Search functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.querySelector('.search-box input');
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                
+                eventCards.forEach(card => {
+                    const title = card.querySelector('.event-title')?.textContent.toLowerCase() || '';
+                    const category = card.querySelector('.event-category')?.textContent.toLowerCase() || '';
+                    const description = card.querySelector('.event-description')?.textContent.toLowerCase() || '';
+                    
+                    if (title.includes(searchTerm) || category.includes(searchTerm) || description.includes(searchTerm)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>

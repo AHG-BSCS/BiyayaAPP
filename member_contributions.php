@@ -19,59 +19,60 @@ $current_page = 'member_contributions.php';
 $username = $_SESSION["user"];
 $is_admin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
-<<<<<<< HEAD
-// Get user's contributions - Modified to use user_profiles table
-=======
-// Get user's contributions - Fixed to use username instead of user_id
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
-$stmt = $conn->prepare("
-    SELECT 
-        c.id,
-        c.amount,
-        c.contribution_type,
-        c.contribution_date,
-        c.payment_method,
-        c.reference_number,
-        c.status,
-        c.notes,
-<<<<<<< HEAD
-        up.full_name as member_name,
-        up.role as member_role
-    FROM contributions c
-    JOIN user_profiles up ON c.user_id = up.user_id
-    WHERE c.user_id = ?
-    ORDER BY c.contribution_date DESC
-");
-$stmt->bind_param("s", $user_id);
-=======
-        up.full_name as member_name
-    FROM contributions c
-    JOIN user_profiles up ON c.user_id = up.user_id
-    WHERE up.username = ?
-    ORDER BY c.contribution_date DESC
-");
-$stmt->bind_param("s", $username);
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
-$stmt->execute();
-$contributions = $stmt->get_result();
 
-// Get total contributions - Fixed to use username
-$stmt = $conn->prepare("
-    SELECT 
-        SUM(CASE WHEN c.contribution_type = 'tithe' THEN c.amount ELSE 0 END) as total_tithe,
-        SUM(CASE WHEN c.contribution_type = 'offering' THEN c.amount ELSE 0 END) as total_offering,
-        SUM(c.amount) as total_contributions
-    FROM contributions c
-    JOIN user_profiles up ON c.user_id = up.user_id
-    WHERE up.username = ?
-");
-<<<<<<< HEAD
-$stmt->bind_param("s", $user_id);
-=======
+// Get user's user_id from username
+$stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
 $stmt->bind_param("s", $username);
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $stmt->execute();
-$totals = $stmt->get_result()->fetch_assoc();
+$user_result = $stmt->get_result();
+$user_data = $user_result->fetch_assoc();
+$user_id = $user_data ? $user_data['user_id'] : null;
+
+// Get user's contributions
+$contributions = null;
+if ($user_id) {
+    $stmt = $conn->prepare("
+        SELECT 
+            c.id,
+            c.amount,
+            c.contribution_type,
+            c.contribution_date,
+            c.payment_method,
+            c.reference_number,
+            c.status,
+            c.notes,
+            up.full_name as member_name,
+            up.role as member_role
+        FROM contributions c
+        JOIN user_profiles up ON c.user_id = up.user_id
+        WHERE c.user_id = ?
+        ORDER BY c.contribution_date DESC
+    ");
+    $stmt->bind_param("s", $user_id);
+    $stmt->execute();
+    $contributions = $stmt->get_result();
+}
+
+// Get total contributions for the user
+$totals = [
+    'total_tithe' => 0,
+    'total_offering' => 0,
+    'total_contributions' => 0
+];
+if ($user_id) {
+    $stmt = $conn->prepare("
+        SELECT 
+            SUM(CASE WHEN c.contribution_type = 'tithe' THEN c.amount ELSE 0 END) as total_tithe,
+            SUM(CASE WHEN c.contribution_type = 'offering' THEN c.amount ELSE 0 END) as total_offering,
+            SUM(c.amount) as total_contributions
+        FROM contributions c
+        JOIN user_profiles up ON c.user_id = up.user_id
+        WHERE up.user_id = ?
+    ");
+    $stmt->bind_param("s", $user_id);
+    $stmt->execute();
+    $totals = $stmt->get_result()->fetch_assoc();
+}
 
 // Handle form submission for new contribution
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution'])) {
@@ -80,27 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
     $payment_method = $_POST['payment_method'];
     $reference_number = $_POST['reference_number'];
     $notes = $_POST['notes'];
-    
-<<<<<<< HEAD
-    $stmt = $conn->prepare("
-        INSERT INTO contributions (
-            user_id, amount, contribution_type, contribution_date, 
-            payment_method, reference_number, status, notes
-        ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
-    ");
-    $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
-=======
-    // Get the user_id from user_profiles using username
-    $stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
-    $stmt->bind_param("s", $username);
-    $stmt->execute();
-    $user_result = $stmt->get_result();
-    $user_data = $user_result->fetch_assoc();
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
-    
-    if ($user_data) {
-        $user_id = $user_data['user_id'];
-        
+    if ($user_id) {
         $stmt = $conn->prepare("
             INSERT INTO contributions (
                 user_id, amount, contribution_type, contribution_date, 
@@ -108,7 +89,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
             ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
         ");
         $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
-        
         if ($stmt->execute()) {
             $_SESSION['success_message'] = "Contribution submitted successfully!";
             header("Location: member_contributions.php");
@@ -121,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution']
     }
 }
 
-// Get all contributions for admin view - Modified to use user_profiles table
+// Get all contributions for admin view
 $contributions_query = "
     SELECT 
         c.id,
@@ -130,12 +110,8 @@ $contributions_query = "
         c.contribution_date,
         c.payment_method,
         c.reference_number,
-<<<<<<< HEAD
         up.full_name as member_name,
         up.role as member_role
-=======
-        up.full_name as member_name
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     FROM contributions c
     JOIN user_profiles up ON c.user_id = up.user_id
     ORDER BY c.contribution_date DESC
@@ -150,7 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
     $payment_method = $_POST['payment_method'];
     $reference_number = $_POST['reference_number'];
     $contribution_date = $_POST['contribution_date'];
-    
     // Check if the user exists in user_profiles
     $user_query = "SELECT user_id, full_name FROM user_profiles WHERE user_id = ?";
     $stmt = $conn->prepare($user_query);
@@ -158,7 +133,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
     $stmt->execute();
     $user_result = $stmt->get_result();
     $user_data = $user_result->fetch_assoc();
-    
     if ($user_data) {
         // Now insert the contribution using the user_id and specified date
         $stmt = $conn->prepare("
@@ -168,7 +142,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
             ) VALUES (?, ?, ?, ?, ?, ?, 'approved')
         ");
         $stmt->bind_param("sdssss", $member_user_id, $amount, $contribution_type, $contribution_date, $payment_method, $reference_number);
-        
         if ($stmt->execute()) {
             $_SESSION['success_message'] = "Contribution added successfully for " . $user_data['full_name'] . "!";
             header("Location: member_contributions.php");
@@ -181,12 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
     }
 }
 
-// Get all users for admin dropdown - Modified to use user_profiles table
-<<<<<<< HEAD
+// Get all users for admin dropdown
 $users_query = "SELECT user_id, full_name FROM user_profiles WHERE role IN ('Member', 'Pastor') ORDER BY full_name";
-=======
-$users_query = "SELECT user_id, full_name FROM user_profiles WHERE role = 'Member' ORDER BY full_name";
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
 $users_result = $conn->query($users_query);
 $users = [];
 while ($row = $users_result->fetch_assoc()) {
@@ -287,17 +256,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             padding: 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
         }
 
         .sidebar-header img {
-            width: 60px;
             height: 60px;
             margin-bottom: 10px;
+            transition: 0.3s;
         }
 
         .sidebar-header h3 {
             font-size: 18px;
-            color: var(--white);
         }
 
         .sidebar-menu {
@@ -318,7 +287,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             padding: 12px 20px;
             color: var(--white);
             text-decoration: none;
-            transition: background-color 0.3s;
+            transition: all 0.3s;
+            font-size: 16px;
         }
 
         .sidebar-menu a:hover {
@@ -330,9 +300,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         .sidebar-menu i {
-            margin-right: 10px;
+            margin-right: 15px;
             width: 20px;
             text-align: center;
+            font-size: 20px;
+        }
+
+        .sidebar-menu span {
+            margin-left: 10px;
         }
 
         /* Main Content Area */
@@ -566,8 +541,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
-                position: fixed;
-                height: 100vh;
             }
             .sidebar-header h3,
             .sidebar-menu span {
@@ -575,9 +548,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             .content-area {
                 margin-left: 70px;
-            }
-            .top-bar {
-                margin-left: 0;
             }
         }
 
@@ -590,30 +560,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 height: auto;
                 position: relative;
             }
+            .sidebar-menu {
+                display: flex;
+                padding: 0;
+                overflow-x: auto;
+            }
+            .sidebar-menu ul {
+                display: flex;
+                width: 100%;
+            }
+            .sidebar-menu li {
+                margin-bottom: 0;
+                flex: 1;
+            }
+            .sidebar-menu a {
+                padding: 10px;
+                justify-content: center;
+            }
+            .sidebar-menu i {
+                margin-right: 0;
+            }
             .content-area {
                 margin-left: 0;
-                padding: 10px;
-            }
-            .content {
-                padding: 10px;
-            }
-            .summary-cards {
-                grid-template-columns: 1fr;
             }
             .top-bar {
                 flex-direction: column;
-                gap: 10px;
-                padding: 10px;
+                align-items: flex-start;
             }
             .user-profile {
-                width: 100%;
-                justify-content: space-between;
-            }
-            .card {
-                padding: 15px;
-            }
-            .dataTables_wrapper {
-                padding: 10px;
+                margin-top: 10px;
             }
         }
 
@@ -841,8 +816,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         #contributionsTable.dataTable {
             visibility: visible;
         }
-<<<<<<< HEAD
-
         /* Role Badge Styles (copied from settings.php) */
         .role-badge {
             display: inline-block;
@@ -864,8 +837,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #95a5a6;
             color: white;
         }
-=======
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
     </style>
 </head>
 <body>
@@ -885,7 +856,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
                     <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
                     <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
-                </ul>
+                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
+            </ul>
             </div>
         </aside>
 
@@ -945,10 +917,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 <tr>
                                     <th>Date</th>
                                     <th>Member Name</th>
-<<<<<<< HEAD
                                     <th>Role</th>
-=======
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                     <th>Type</th>
                                     <th>Amount</th>
                                     <th>Payment Method</th>
@@ -958,7 +927,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <tbody>
                                 <?php while ($row = $all_contributions->fetch_assoc()): ?>
                                 <tr>
-<<<<<<< HEAD
                                     <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
                                     <td><?php echo htmlspecialchars($row['member_name']); ?></td>
                                     <td>
@@ -966,10 +934,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                             <?php echo htmlspecialchars($row['member_role']); ?>
                                         </span>
                                     </td>
-=======
-                                    <td><strong><?php echo date('M d, Y', strtotime($row['contribution_date'])); ?></strong></td>
-                                    <td><?php echo htmlspecialchars($row['member_name']); ?></td>
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                                     <td><?php echo ucfirst($row['contribution_type']); ?></td>
                                     <td>₱<?php echo number_format($row['amount'], 2); ?></td>
                                     <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
@@ -1048,18 +1012,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 columnDefs: [
                     { width: '15%', targets: 0 }, // Date
                     { width: '20%', targets: 1 }, // Member Name
-<<<<<<< HEAD
                     { width: '10%', targets: 2 }, // Role
                     { width: '10%', targets: 3 }, // Type
                     { width: '15%', targets: 4 }, // Amount
                     { width: '15%', targets: 5 }, // Payment Method
                     { width: '25%', targets: 6 }  // Reference Number
-=======
-                    { width: '10%', targets: 2 }, // Type
-                    { width: '15%', targets: 3 }, // Amount
-                    { width: '15%', targets: 4 }, // Payment Method
-                    { width: '25%', targets: 5 }  // Reference Number
->>>>>>> e72896b2a2e757c3b179363c20ce46759e263081
                 ],
                 autoWidth: false,
                 responsive: true

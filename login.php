@@ -8,16 +8,41 @@ $service_times = json_decode($site_settings['service_times'], true);
 // Start session to access events from events.php
 session_start();
 
-// Default events if not set in session (sync with events.php initial data)
-if (!isset($_SESSION['events'])) {
-    $_SESSION['events'] = [
-        ["id" => 1, "title" => "AMEN Prayer Meeting", "category" => "AMEN Fellowship", "date" => "2025-03-25", "time" => "18:00", "description" => "Monthly prayer meeting for men."],
-        ["id" => 2, "title" => "WOW Bible Study", "category" => "WOW Fellowship", "date" => "2025-03-26", "time" => "19:00", "description" => "Women's Bible study session."],
-        ["id" => 3, "title" => "Youth Night", "category" => "Youth Fellowship", "date" => "2025-03-27", "time" => "17:00", "description" => "Fun night for the youth."],
-        ["id" => 4, "title" => "Sunday School Picnic", "category" => "Sunday School Outreach", "date" => "2025-03-28", "time" => "10:00", "description" => "Outreach event for kids."]
-    ];
+// Function to get upcoming events from database
+function getUpcomingEvents($conn) {
+    $events = [];
+    $sql = "SELECT * FROM events WHERE event_date >= CURDATE() ORDER BY event_date ASC, event_time ASC LIMIT 4";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $events[] = [
+                'id' => $row['id'],
+                'title' => $row['title'],
+                'category' => $row['category'],
+                'date' => $row['event_date'],
+                'time' => $row['event_time'],
+                'description' => $row['description']
+            ];
+        }
+    }
+    return $events;
 }
-$upcoming_events = $_SESSION['events'];
+
+// Get upcoming events from database
+$upcoming_events = getUpcomingEvents($conn);
+
+// Function to log login attempts
+function logLoginAttempt($conn, $username, $status, $failure_reason = null) {
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    
+    $sql = "INSERT INTO login_logs (username, login_time, ip_address, user_agent, status, failure_reason) 
+            VALUES (?, NOW(), ?, ?, ?, ?)";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("sssss", $username, $ip_address, $user_agent, $status, $failure_reason);
+    $stmt->execute();
+}
 
 // Login processing
 $login_error = "";
@@ -38,7 +63,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // User exists, now verify password
         $user = $result->fetch_assoc();
         if (password_verify($password, $user['password'])) {
-            // Password is correct, set session variables
+            // Password is correct, log successful login
+            logLoginAttempt($conn, $username, 'Success');
+            
+            // Set session variables
             $_SESSION["user"] = $user['username'];
             $_SESSION["user_role"] = $user['role'];
             $_SESSION["loggedin"] = true;
@@ -51,11 +79,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
             exit();
         } else {
-            // Password is incorrect
+            // Password is incorrect, log failed login
+            logLoginAttempt($conn, $username, 'Failed', 'Invalid password');
             $login_error = "Invalid username or password";
         }
     } else {
-        // User doesn't exist in the database
+        // User doesn't exist in the database, log failed login
+        logLoginAttempt($conn, $username, 'Failed', 'User not found');
         $login_error = "Not a member. Please contact the administrator to register.";
     }
 }
