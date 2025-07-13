@@ -1324,57 +1324,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
                                     </div>
                                 </div>
                             </div>
-                            <div class="summary-card">
-                                <h3>Next Month Income Prediction</h3>
-                                <div class="prediction-chart">
-                                    <canvas id="predictionChart"></canvas>
-                                </div>
-                                <div class="prediction-details">
-                                    <div class="prediction-metric">
-                                        <span class="label">Predicted Amount</span>
-                                        <span class="value">₱<?php echo number_format($predicted_monthly, 2); ?></span>
-                                    </div>
-                                    <div class="prediction-metric">
-                                        <span class="label">Confidence Range</span>
-                                        <span class="value">₱<?php echo number_format($prediction_lower, 2); ?> - ₱<?php echo number_format($prediction_upper, 2); ?></span>
-                                    </div>
-                                    <div class="prediction-metric">
-                                        <span class="label">Prediction Period</span>
-                                        <span class="value">
-<?php
-if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatted'])) {
-    echo $prophet_predictions[0]['date_formatted'];
-} elseif (!empty($prophet_predictions) && isset($prophet_predictions[0]['month'])) {
-    echo $prophet_predictions[0]['month'];
-} else {
-    echo 'N/A';
-}
-?>
-</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="summary-card">
-                                <h3>Weekly Averages</h3>
-                                <div class="metrics-grid">
-                                    <div class="metric-item">
-                                        <span class="metric-label">Tithes</span>
-                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_tithes, 2); ?></span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Offerings</span>
-                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_offerings, 2); ?></span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Bank Gifts</span>
-                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_bank_gifts, 2); ?></span>
-                                    </div>
-                                    <div class="metric-item">
-                                        <span class="metric-label">Specified Gifts</span>
-                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_specified_gifts, 2); ?></span>
-                                    </div>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -1493,55 +1443,7 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
             }
         });
 
-        // Prediction Chart
-        const predictionCtx = document.getElementById('predictionChart').getContext('2d');
-        new Chart(predictionCtx, {
-            type: 'bar',
-                data: {
-                labels: ['Predicted Income'],
-                    datasets: [{
-                    label: 'Amount',
-                    data: [predictedMonthly],
-                    backgroundColor: 'rgba(0, 100, 0, 0.8)',
-                    borderColor: 'rgba(0, 100, 0, 1)',
-                    borderWidth: 1
-                }, {
-                    label: 'Range Low',
-                    data: [predictionLower],
-                    backgroundColor: 'rgba(220, 53, 69, 0.6)', // red
-                    borderColor: 'rgba(220, 53, 69, 1)', // red
-                    borderWidth: 1
-                }, {
-                    label: 'Range High',
-                    data: [predictionUpper],
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)', // blue
-                    borderColor: 'rgba(54, 162, 235, 1)', // blue
-                    borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                    y: {
-                        beginAtZero: true,
-                            title: {
-                                display: true,
-                            text: 'Amount'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true
-                    },
-                            title: {
-                                display: true,
-                        text: 'Next Month Income Prediction'
-                        }
-                    }
-                }
-            });
+
 
         // Trend Chart
         const trendCtx = document.getElementById('trendChart').getContext('2d');

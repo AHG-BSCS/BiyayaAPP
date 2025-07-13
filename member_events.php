@@ -285,19 +285,17 @@ foreach ($events as $event) {
         }
 
         .logout-btn {
-            background-color: #f8f9fa;
+            background-color: #f0f0f0;
             color: var(--primary-color);
-            border: 1px solid #dee2e6;
-            padding: 10px 20px;
-            border-radius: 8px;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 500;
+            transition: background-color 0.3s;
         }
-
+        
         .logout-btn:hover {
-            background-color: #e9ecef;
-            border-color: #adb5bd;
+            background-color: #e0e0e0;
         }
 
         /* Schedule Template Styles */
