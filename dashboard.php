@@ -60,11 +60,20 @@ try {
     $total_events = 0;
 }
 
+// Get total prayer requests count from database
+try {
+    $result = $conn->query("SELECT COUNT(*) as total FROM prayer_requests");
+    $row = $result->fetch_assoc();
+    $total_prayers = $row['total'];
+} catch(Exception $e) {
+    $total_prayers = 0;
+}
+
 // Dashboard statistics
 $dashboard_stats = [
     "total_members" => $total_members,
     "upcoming_events" => $total_events,
-    "pending_prayers" => 5
+    "pending_prayers" => $total_prayers
 ];
 
 // --- LIVE DATA FOR ACTUAL VS PREDICTED INCOME CHART (2025) ---

@@ -1264,32 +1264,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
                                 <h3>Actual Income vs Predicted Amount</h3>
                                 <div class="prediction-chart">
                                     <canvas id="actualVsPredictedChart"></canvas>
-                                </div>
-                            </div>
+                        </div>
+                        </div>
                             <div class="summary-card full-width">
                                 <h3>Monthly Income Predictions</h3>
                                 <div class="prediction-chart">
                                     <canvas id="predictionChart2025"></canvas>
-                                </div>
+                        </div>
                                 <div class="prediction-details">
                                     <div class="prediction-metric">
                                         <span class="label">Total Predicted Income</span>
                                         <span class="value">₱<?php echo number_format($prediction_summary['total_predicted_income'], 2); ?></span>
-                                    </div>
+                        </div>
                                     <div class="prediction-metric">
                                         <span class="label">Average Monthly Income</span>
                                         <span class="value">₱<?php echo number_format($prediction_summary['average_monthly_income'], 2); ?></span>
-                                    </div>
+                    </div>
                                     <div class="prediction-metric">
                                         <span class="label">Predicted Growth Rate</span>
                                         <span class="value <?php echo $prediction_summary['predicted_growth_rate'] >= 0 ? 'positive' : 'negative'; ?>">
                                             <?php echo ($prediction_summary['predicted_growth_rate'] >= 0 ? '+' : '') . number_format($prediction_summary['predicted_growth_rate'], 1); ?>%
                                         </span>
-                                    </div>
+                    </div>
                                     <div class="prediction-metric">
                                         <span class="label">Best Month</span>
                                         <span class="value"><?php echo $prediction_summary['best_month']['date_formatted'] ?? $prediction_summary['best_month']['month']; ?> (₱<?php echo number_format($prediction_summary['best_month']['yhat'], 2); ?>)</span>
-                                    </div>
+                    </div>
                                     <div class="prediction-metric">
                                         <span class="label">Worst Month</span>
                                         <span class="value"><?php echo $prediction_summary['worst_month']['date_formatted'] ?? $prediction_summary['worst_month']['month']; ?> (₱<?php echo number_format($prediction_summary['worst_month']['yhat'], 2); ?>)</span>
@@ -1497,9 +1497,9 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
         const predictionCtx = document.getElementById('predictionChart').getContext('2d');
         new Chart(predictionCtx, {
             type: 'bar',
-            data: {
+                data: {
                 labels: ['Predicted Income'],
-                datasets: [{
+                    datasets: [{
                     label: 'Amount',
                     data: [predictedMonthly],
                     backgroundColor: 'rgba(0, 100, 0, 0.8)',
@@ -1517,16 +1517,16 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
                     backgroundColor: 'rgba(54, 162, 235, 0.6)', // blue
                     borderColor: 'rgba(54, 162, 235, 1)', // blue
                     borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
                     y: {
                         beginAtZero: true,
-                        title: {
-                            display: true,
+                            title: {
+                                display: true,
                             text: 'Amount'
                         }
                     }
@@ -1535,13 +1535,13 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
                     legend: {
                         display: true
                     },
-                    title: {
-                        display: true,
+                            title: {
+                                display: true,
                         text: 'Next Month Income Prediction'
+                        }
                     }
                 }
-            }
-        });
+            });
 
         // Trend Chart
         const trendCtx = document.getElementById('trendChart').getContext('2d');
@@ -1582,8 +1582,8 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
                         legend: {
                             display: true
                         },
-                        title: {
-                            display: true,
+                            title: {
+                                display: true,
                             text: 'Historical Income Trend (Last 6 Months)'
                         }
                     }
