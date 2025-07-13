@@ -847,9 +847,8 @@ foreach ($months_2025 as $i => $month) {
     $predicted_data_2025[] = isset($prophet_predictions[$i]['yhat']) ? $prophet_predictions[$i]['yhat'] : 0;
 }
 
-// Pass the calculated values to JavaScript
+// Pass the calculated values to JavaScript (without console logging for security)
 echo "<script>
-    console.log('Initializing chart data...');
     const historicalData = " . json_encode($historical_data) . ";
     const avgWeeklyTithes = " . $avg_weekly_tithes . ";
     const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
@@ -860,26 +859,10 @@ echo "<script>
     const predictionUpper = " . $prediction_upper . ";
     const prophetPredictions = " . json_encode($prophet_predictions) . ";
     const predictionSummary = " . json_encode($prediction_summary) . ";
-    console.log('Historical Data:', historicalData);
-    console.log('Weekly Averages:', {
-        tithes: avgWeeklyTithes,
-        offerings: avgWeeklyOfferings
-    });
-    console.log('Predicted Monthly:', predictedMonthly);
-    console.log('Prediction Range:', {
-        lower: predictionLower,
-        upper: predictionUpper
-    });
-    console.log('Prophet Predictions:', prophetPredictions);
-    console.log('Prediction Summary:', predictionSummary);
     
-    // Validate data before creating charts
-    if (!prophetPredictions || prophetPredictions.length === 0) {
-        console.error('No prediction data available. Charts will not be created.');
-    }
-    if (!historicalData || Object.keys(historicalData).length === 0) {
-        console.error('No historical data available. Some charts may not display properly.');
-    }
+    // Validate data before creating charts (silent validation)
+    const hasPredictionData = prophetPredictions && prophetPredictions.length > 0;
+    const hasHistoricalData = historicalData && Object.keys(historicalData).length > 0;
 
     // 1. Fetch actual totals for each month in 2025
     const actuals2025 = " . json_encode($prophet_predictions) . ";
@@ -2407,22 +2390,18 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
                 }
             }
         });
-    } else {
-        console.error('No historical data available for trend chart');
-        // Create a placeholder chart or show message
-        trendCtx.canvas.style.display = 'none';
-        const chartContainer = trendCtx.canvas.parentElement;
-        chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No historical data available. Please add some tithes and offerings records.</p>';
-    }
+            } else {
+            // Create a placeholder chart or show message (silent error handling)
+            trendCtx.canvas.style.display = 'none';
+            const chartContainer = trendCtx.canvas.parentElement;
+            chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No historical data available. Please add some tithes and offerings records.</p>';
+        }
 
     // Monthly Income Predictions Chart
     const predictionCtx2025 = document.getElementById('predictionChart2025').getContext('2d');
     
-    // Check if we have prediction data
-    if (prophetPredictions && prophetPredictions.length > 0) {
-        console.log('Creating prediction chart with data:', prophetPredictions);
-        console.log('Chart labels:', prophetPredictions.map(p => p.date_formatted || p.month));
-        console.log('Chart data:', prophetPredictions.map(p => p.yhat));
+            // Check if we have prediction data
+        if (hasPredictionData) {
         
         new Chart(predictionCtx2025, {
             type: 'bar',
@@ -2477,13 +2456,12 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
                 }
             }
         });
-    } else {
-        console.error('No prediction data available for chart');
-        // Create a placeholder chart or show message
-        predictionCtx2025.canvas.style.display = 'none';
-        const chartContainer = predictionCtx2025.canvas.parentElement;
-        chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available. Please ensure you have sufficient tithes and offerings data.</p>';
-    }
+            } else {
+            // Create a placeholder chart or show message (silent error handling)
+            predictionCtx2025.canvas.style.display = 'none';
+            const chartContainer = predictionCtx2025.canvas.parentElement;
+            chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available. Please ensure you have sufficient tithes and offerings data.</p>';
+        }
 
     // Helper to format 'YYYY-MM' to 'Month 01, YYYY'
     function formatMonthLabel(ym) {
@@ -2496,8 +2474,7 @@ if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatte
     // Actual vs Predicted Chart
     (function() {
         // Check if we have prediction data
-        if (!prophetPredictions || prophetPredictions.length === 0) {
-            console.error('No prediction data available for Actual vs Predicted chart');
+        if (!hasPredictionData) {
             const ctx = document.getElementById('actualVsPredictedChart');
             if (ctx) {
                 ctx.style.display = 'none';
