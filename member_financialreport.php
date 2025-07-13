@@ -12,7 +12,7 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in and is a member
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Member") {
-    header("Location: login.php");
+            header("Location: index.php");
     exit;
 }
 

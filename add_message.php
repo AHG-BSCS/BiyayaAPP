@@ -9,7 +9,7 @@ ini_set('display_errors', 1);
 
 // Check if user is logged in and is admin
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-    header("Location: login.php");
+            header("Location: index.php");
     exit;
 }
 

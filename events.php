@@ -9,7 +9,7 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit;
 }
 
@@ -23,9 +23,9 @@ if ($is_member && !$is_admin) {
     exit;
 }
 
-// Redirect non-admins/non-members to login.php
+// Redirect non-admins/non-members to index.php
 if (!$is_admin && !$is_member) {
-    header("Location: login.php");
+    header("Location: index.php");
     exit;
 }
 

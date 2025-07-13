@@ -12,7 +12,7 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in and is admin
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Administrator") {
-    header("Location: login.php");
+            header("Location: index.php");
     exit;
 }
 
