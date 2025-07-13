@@ -661,7 +661,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <label>Account Information</label>
                                         <div class="info-box">
                                             <p><strong>Role:</strong> <?php echo htmlspecialchars($user_profile['role']); ?></p>
-                                            <p><strong>Member Since:</strong> <?php echo date('F j, Y', strtotime($user_profile['created_at'])); ?></p>
+                                            <p><strong>Account Created:</strong> <?php echo date('F j, Y', strtotime($user_profile['created_at'])); ?></p>
                                             <p><strong>Last Updated:</strong> <?php echo date('F j, Y', strtotime($user_profile['updated_at'])); ?></p>
                                         </div>
                                     </div>

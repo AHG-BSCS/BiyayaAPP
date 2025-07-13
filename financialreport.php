@@ -20,11 +20,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Denominations for bills and coins
-$denominations = [
-    'bills' => [],
-    'coins' => []
-];
+
 
 // Specified gift categories
 $specified_gifts = [
@@ -892,17 +888,7 @@ echo "<script>
     const predictedData2025 = " . json_encode($predicted_data_2025) . ";
 </script>";
 
-// Function to calculate total amount from denominations
-function calculate_total($denominations, $denomination_list) {
-    $total = 0;
-    foreach ($denomination_list['bills'] as $bill) {
-        $total += $denominations["bill_$bill"] * $bill;
-    }
-    foreach ($denomination_list['coins'] as $coin) {
-        $total += $denominations["coin_$coin"] * $coin;
-    }
-    return $total;
-}
+
 
 // Handle success messages
 if (isset($_GET['success'])) {

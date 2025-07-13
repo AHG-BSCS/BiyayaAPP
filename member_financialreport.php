@@ -20,11 +20,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Denominations for bills and coins
-$denominations = [
-    'bills' => [],
-    'coins' => []
-];
+
 
 // Specified gift categories
 $specified_gifts = [
@@ -402,6 +398,48 @@ foreach ($months_2025 as $i => $month) {
     $actual_data_2025[] = isset($actuals_2025[$month]) ? $actuals_2025[$month] : 0;
     $predicted_data_2025[] = isset($prophet_predictions[$i]['yhat']) ? $prophet_predictions[$i]['yhat'] : 0;
 }
+
+// Pass the calculated values to JavaScript
+echo "<script>
+    console.log('Initializing chart data...');
+    const historicalData = " . json_encode($historical_data) . ";
+    const avgWeeklyTithes = " . $avg_weekly_tithes . ";
+    const avgWeeklyOfferings = " . $avg_weekly_offerings . ";
+    const avgWeeklyBankGifts = " . $avg_weekly_bank_gifts . ";
+    const avgWeeklySpecifiedGifts = " . $avg_weekly_specified_gifts . ";
+    const predictedMonthly = " . $predicted_monthly . ";
+    const predictionLower = " . $prediction_lower . ";
+    const predictionUpper = " . $prediction_upper . ";
+    const prophetPredictions = " . json_encode($prophet_predictions) . ";
+    const predictionSummary = " . json_encode($prediction_summary) . ";
+    console.log('Historical Data:', historicalData);
+    console.log('Weekly Averages:', {
+        tithes: avgWeeklyTithes,
+        offerings: avgWeeklyOfferings
+    });
+    console.log('Predicted Monthly:', predictedMonthly);
+    console.log('Prediction Range:', {
+        lower: predictionLower,
+        upper: predictionUpper
+    });
+    console.log('Prophet Predictions:', prophetPredictions);
+    console.log('Prediction Summary:', predictionSummary);
+    
+    // Validate data before creating charts
+    if (!prophetPredictions || prophetPredictions.length === 0) {
+        console.error('No prediction data available. Charts will not be created.');
+    }
+    if (!historicalData || Object.keys(historicalData).length === 0) {
+        console.error('No historical data available. Some charts may not display properly.');
+    }
+
+    // 1. Fetch actual totals for each month in 2025
+    const actuals2025 = " . json_encode($prophet_predictions) . ";
+    const months2025 = " . json_encode($months_2025) . ";
+    const actualData2025 = " . json_encode($actual_data_2025) . ";
+    const predictedData2025 = " . json_encode($predicted_data_2025) . ";
+</script>";
+
 // --- END: Copy calculations for averages, predictions, and chart data ---
 
 // Handle profile picture update
@@ -769,6 +807,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .summary-card.full-width {
+            grid-column: 1 / -1;
         }
 
         .summary-card h3 {
@@ -1233,43 +1275,124 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
 
                 <!-- Summary Tab -->
                 <div class="tab-pane" id="summary">
-                    <h3>Financial Insights</h3>
-                    <div class="insights-grid">
-                        <div class="insight-card">
-                            <h4>Total Predicted Income (2025)</h4>
-                            <p>₱<?php echo number_format($prediction_summary['total_predicted_income'], 2); ?></p>
-                            <p>Average Monthly: ₱<?php echo number_format($prediction_summary['average_monthly_income'], 2); ?></p>
-                            <p>Predicted Growth Rate: <?php echo number_format($prediction_summary['predicted_growth_rate'], 2); ?>%</p>
+                    <div class="summary-content">
+                        <div class="summary-grid">
+                            <div class="summary-card full-width">
+                                <h3>Actual Income vs Predicted Amount</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="actualVsPredictedChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="summary-card full-width">
+                                <h3>Monthly Income Predictions</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="predictionChart2025"></canvas>
+                                </div>
+                                <div class="prediction-details">
+                                    <div class="prediction-metric">
+                                        <span class="label">Total Predicted Income</span>
+                                        <span class="value">₱<?php echo number_format($prediction_summary['total_predicted_income'], 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Average Monthly Income</span>
+                                        <span class="value">₱<?php echo number_format($prediction_summary['average_monthly_income'], 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Predicted Growth Rate</span>
+                                        <span class="value <?php echo $prediction_summary['predicted_growth_rate'] >= 0 ? 'positive' : 'negative'; ?>">
+                                            <?php echo ($prediction_summary['predicted_growth_rate'] >= 0 ? '+' : '') . number_format($prediction_summary['predicted_growth_rate'], 1); ?>%
+                                        </span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Best Month</span>
+                                        <span class="value"><?php echo $prediction_summary['best_month']['date_formatted'] ?? $prediction_summary['best_month']['month']; ?> (₱<?php echo number_format($prediction_summary['best_month']['yhat'], 2); ?>)</span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Worst Month</span>
+                                        <span class="value"><?php echo $prediction_summary['worst_month']['date_formatted'] ?? $prediction_summary['worst_month']['month']; ?> (₱<?php echo number_format($prediction_summary['worst_month']['yhat'], 2); ?>)</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="summary-card full-width">
+                                <h3>Historical Income Trend</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                                <div class="prediction-details">
+                                    <div class="prediction-metric">
+                                        <span class="label">Total Historical Income</span>
+                                        <span class="value">₱<?php echo number_format(array_sum(array_values($historical_data)), 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Average Monthly Income</span>
+                                        <span class="value">₱<?php echo number_format(array_sum(array_values($historical_data)) / max(count($historical_data), 1), 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Data Period</span>
+                                        <span class="value"><?php echo count($historical_data); ?> months</span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Highest Month</span>
+                                        <span class="value">₱<?php echo number_format(max(array_values($historical_data)), 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Lowest Month</span>
+                                        <span class="value">₱<?php echo number_format(min(array_values($historical_data)), 2); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="summary-card">
+                                <h3>Next Month Income Prediction</h3>
+                                <div class="prediction-chart">
+                                    <canvas id="predictionChart"></canvas>
+                                </div>
+                                <div class="prediction-details">
+                                    <div class="prediction-metric">
+                                        <span class="label">Predicted Amount</span>
+                                        <span class="value">₱<?php echo number_format($predicted_monthly, 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Confidence Range</span>
+                                        <span class="value">₱<?php echo number_format($prediction_lower, 2); ?> - ₱<?php echo number_format($prediction_upper, 2); ?></span>
+                                    </div>
+                                    <div class="prediction-metric">
+                                        <span class="label">Prediction Period</span>
+                                        <span class="value">
+<?php
+if (!empty($prophet_predictions) && isset($prophet_predictions[0]['date_formatted'])) {
+    echo $prophet_predictions[0]['date_formatted'];
+} elseif (!empty($prophet_predictions) && isset($prophet_predictions[0]['month'])) {
+    echo $prophet_predictions[0]['month'];
+} else {
+    echo 'N/A';
+}
+?>
+</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="summary-card">
+                                <h3>Weekly Averages</h3>
+                                <div class="metrics-grid">
+                                    <div class="metric-item">
+                                        <span class="metric-label">Tithes</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_tithes, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Offerings</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_offerings, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Bank Gifts</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_bank_gifts, 2); ?></span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Specified Gifts</span>
+                                        <span class="metric-value">₱<?php echo number_format($avg_weekly_specified_gifts, 2); ?></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="insight-card">
-                            <h4>Best Performing Month (2025)</h4>
-                            <p><?php echo htmlspecialchars($prediction_summary['best_month']['date_formatted'] ?? 'N/A'); ?></p>
-                            <p>Amount: ₱<?php echo number_format($prediction_summary['best_month']['yhat'], 2); ?></p>
-                        </div>
-                        <div class="insight-card">
-                            <h4>Worst Performing Month (2025)</h4>
-                            <p><?php echo htmlspecialchars($prediction_summary['worst_month']['date_formatted'] ?? 'N/A'); ?></p>
-                            <p>Amount: ₱<?php echo number_format($prediction_summary['worst_month']['yhat'], 2); ?></p>
-                        </div>
-                        <div class="insight-card">
-                            <h4>Total Months Predicted</h4>
-                            <p><?php echo $prediction_summary['total_months']; ?></p>
-                        </div>
-                    </div>
-
-                    <h3>Historical Data (Last 6 Months)</h3>
-                    <div class="chart-container">
-                        <canvas id="historical-chart"></canvas>
-                    </div>
-
-                    <h3>Predicted Income (2025)</h3>
-                    <div class="chart-container">
-                        <canvas id="predicted-chart"></canvas>
-                    </div>
-
-                    <h3>Actual Income (2025)</h3>
-                    <div class="chart-container">
-                        <canvas id="actual-chart"></canvas>
                     </div>
                 </div>
             </div>
@@ -1387,19 +1510,70 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             }
         });
 
-        // Chart.js for Insights
-        const ctxHistorical = document.getElementById('historical-chart');
-        if (ctxHistorical) {
-            new Chart(ctxHistorical.getContext('2d'), {
+        // Prediction Chart
+        const predictionCtx = document.getElementById('predictionChart').getContext('2d');
+        new Chart(predictionCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Predicted Income'],
+                datasets: [{
+                    label: 'Amount',
+                    data: [predictedMonthly],
+                    backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                    borderColor: 'rgba(0, 100, 0, 1)',
+                    borderWidth: 1
+                }, {
+                    label: 'Range Low',
+                    data: [predictionLower],
+                    backgroundColor: 'rgba(220, 53, 69, 0.6)', // red
+                    borderColor: 'rgba(220, 53, 69, 1)', // red
+                    borderWidth: 1
+                }, {
+                    label: 'Range High',
+                    data: [predictionUpper],
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)', // blue
+                    borderColor: 'rgba(54, 162, 235, 1)', // blue
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Next Month Income Prediction'
+                    }
+                }
+            }
+        });
+
+        // Trend Chart
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        
+        // Check if we have historical data
+        if (historicalData && Object.keys(historicalData).length > 0) {
+            new Chart(trendCtx, {
                 type: 'line',
                 data: {
-                    labels: Object.keys(<?php echo json_encode($historical_data); ?>),
+                    labels: Object.keys(historicalData),
                     datasets: [{
-                        label: 'Total Income (Historical)',
-                        data: Object.values(<?php echo json_encode($historical_data); ?>),
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
+                        label: 'Monthly Income',
+                        data: Object.values(historicalData),
+                        fill: false,
+                        borderColor: 'rgba(0, 139, 30, 1)',
                         tension: 0.1
                     }]
                 },
@@ -1407,97 +1581,192 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Amount'
+                            }
+                        },
                         x: {
                             title: {
                                 display: true,
                                 text: 'Month'
                             }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
                         },
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Total Income (₱)'
-                            }
+                        title: {
+                            display: true,
+                            text: 'Historical Income Trend (Last 6 Months)'
                         }
                     }
                 }
             });
+        } else {
+            console.error('No historical data available for trend chart');
+            // Create a placeholder chart or show message
+            trendCtx.canvas.style.display = 'none';
+            const chartContainer = trendCtx.canvas.parentElement;
+            chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No historical data available. Please add some tithes and offerings records.</p>';
         }
 
-        const ctxPredicted = document.getElementById('predicted-chart');
-        if (ctxPredicted) {
-            new Chart(ctxPredicted.getContext('2d'), {
-                type: 'line',
+        // Monthly Income Predictions Chart
+        const predictionCtx2025 = document.getElementById('predictionChart2025').getContext('2d');
+        
+        // Check if we have prediction data
+        if (prophetPredictions && prophetPredictions.length > 0) {
+            console.log('Creating prediction chart with data:', prophetPredictions);
+            console.log('Chart labels:', prophetPredictions.map(p => p.date_formatted || p.month));
+            console.log('Chart data:', prophetPredictions.map(p => p.yhat));
+            
+            new Chart(predictionCtx2025, {
+                type: 'bar',
                 data: {
-                    labels: <?php echo json_encode(array_column($prophet_predictions ?? [], 'date_formatted')); ?>,
+                    labels: prophetPredictions.map(p => p.date_formatted || p.month),
                     datasets: [{
-                        label: 'Predicted Income (2025)',
-                        data: <?php echo json_encode(array_column($prophet_predictions ?? [], 'yhat')); ?>,
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        fill: true,
-                        tension: 0.1
+                        label: 'Predicted Amount',
+                        data: prophetPredictions.map(p => p.yhat),
+                        backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                        borderColor: 'rgba(0, 100, 0, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Confidence Range (Lower)',
+                        data: prophetPredictions.map(p => p.yhat_lower),
+                        backgroundColor: 'rgba(255, 165, 0, 0.6)',
+                        borderColor: 'rgba(255, 140, 0, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Confidence Range (Upper)',
+                        data: prophetPredictions.map(p => p.yhat_upper),
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Amount (₱)'
+                            }
+                        },
                         x: {
                             title: {
                                 display: true,
                                 text: 'Month'
                             }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
                         },
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Total Income (₱)'
-                            }
+                        title: {
+                            display: true,
+                            text: 'Monthly Income Predictions'
                         }
                     }
                 }
             });
+        } else {
+            console.error('No prediction data available for chart');
+            // Create a placeholder chart or show message
+            predictionCtx2025.canvas.style.display = 'none';
+            const chartContainer = predictionCtx2025.canvas.parentElement;
+            chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available. Please ensure you have sufficient tithes and offerings data.</p>';
         }
 
-        const ctxActual = document.getElementById('actual-chart');
-        if (ctxActual) {
-            new Chart(ctxActual.getContext('2d'), {
-                type: 'line',
+        // Helper to format 'YYYY-MM' to 'Month 01, YYYY'
+        function formatMonthLabel(ym) {
+            const [year, month] = ym.split('-');
+            const date = new Date(year, parseInt(month, 10) - 1, 1);
+            const monthName = date.toLocaleString('default', { month: 'long' });
+            return `${monthName} 01, ${year}`;
+        }
+
+        // Actual vs Predicted Chart
+        (function() {
+            // Check if we have prediction data
+            if (!prophetPredictions || prophetPredictions.length === 0) {
+                console.error('No prediction data available for Actual vs Predicted chart');
+                const ctx = document.getElementById('actualVsPredictedChart');
+                if (ctx) {
+                    ctx.style.display = 'none';
+                    const chartContainer = ctx.parentElement;
+                    chartContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prediction data available for comparison.</p>';
+                }
+                return;
+            }
+
+            // Use all months from prophetPredictions
+            const months = prophetPredictions.map(p => p.month);
+            // Prepare data arrays
+            const actualData = months.map(m => historicalData[m] !== undefined ? historicalData[m] : 0);
+            const predictedData = prophetPredictions.map(p => p.yhat);
+            // Format labels using date_formatted if available
+            const labels = prophetPredictions.map(p => p.date_formatted || formatMonthLabel(p.month));
+            
+            // Draw chart
+            const ctx = document.getElementById('actualVsPredictedChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
                 data: {
-                    labels: <?php echo json_encode(array_column($prophet_predictions ?? [], 'date_formatted')); ?>,
-                    datasets: [{
-                        label: 'Actual Income (2025)',
-                        data: <?php echo json_encode($actual_data_2025); ?>,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: true,
-                        tension: 0.1
-                    }]
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Actual Income',
+                            data: actualData,
+                            backgroundColor: 'rgba(255, 140, 0, 0.85)', // dark orange
+                            borderColor: 'rgba(255, 140, 0, 1)',
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Predicted Amount',
+                            data: predictedData,
+                            backgroundColor: 'rgba(0, 100, 0, 0.85)', // dark green
+                            borderColor: 'rgba(0, 100, 0, 1)',
+                            borderWidth: 2
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Amount (₱)'
+                            }
+                        },
                         x: {
                             title: {
                                 display: true,
                                 text: 'Month'
                             }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
                         },
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Total Income (₱)'
-                            }
+                        title: {
+                            display: true,
+                            text: 'Actual Income vs Predicted Amount'
                         }
                     }
                 }
             });
-        }
+        })();
     });
 </script>
 </body>
