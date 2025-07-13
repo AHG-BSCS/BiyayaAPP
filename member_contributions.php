@@ -640,13 +640,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .modal-content {
             background-color: var(--white);
-            margin: 5% auto;
+            margin: 2% auto;
             padding: 20px;
             border-radius: 5px;
             width: 90%;
             max-width: 600px;
             position: relative;
             animation: modalSlideIn 0.3s ease-out;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         @keyframes modalSlideIn {
@@ -739,9 +741,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         /* Responsive Updates */
         @media (max-width: 768px) {
             .modal-content {
-                margin: 10% auto;
+                margin: 5% auto;
                 width: 95%;
                 padding: 15px;
+                max-height: 85vh;
             }
 
             .form-actions {
