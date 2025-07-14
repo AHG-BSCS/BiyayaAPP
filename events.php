@@ -33,7 +33,8 @@ if (!$is_admin && !$is_member) {
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Initialize message variables
@@ -55,6 +56,7 @@ function getAllEvents($conn) {
                 'date' => $row['event_date'],
                 'time' => $row['event_time'],
                 'description' => $row['description'],
+                'event_image' => isset($row['event_image']) ? $row['event_image'] : null,
                 'is_pinned' => $row['is_pinned'],
                 'created_by' => $row['created_by'],
                 'created_at' => $row['created_at']
@@ -78,6 +80,7 @@ function getPinnedEvent($conn) {
             'date' => $row['event_date'],
             'time' => $row['event_time'],
             'description' => $row['description'],
+            'event_image' => isset($row['event_image']) ? $row['event_image'] : null,
             'is_pinned' => $row['is_pinned'],
             'created_by' => $row['created_by'],
             'created_at' => $row['created_at']
@@ -94,17 +97,49 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_event"]) && $is_ad
     $event_time = date("H:i:s", strtotime($_POST["datetime"]));
     $description = htmlspecialchars(trim($_POST["description"]));
     $created_by = $_SESSION["user"];
+    $event_image = "";
 
-    $sql = "INSERT INTO events (title, category, event_date, event_time, description, created_by) VALUES (?, ?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssssss", $title, $category, $event_date, $event_time, $description, $created_by);
-    
-    if ($stmt->execute()) {
-        $message = "Event added successfully!";
-        $messageType = "success";
-    } else {
-        $message = "Error adding event: " . $conn->error;
-        $messageType = "danger";
+    // Handle image upload
+    if (isset($_FILES["event_image"]) && $_FILES["event_image"]["error"] == 0) {
+        $allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+        $file_type = $_FILES["event_image"]["type"];
+        
+        if (in_array($file_type, $allowed_types)) {
+            $upload_dir = "uploads/events/";
+            
+            // Create directory if it doesn't exist
+            if (!file_exists($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+            
+            $file_extension = pathinfo($_FILES["event_image"]["name"], PATHINFO_EXTENSION);
+            $file_name = "event_" . time() . "_" . uniqid() . "." . $file_extension;
+            $upload_path = $upload_dir . $file_name;
+            
+            if (move_uploaded_file($_FILES["event_image"]["tmp_name"], $upload_path)) {
+                $event_image = $upload_path;
+            } else {
+                $message = "Error uploading image.";
+                $messageType = "danger";
+            }
+        } else {
+            $message = "Invalid file type. Please upload JPEG, PNG, or GIF images only.";
+            $messageType = "danger";
+        }
+    }
+
+    if (!isset($message)) { // Only proceed if no upload errors
+        $sql = "INSERT INTO events (title, category, event_date, event_time, description, event_image, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("sssssss", $title, $category, $event_date, $event_time, $description, $event_image, $created_by);
+        
+        if ($stmt->execute()) {
+            $message = "Event added successfully!";
+            $messageType = "success";
+        } else {
+            $message = "Error adding event: " . $conn->error;
+            $messageType = "danger";
+        }
     }
 }
 
@@ -134,16 +169,60 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_event"]) && $is_a
     $event_time = date("H:i:s", strtotime($_POST["datetime"]));
     $description = htmlspecialchars(trim($_POST["description"]));
 
-    $sql = "UPDATE events SET title = ?, category = ?, event_date = ?, event_time = ?, description = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sssssi", $title, $category, $event_date, $event_time, $description, $event_id);
-    
-    if ($stmt->execute()) {
-        $message = "Event updated successfully!";
-        $messageType = "success";
-    } else {
-        $message = "Error updating event: " . $conn->error;
-        $messageType = "danger";
+    // Get current event image
+    $current_image_sql = "SELECT event_image FROM events WHERE id = ?";
+    $current_image_stmt = $conn->prepare($current_image_sql);
+    $current_image_stmt->bind_param("i", $event_id);
+    $current_image_stmt->execute();
+    $current_image_result = $current_image_stmt->get_result();
+    $current_event = $current_image_result->fetch_assoc();
+    $event_image = $current_event['event_image'];
+
+    // Handle new image upload
+    if (isset($_FILES["event_image"]) && $_FILES["event_image"]["error"] == 0) {
+        $allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+        $file_type = $_FILES["event_image"]["type"];
+        
+        if (in_array($file_type, $allowed_types)) {
+            $upload_dir = "uploads/events/";
+            
+            // Create directory if it doesn't exist
+            if (!file_exists($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+            
+            $file_extension = pathinfo($_FILES["event_image"]["name"], PATHINFO_EXTENSION);
+            $file_name = "event_" . time() . "_" . uniqid() . "." . $file_extension;
+            $upload_path = $upload_dir . $file_name;
+            
+            if (move_uploaded_file($_FILES["event_image"]["tmp_name"], $upload_path)) {
+                // Delete old image if it exists
+                if (!empty($event_image) && file_exists($event_image)) {
+                    unlink($event_image);
+                }
+                $event_image = $upload_path;
+            } else {
+                $message = "Error uploading image.";
+                $messageType = "danger";
+            }
+        } else {
+            $message = "Invalid file type. Please upload JPEG, PNG, or GIF images only.";
+            $messageType = "danger";
+        }
+    }
+
+    if (!isset($message)) { // Only proceed if no upload errors
+        $sql = "UPDATE events SET title = ?, category = ?, event_date = ?, event_time = ?, description = ?, event_image = ? WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ssssssi", $title, $category, $event_date, $event_time, $description, $event_image, $event_id);
+        
+        if ($stmt->execute()) {
+            $message = "Event updated successfully!";
+            $messageType = "success";
+        } else {
+            $message = "Error updating event: " . $conn->error;
+            $messageType = "danger";
+        }
     }
 }
 
@@ -617,6 +696,38 @@ $pinned_event = getPinnedEvent($conn);
             background-color: rgba(244, 67, 54, 0.1);
             color: var(--danger-color);
         }
+
+        /* File input styling */
+        .form-control[type="file"] {
+            padding: 8px;
+            border: 2px dashed var(--light-gray);
+            background-color: #fafafa;
+            cursor: pointer;
+        }
+
+        .form-control[type="file"]:hover {
+            border-color: var(--accent-color);
+            background-color: #f0f8f0;
+        }
+
+        .form-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .current-image {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid var(--light-gray);
+        }
+
+        .current-image p {
+            margin: 0 0 10px 0;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -685,7 +796,7 @@ $pinned_event = getPinnedEvent($conn);
                     <!-- Add Event Form -->
                     <div class="event-form" id="add-event-form">
                         <h3>Add New Event</h3>
-                        <form action="" method="post">
+                        <form action="" method="post" enctype="multipart/form-data">
                             <div class="form-group">
                                 <label for="add_title">Event Title</label>
                                 <input type="text" id="add_title" name="title" class="form-control" required>
@@ -707,6 +818,11 @@ $pinned_event = getPinnedEvent($conn);
                                 <label for="add_description">Description</label>
                                 <textarea id="add_description" name="description" class="form-control" rows="4" required></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="add_event_image">Event Image (Optional)</label>
+                                <input type="file" id="add_event_image" name="event_image" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">Upload JPEG, PNG, or GIF image. This image will be displayed on the homepage.</small>
+                            </div>
                             <button type="submit" class="btn" name="add_event">
                                 <i class="fas fa-calendar-plus"></i> Add Event
                             </button>
@@ -719,7 +835,7 @@ $pinned_event = getPinnedEvent($conn);
                     <!-- Edit Event Form -->
                     <div class="event-form" id="edit-event-form">
                         <h3>Edit Event</h3>
-                        <form action="" method="post">
+                        <form action="" method="post" enctype="multipart/form-data">
                             <input type="hidden" name="event_id" value="<?php echo $edit_event['id'] ?? ''; ?>">
                             <div class="form-group">
                                 <label for="edit_title">Event Title</label>
@@ -741,6 +857,17 @@ $pinned_event = getPinnedEvent($conn);
                             <div class="form-group">
                                 <label for="edit_description">Description</label>
                                 <textarea id="edit_description" name="description" class="form-control" rows="4" required><?php echo $edit_event['description'] ?? ''; ?></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_event_image">Event Image (Optional)</label>
+                                <?php if (!empty($edit_event['event_image'])): ?>
+                                    <div class="current-image">
+                                        <p><strong>Current Image:</strong></p>
+                                        <img src="<?php echo htmlspecialchars($edit_event['event_image']); ?>" alt="Current Event Image" style="max-width: 200px; height: auto; margin: 10px 0;">
+                                    </div>
+                                <?php endif; ?>
+                                <input type="file" id="edit_event_image" name="event_image" class="form-control" accept="image/*">
+                                <small class="form-text text-muted">Upload a new image to replace the current one. Leave empty to keep the current image.</small>
                             </div>
                             <button type="submit" class="btn" name="edit_event">
                                 <i class="fas fa-save"></i> Save Changes

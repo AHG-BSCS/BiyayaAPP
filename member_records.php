@@ -2438,117 +2438,228 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <h4>Membership Application Form</h4>
                     </div>
                     <form action="" method="post">
-                        <div class="form-group">
-                            <label for="name">Name/Pangalan</label>
-                            <input type="text" id="name" name="name" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="nickname">Nickname/Palayaw</label>
-                            <input type="text" id="nickname" name="nickname" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="address">Address/Tirahan</label>
-                            <input type="text" id="address" name="address" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="telephone">Telephone No./Telepono</label>
-                            <input type="tel" id="telephone" name="telephone" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="cellphone">Cellphone No.</label>
-                            <input type="tel" id="cellphone" name="cellphone" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="email">E-mail</label>
-                            <input type="email" id="email" name="email" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>Civil Status</label>
-                            <div class="radio-group">
-                                <label><input type="radio" name="civil_status" value="Single" required> Single</label>
-                                <label><input type="radio" name="civil_status" value="Married"> Married</label>
-                                <label><input type="radio" name="civil_status" value="Widowed"> Widowed</label>
+                        <input type="hidden" name="add_membership" value="1">
+                        
+                        <!-- Personal Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-user"></i> Personal Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="name">Name/Pangalan</label>
+                                        <input type="text" id="name" name="name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="nickname">Nickname/Palayaw</label>
+                                        <input type="text" id="nickname" name="nickname" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="birthday">Birthday/Kaarawan</label>
+                                        <input type="date" id="birthday" name="birthday" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label>Sex</label>
+                                        <div class="radio-group">
+                                            <label><input type="radio" name="sex" value="Male" required> Male</label>
+                                            <label><input type="radio" name="sex" value="Female"> Female</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label>Civil Status</label>
+                                        <div class="radio-group">
+                                            <label><input type="radio" name="civil_status" value="Single" required> Single</label>
+                                            <label><input type="radio" name="civil_status" value="Married"> Married</label>
+                                            <label><input type="radio" name="civil_status" value="Widowed"> Widowed</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="spiritual_birthday">Spiritual Birthday</label>
+                                        <input type="date" id="spiritual_birthday" name="spiritual_birthday" class="form-control">
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Sex</label>
-                            <div class="radio-group">
-                                <label><input type="radio" name="sex" value="Male" required> Male</label>
-                                <label><input type="radio" name="sex" value="Female"> Female</label>
+
+                        <!-- Contact Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-address-book"></i> Contact Information
+                            </h5>
+                            <div class="form-group">
+                                <label for="address">Address/Tirahan</label>
+                                <input type="text" id="address" name="address" class="form-control" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="telephone">Telephone No./Telepono</label>
+                                        <input type="tel" id="telephone" name="telephone" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="cellphone">Cellphone No.</label>
+                                        <input type="tel" id="cellphone" name="cellphone" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">E-mail</label>
+                                <input type="email" id="email" name="email" class="form-control">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label for="birthday">Birthday/Kaarawan</label>
-                            <input type="date" id="birthday" name="birthday" class="form-control" required>
+
+                        <!-- Family Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-users"></i> Family Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="father_name">Father's Name/Pangalan ng Tatay</label>
+                                        <input type="text" id="father_name" name="father_name" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="mother_name">Mother's Name/Pangalan ng Nanay</label>
+                                        <input type="text" id="mother_name" name="mother_name" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="children">Name of Children/Pangalan ng Anak</label>
+                                <textarea id="children" name="children" class="form-control" rows="3"></textarea>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="father_name">Father's Name/Pangalan ng Tatay</label>
-                            <input type="text" id="father_name" name="father_name" class="form-control">
+
+                        <!-- Educational Background Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-graduation-cap"></i> Educational Background
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="education">Educational Attainment/Antas na natapos</label>
+                                        <input type="text" id="education" name="education" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="course">Course/Kurso</label>
+                                        <input type="text" id="course" name="course" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="school">School/Paaralan</label>
+                                        <input type="text" id="school" name="school" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="year">Year/Taon</label>
+                                        <input type="text" id="year" name="year" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="mother_name">Mother's Name/Pangalan ng Nanay</label>
-                            <input type="text" id="mother_name" name="mother_name" class="form-control">
+
+                        <!-- Employment Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-briefcase"></i> Employment Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="company">If employed, what company/Pangalan ng kompanya</label>
+                                        <input type="text" id="company" name="company" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="position">Position/Title/Trabaho</label>
+                                        <input type="text" id="position" name="position" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
+                                <input type="text" id="business" name="business" class="form-control">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="children">Name of Children/Pangalan ng Anak</label>
-                            <textarea id="children" name="children" class="form-control" rows="3"></textarea>
+
+                        <!-- Church Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-church"></i> Church Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
+                                        <input type="text" id="inviter" name="inviter" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
+                                        <input type="text" id="attendance_duration" name="attendance_duration" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
+                                <textarea id="how_know" name="how_know" class="form-control" rows="3"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
+                                <input type="text" id="previous_church" name="previous_church" class="form-control">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="education">Educational Attainment/Antas na natapos</label>
-                            <input type="text" id="education" name="education" class="form-control">
+
+                        <!-- Membership Class Details Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-calendar-check"></i> Membership Class Details
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="membership_class_date">Date of Membership Class</label>
+                                        <input type="date" id="membership_class_date" name="membership_class_date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="membership_class_officiant">Officiant (Pastor who led the membership class)</label>
+                                        <input type="text" id="membership_class_officiant" name="membership_class_officiant" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="course">Course/Kurso</label>
-                            <input type="text" id="course" name="course" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="school">School/Paaralan</label>
-                            <input type="text" id="school" name="school" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="year">Year/Taon</label>
-                            <input type="text" id="year" name="year" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="company">If employed, what company/Pangalan ng kompanya</label>
-                            <input type="text" id="company" name="company" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="position">Position/Title/Trabaho</label>
-                            <input type="text" id="position" name="position" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
-                            <input type="text" id="business" name="business" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="spiritual_birthday">Spiritual Birthday</label>
-                            <input type="date" id="spiritual_birthday" name="spiritual_birthday" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
-                            <input type="text" id="inviter" name="inviter" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
-                            <textarea id="how_know" name="how_know" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
-                            <input type="text" id="attendance_duration" name="attendance_duration" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
-                            <input type="text" id="previous_church" name="previous_church" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="membership_class_date">Date of Membership Class</label>
-                            <input type="date" id="membership_class_date" name="membership_class_date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="membership_class_officiant">Officiant (Pastor who led the membership class)</label>
-                            <input type="text" id="membership_class_officiant" name="membership_class_officiant" class="form-control" required>
-                        </div>
+
                         <div class="modal-buttons">
                             <button type="submit" class="btn" name="add_membership">
                                 <i class="fas fa-save"></i> Submit
@@ -2895,121 +3006,231 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <form action="" method="post" id="baptismal-form">
                         <input type="hidden" name="add_baptismal" value="1">
                         <input type="hidden" name="id" id="bap_id">
-                        <div class="form-group">
-                            <label for="bap_name">Name/Pangalan</label>
-                            <input type="text" id="bap_name" name="name" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_nickname">Nickname/Palayaw</label>
-                            <input type="text" id="bap_nickname" name="nickname" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_address">Address/Tirahan</label>
-                            <input type="text" id="bap_address" name="address" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_telephone">Telephone No./Telepono</label>
-                            <input type="tel" id="bap_telephone" name="telephone" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_cellphone">Cellphone No.</label>
-                            <input type="tel" id="bap_cellphone" name="cellphone" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_email">E-mail</label>
-                            <input type="email" id="bap_email" name="email" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>Civil Status</label>
-                            <div class="radio-group">
-                                <label><input type="radio" name="civil_status" value="Single" required> Single</label>
-                                <label><input type="radio" name="civil_status" value="Married"> Married</label>
-                                <label><input type="radio" name="civil_status" value="Widowed"> Widowed</label>
+                        
+                        <!-- Personal Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-user"></i> Personal Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_name">Name/Pangalan</label>
+                                        <input type="text" id="bap_name" name="name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_nickname">Nickname/Palayaw</label>
+                                        <input type="text" id="bap_nickname" name="nickname" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_birthday">Birthday/Kaarawan</label>
+                                        <input type="date" id="bap_birthday" name="birthday" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label>Sex</label>
+                                        <div class="radio-group">
+                                            <label><input type="radio" name="sex" value="Male" required> Male</label>
+                                            <label><input type="radio" name="sex" value="Female"> Female</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label>Civil Status</label>
+                                        <div class="radio-group">
+                                            <label><input type="radio" name="civil_status" value="Single" required> Single</label>
+                                            <label><input type="radio" name="civil_status" value="Married"> Married</label>
+                                            <label><input type="radio" name="civil_status" value="Widowed"> Widowed</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_spiritual_birthday">Spiritual Birthday</label>
+                                        <input type="date" id="bap_spiritual_birthday" name="spiritual_birthday" class="form-control" required>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Sex</label>
-                            <div class="radio-group">
-                                <label><input type="radio" name="sex" value="Male" required> Male</label>
-                                <label><input type="radio" name="sex" value="Female"> Female</label>
+
+                        <!-- Contact Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-address-book"></i> Contact Information
+                            </h5>
+                            <div class="form-group">
+                                <label for="bap_address">Address/Tirahan</label>
+                                <input type="text" id="bap_address" name="address" class="form-control" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_telephone">Telephone No./Telepono</label>
+                                        <input type="tel" id="bap_telephone" name="telephone" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_cellphone">Cellphone No.</label>
+                                        <input type="tel" id="bap_cellphone" name="cellphone" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_email">E-mail</label>
+                                <input type="email" id="bap_email" name="email" class="form-control">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_birthday">Birthday/Kaarawan</label>
-                            <input type="date" id="bap_birthday" name="birthday" class="form-control" required>
+
+                        <!-- Family Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-users"></i> Family Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_father_name">Father's Name/Pangalan ng Tatay</label>
+                                        <input type="text" id="bap_father_name" name="father_name" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_mother_name">Mother's Name/Pangalan ng Nanay</label>
+                                        <input type="text" id="bap_mother_name" name="mother_name" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_children">Name of Children/Pangalan ng Anak</label>
+                                <textarea id="bap_children" name="children" class="form-control" rows="3" required></textarea>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_father_name">Father's Name/Pangalan ng Tatay</label>
-                            <input type="text" id="bap_father_name" name="father_name" class="form-control" required>
+
+                        <!-- Educational Background Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-graduation-cap"></i> Educational Background
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_education">Educational Attainment/Antas na natapos</label>
+                                        <input type="text" id="bap_education" name="education" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_course">Course/Kurso</label>
+                                        <input type="text" id="bap_course" name="course" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_school">School/Paaralan</label>
+                                        <input type="text" id="bap_school" name="school" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_year">Year/Taon</label>
+                                        <input type="text" id="bap_year" name="year" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_mother_name">Mother's Name/Pangalan ng Nanay</label>
-                            <input type="text" id="bap_mother_name" name="mother_name" class="form-control" required>
+
+                        <!-- Employment Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-briefcase"></i> Employment Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_company">If employed, what company/Pangalan ng kompanya</label>
+                                        <input type="text" id="bap_company" name="company" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_position">Position/Title/Trabaho</label>
+                                        <input type="text" id="bap_position" name="position" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
+                                <input type="text" id="bap_business" name="business" class="form-control" required>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_children">Name of Children/Pangalan ng Anak</label>
-                            <textarea id="bap_children" name="children" class="form-control" rows="3" required></textarea>
+
+                        <!-- Church Information Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-church"></i> Church Information
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
+                                        <input type="text" id="bap_inviter" name="inviter" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
+                                        <input type="text" id="bap_attendance_duration" name="attendance_duration" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
+                                <textarea id="bap_how_know" name="how_know" class="form-control" rows="3" required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
+                                <input type="text" id="bap_previous_church" name="previous_church" class="form-control" required>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_education">Educational Attainment/Antas na natapos</label>
-                            <input type="text" id="bap_education" name="education" class="form-control" required>
+
+                        <!-- Baptismal Details Section -->
+                        <div class="form-section">
+                            <h5 style="color: var(--accent-color); margin-bottom: 15px; border-bottom: 2px solid var(--accent-color); padding-bottom: 5px;">
+                                <i class="fas fa-water"></i> Baptismal Details
+                            </h5>
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_baptism_date">Date of Baptism</label>
+                                        <input type="date" id="bap_baptism_date" name="baptism_date" class="form-control" required>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="bap_officiant">Officiating Pastor</label>
+                                        <input type="text" id="bap_officiant" name="officiant" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="bap_venue">Venue of Baptismal</label>
+                                <input type="text" id="bap_venue" name="venue" class="form-control" required>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bap_course">Course/Kurso</label>
-                            <input type="text" id="bap_course" name="course" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_school">School/Paaralan</label>
-                            <input type="text" id="bap_school" name="school" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_year">Year/Taon</label>
-                            <input type="text" id="bap_year" name="year" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_company">If employed, what company/Pangalan ng kompanya</label>
-                            <input type="text" id="bap_company" name="company" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_position">Position/Title/Trabaho</label>
-                            <input type="text" id="bap_position" name="position" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_business">If self-employed, what is the nature of your business?/Kung hindi namamasukan, ano ang klase ng negosyo?</label>
-                            <input type="text" id="bap_business" name="business" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_spiritual_birthday">Spiritual Birthday</label>
-                            <input type="date" id="bap_spiritual_birthday" name="spiritual_birthday" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_inviter">Who invited you to COCD?/Sino ang nag-imbita sa iyo sa COCD?</label>
-                            <input type="text" id="bap_inviter" name="inviter" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_how_know">How did you know about COCD?/Paano mo nalaman ang tungkol sa COCD?</label>
-                            <textarea id="bap_how_know" name="how_know" class="form-control" rows="3" required></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_attendance_duration">How long have you been attending at COCD?/Kailan ka pa dumadalo sa COCD?</label>
-                            <input type="text" id="bap_attendance_duration" name="attendance_duration" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_previous_church">Previous Church Membership?/Dating miembro ng anong simbahan?</label>
-                            <input type="text" id="bap_previous_church" name="previous_church" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_baptism_date">Date of Baptism</label>
-                            <input type="date" id="bap_baptism_date" name="baptism_date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_officiant">Officiating Pastor</label>
-                            <input type="text" id="bap_officiant" name="officiant" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bap_venue">Venue of Baptismal</label>
-                            <input type="text" id="bap_venue" name="venue" class="form-control" required>
-                        </div>
+
                         <div class="modal-buttons">
                             <button type="submit" class="btn" name="add_baptismal">
                                 <i class="fas fa-save"></i> Submit

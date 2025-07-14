@@ -12,7 +12,6 @@ $conn = new mysqli($servername, $username, $password);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
-
 // Select the database
 $conn->select_db($dbname);
 
@@ -388,60 +387,31 @@ $sql = "CREATE TABLE IF NOT EXISTS prayer_requests (
 
 $conn->query($sql);
 
-// Insert sample prayer requests if table is empty
-$result = $conn->query("SELECT COUNT(*) as count FROM prayer_requests");
-$row = $result->fetch_assoc();
+// Create events table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS events (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    event_date DATE NOT NULL,
+    event_time TIME NOT NULL,
+    description TEXT NOT NULL,
+    event_image VARCHAR(255),
+    is_pinned BOOLEAN DEFAULT FALSE,
+    created_by VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
 
-if ($row['count'] == 0) {
-    $sample_requests = [
-        [
-            'member_name' => 'John Doe',
-            'prayer_request' => 'Please pray for my mother who is in the hospital. She\'s been diagnosed with pneumonia and needs strength to recover.',
-            'category' => 'Health',
-            'urgency' => 'urgent',
-            'anonymous' => 0,
-            'heart_reactions' => 3,
-            'praying_reactions' => 5,
-            'like_reactions' => 2
-        ],
-        [
-            'member_name' => 'Anonymous',
-            'prayer_request' => 'I\'m struggling with my finances and need prayer for God\'s provision. Please pray for wisdom in managing my resources.',
-            'category' => 'Financial',
-            'urgency' => 'normal',
-            'anonymous' => 1,
-            'heart_reactions' => 1,
-            'praying_reactions' => 4,
-            'like_reactions' => 1
-        ],
-        [
-            'member_name' => 'Sarah Smith',
-            'prayer_request' => 'My family is going through a difficult time. Please pray for unity, understanding, and God\'s peace to reign in our home.',
-            'category' => 'Family',
-            'urgency' => 'normal',
-            'anonymous' => 0,
-            'heart_reactions' => 2,
-            'praying_reactions' => 3,
-            'like_reactions' => 1
-        ]
-    ];
-    
-    foreach ($sample_requests as $request) {
-        $sql = "INSERT INTO prayer_requests (member_name, prayer_request, category, urgency, anonymous, heart_reactions, praying_reactions, like_reactions) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssiiii", 
-            $request['member_name'],
-            $request['prayer_request'],
-            $request['category'],
-            $request['urgency'],
-            $request['anonymous'],
-            $request['heart_reactions'],
-            $request['praying_reactions'],
-            $request['like_reactions']
-        );
-        $stmt->execute();
+if ($conn->query($sql) === TRUE) {
+    // Add event_image column if it doesn't exist
+    $check_column_sql = "SHOW COLUMNS FROM events LIKE 'event_image'";
+    $column_result = $conn->query($check_column_sql);
+    if ($column_result->num_rows == 0) {
+        $add_column_sql = "ALTER TABLE events ADD COLUMN event_image VARCHAR(255) AFTER description";
+        $conn->query($add_column_sql);
     }
+    
+
 }
 
 // Function to get site settings

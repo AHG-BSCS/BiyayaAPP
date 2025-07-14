@@ -11,7 +11,8 @@ session_start();
 // Function to get upcoming events from database
 function getUpcomingEvents($conn) {
     $events = [];
-    $sql = "SELECT * FROM events WHERE event_date >= CURDATE() ORDER BY event_date ASC, event_time ASC LIMIT 4";
+    // Show all events, not just future ones for now
+    $sql = "SELECT * FROM events ORDER BY event_date ASC, event_time ASC LIMIT 6";
     $result = $conn->query($sql);
     
     if ($result && $result->num_rows > 0) {
@@ -22,15 +23,54 @@ function getUpcomingEvents($conn) {
                 'category' => $row['category'],
                 'date' => $row['event_date'],
                 'time' => $row['event_time'],
-                'description' => $row['description']
+                'description' => $row['description'],
+                'event_image' => isset($row['event_image']) ? $row['event_image'] : null,
+                'is_pinned' => $row['is_pinned']
             ];
         }
     }
     return $events;
 }
 
+// Function to get total upcoming events count
+function getUpcomingEventsCount($conn) {
+    // Count all events for now
+    $sql = "SELECT COUNT(*) as total FROM events";
+    $result = $conn->query($sql);
+    
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        return $row['total'];
+    }
+    return 0;
+}
+
 // Get upcoming events from database
 $upcoming_events = getUpcomingEvents($conn);
+$total_upcoming_events = getUpcomingEventsCount($conn);
+
+// Debug: Check if events are being fetched
+if (empty($upcoming_events)) {
+    // Check if there are any events in the database
+    $debug_sql = "SELECT COUNT(*) as total FROM events";
+    $debug_result = $conn->query($debug_sql);
+    if ($debug_result && $debug_result->num_rows > 0) {
+        $debug_row = $debug_result->fetch_assoc();
+        error_log("Total events in database: " . $debug_row['total']);
+    }
+    
+    // Show all events in database for debugging
+    $debug_sql3 = "SELECT id, title, event_date, event_time FROM events ORDER BY event_date ASC";
+    $debug_result3 = $conn->query($debug_sql3);
+    if ($debug_result3 && $debug_result3->num_rows > 0) {
+        while ($debug_row3 = $debug_result3->fetch_assoc()) {
+            error_log("Event: ID=" . $debug_row3['id'] . ", Title=" . $debug_row3['title'] . ", Date=" . $debug_row3['event_date'] . ", Time=" . $debug_row3['event_time']);
+        }
+    }
+    
+    // Check current date
+    error_log("Current date: " . date('Y-m-d'));
+}
 
 // Function to log login attempts
 function logLoginAttempt($conn, $username, $status, $failure_reason = null) {
@@ -91,7 +131,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 // Function to get event-specific image
-function getEventImage($event_title) {
+function getEventImage($event_title, $custom_image = null) {
+    // If custom image is provided and exists, use it
+    if (!empty($custom_image) && file_exists($custom_image)) {
+        return $custom_image;
+    }
+    
+    // Check by exact title first
     switch ($event_title) {
         case "AMEN Prayer Meeting":
             return "logo/amen.jpg";
@@ -102,7 +148,18 @@ function getEventImage($event_title) {
         case "Sunday School Picnic":
             return "logo/sunday.jpg";
         default:
-            return "logo/default_event.jpg"; // Fallback image
+            // Check by category if title doesn't match
+            if (strpos($event_title, 'AMEN') !== false || strpos($event_title, 'Prayer') !== false) {
+                return "logo/amen.jpg";
+            } elseif (strpos($event_title, 'WOW') !== false || strpos($event_title, 'Women') !== false) {
+                return "logo/wow.jpg";
+            } elseif (strpos($event_title, 'Youth') !== false) {
+                return "logo/dg.jpg";
+            } elseif (strpos($event_title, 'Sunday School') !== false || strpos($event_title, 'Outreach') !== false) {
+                return "logo/sunday.jpg";
+            } else {
+                return "logo/churchpic.jpg"; // Use church picture as default
+            }
     }
 }
 ?>
@@ -314,33 +371,153 @@ function getEventImage($event_title) {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 30px;
-            margin-top: 50px;
+            margin-top: 30px;
+        }
+
+        .events-summary-card {
+            background: linear-gradient(135deg, var(--accent-color), rgb(0, 112, 9));
+            color: var(--white);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 139, 30, 0.3);
+        }
+
+        .summary-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .summary-icon {
+            font-size: 48px;
+            opacity: 0.9;
+        }
+
+        .summary-info h3 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .summary-info p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid var(--white);
+            color: var(--white);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--white);
+            color: var(--accent-color);
+        }
+
+        .btn-large {
+            padding: 15px 30px;
+            font-size: 16px;
+        }
+
+        .view-all-events {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .no-events-message {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .no-events-message i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: var(--light-gray);
+        }
+
+        .no-events-message h3 {
+            margin-bottom: 10px;
+            color: var(--primary-color);
         }
 
         .event-card {
             background-color: var(--light-gray);
             border-radius: 10px;
             overflow: hidden;
-            transition: transform 0.3s;
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
         }
 
         .event-card:hover {
             transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .event-card.pinned-event {
+            border: 2px solid var(--accent-color);
+        }
+
+        .pinned-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: var(--accent-color);
+            color: var(--white);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 10;
         }
 
         .event-details {
             padding: 20px;
-            color: #000000; /* Black font color for event details */
+            color: #000000;
+        }
+
+        .event-category {
+            margin-bottom: 10px;
+        }
+
+        .category-badge {
+            background-color: var(--accent-color);
+            color: var(--white);
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
         }
 
         .event-details h3 {
             color: var(--accent-color);
             margin-bottom: 10px;
+            font-size: 18px;
         }
 
         .event-date-time {
             font-weight: 500;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .event-date-time p {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .event-date-time i {
+            margin-right: 8px;
+            color: var(--accent-color);
+        }
+
+        .event-description {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #555;
         }
 
         .contact-info {
@@ -687,19 +864,57 @@ function getEventImage($event_title) {
 <section id="events" class="section">
     <div class="container">
         <h2 class="section-title">Upcoming Events</h2>
-        <div class="events-grid">
-            <?php foreach ($upcoming_events as $event): ?>
-                <div class="event-card">
-                    <img src="<?php echo getEventImage($event['title']); ?>" alt="<?php echo htmlspecialchars($event['title']); ?>" style="width: 100%; height: 200px; object-fit: cover;">
-                    <div class="event-details">
-                        <h3><?php echo htmlspecialchars($event['title']); ?></h3>
-                        <div class="event-date-time">
-                            <p><?php echo htmlspecialchars($event['date']); ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
-                        </div>
-                        <p><?php echo htmlspecialchars($event['description']); ?></p>
+        <div class="section-content">
+            <!-- Events Summary Card -->
+            <div class="events-summary-card">
+                <div class="summary-content">
+                    <div class="summary-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="summary-info">
+                        <h3><?php echo $total_upcoming_events; ?> Upcoming Events</h3>
+                        <p>Join us for our upcoming activities and fellowship events</p>
+                        <?php if ($total_upcoming_events == 0): ?>
+                            <p style="font-size: 12px; margin-top: 5px; opacity: 0.8;">Debug: No events found in database</p>
+                        <?php endif; ?>
                     </div>
                 </div>
-            <?php endforeach; ?>
+            </div>
+
+            <!-- Featured Events Grid -->
+            <div class="events-grid">
+                <?php if (empty($upcoming_events)): ?>
+                    <div class="no-events-message">
+                        <i class="fas fa-calendar-times"></i>
+                        <h3>No Upcoming Events</h3>
+                        <p>Check back soon for new events and activities!</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($upcoming_events as $event): ?>
+                        <div class="event-card <?php echo $event['is_pinned'] ? 'pinned-event' : ''; ?>">
+                            <?php if ($event['is_pinned']): ?>
+                                <div class="pinned-badge">
+                                    <i class="fas fa-thumbtack"></i> Pinned
+                                </div>
+                            <?php endif; ?>
+                            <img src="<?php echo getEventImage($event['title'], $event['event_image']); ?>" alt="<?php echo htmlspecialchars($event['title']); ?>" style="width: 100%; height: 200px; object-fit: cover;">
+                            <div class="event-details">
+                                <div class="event-category">
+                                    <span class="category-badge"><?php echo htmlspecialchars($event['category']); ?></span>
+                                </div>
+                                <h3><?php echo htmlspecialchars($event['title']); ?></h3>
+                                <div class="event-date-time">
+                                    <p><i class="fas fa-calendar"></i> <?php echo date("F j, Y", strtotime($event['date'])); ?></p>
+                                    <p><i class="fas fa-clock"></i> <?php echo date("h:i A", strtotime($event['time'])); ?></p>
+                                </div>
+                                <p class="event-description"><?php echo htmlspecialchars(substr($event['description'], 0, 100)) . (strlen($event['description']) > 100 ? '...' : ''); ?></p>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+
         </div>
     </div>
 </section>
@@ -777,7 +992,7 @@ function getEventImage($event_title) {
                 </ul>
             </div>
             <div class="social-links">
-                <a href="https://web.facebook.com/cocd.sanpablo"><i class="fab fa-facebook"></i></a>
+                <a href="https://web.facebook.com/cocdspc"><i class="fab fa-facebook"></i></a>
                 <a href="https://www.instagram.com/kabataangcocd?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw=="><i class="fab fa-instagram"></i></a>
                 <a href="https://www.youtube.com/@cocdspc1171"><i class="fab fa-youtube"></i></a>
             </div>

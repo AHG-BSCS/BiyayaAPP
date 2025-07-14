@@ -25,6 +25,26 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
 $church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
+// Handle delete action
+$message = "";
+$messageType = "";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_log"])) {
+    $log_id = $_POST["delete_log_id"];
+    
+    $delete_sql = "DELETE FROM login_logs WHERE id = ?";
+    $stmt = $conn->prepare($delete_sql);
+    $stmt->bind_param("i", $log_id);
+    
+    if ($stmt->execute()) {
+        $message = "Login log deleted successfully!";
+        $messageType = "success";
+    } else {
+        $message = "Error deleting login log: " . $conn->error;
+        $messageType = "danger";
+    }
+}
+
 // DataTables will handle pagination, so we fetch all records
 
 // Get all login logs (no filters needed since DataTables handles searching)
@@ -91,6 +111,7 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
             --light-gray: #f5f5f5;
             --white: #ffffff;
             --sidebar-width: 250px;
+            --danger-color: #f44336;
         }
         body {
             background-color: var(--light-gray);
@@ -182,6 +203,7 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
             background-color: #f44336;
             color: white;
         }
+        
         .content-area {
             flex: 1;
             margin-left: var(--sidebar-width);
@@ -273,6 +295,158 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
         tr:hover {
             background-color: #f8f9fa;
         }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+        
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: white;
+        }
+        
+        .action-btn.delete-btn {
+            background-color: var(--danger-color);
+        }
+        
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
+        }
+        
+        .action-btn i {
+            font-size: 14px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            overflow: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background-color: var(--white);
+            border-radius: 5px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+            padding: 20px;
+            position: relative;
+            margin: 20px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eeeeee;
+        }
+        
+        .modal-header h3 {
+            font-size: 20px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eeeeee;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: var(--accent-color);
+            color: var(--white);
+            text-decoration: none;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background-color: rgb(0, 112, 9);
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        
+        .btn-outline:hover {
+            background-color: var(--accent-color);
+            color: var(--white);
+        }
+        
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            transition: opacity 0.3s ease;
+        }
+        
+        .alert i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .alert-success {
+            background-color: rgba(76, 175, 80, 0.1);
+            color: #4caf50;
+        }
+        
+        .alert-danger {
+            background-color: rgba(244, 67, 54, 0.1);
+            color: var(--danger-color);
+        }
+        
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -367,6 +541,14 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                 </form>
             </div>
         </div>
+        
+        <?php if (!empty($message)): ?>
+            <div class="alert alert-<?php echo $messageType; ?>" id="message-alert">
+                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
+                <?php echo $message; ?>
+            </div>
+        <?php endif; ?>
+        
         <div class="logs-table">
             <div class="table-container">
                 <table id="login-logs-table">
@@ -379,6 +561,7 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                             <th>Status</th>
                             <th>Failure Reason</th>
                             <th>User Agent</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -395,6 +578,13 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                                 </td>
                                 <td><?php echo $log['failure_reason'] ? htmlspecialchars($log['failure_reason']) : '-'; ?></td>
                                 <td><?php echo htmlspecialchars($log['user_agent']); ?></td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button type="button" class="action-btn delete-btn" onclick="deleteLog(<?php echo $log['id']; ?>)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -403,12 +593,80 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
         </div>
     </main>
 </div>
+
+<!-- Delete Log Confirmation Modal -->
+<div class="modal" id="delete-log-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Delete Login Log</h3>
+            <button class="modal-close">×</button>
+        </div>
+        <form action="" method="post">
+            <input type="hidden" id="delete_log_id" name="delete_log_id">
+            <p>Are you sure you want to delete this login log? This action cannot be undone.</p>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline modal-close-btn">Cancel</button>
+                <button type="submit" class="btn btn-danger" name="delete_log">Delete Log</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
 <script>
     $(document).ready(function() {
-        $('#login-logs-table').DataTable();
+        $('#login-logs-table').DataTable({
+            columnDefs: [
+                { width: '5%', targets: 0 }, // ID
+                { width: '12%', targets: 1 }, // Username
+                { width: '15%', targets: 2 }, // Login Time
+                { width: '12%', targets: 3 }, // IP Address
+                { width: '8%', targets: 4 }, // Status
+                { width: '15%', targets: 5 }, // Failure Reason
+                { width: '20%', targets: 6 }, // User Agent
+                { width: '8%', targets: 7 }  // Actions
+            ],
+            autoWidth: false,
+            responsive: true
+        });
+        
+        // Auto-hide success messages after 3 seconds
+        const messageAlert = document.getElementById('message-alert');
+        if (messageAlert) {
+            setTimeout(function() {
+                messageAlert.style.opacity = '0';
+                setTimeout(function() {
+                    messageAlert.style.display = 'none';
+                }, 300);
+            }, 3000);
+        }
+        
+        // Modal functions
+        const modal = document.getElementById('delete-log-modal');
+        const closeModalBtns = document.querySelectorAll('.modal-close, .modal-close-btn');
+        
+        // Close modals
+        closeModalBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                modal.classList.remove('show');
+            });
+        });
+        
+        // Close modal when clicking outside the modal content
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('show');
+            }
+        });
     });
+
+    // Delete log function
+    function deleteLog(id) {
+        const modal = document.getElementById('delete-log-modal');
+        document.getElementById('delete_log_id').value = id;
+        modal.classList.add('show');
+    }
 </script>
 </body>
 </html> 

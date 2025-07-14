@@ -22,7 +22,8 @@ if (!$is_member) {
 }
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Get user profile from database

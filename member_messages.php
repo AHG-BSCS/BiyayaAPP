@@ -15,7 +15,9 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
-$church_name = "Church of Christ-Disciples";
+// Site configuration
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Fetch messages from database
