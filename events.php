@@ -794,7 +794,7 @@ $pinned_event = getPinnedEvent($conn);
                     </div>
 
                     <!-- Add Event Form -->
-                    <div class="event-form<?php echo $edit_event ? '' : ' active'; ?>" id="add-event-form">
+                    <div class="event-form" id="add-event-form">
                         <h3>Add New Event</h3>
                         <form action="" method="post" enctype="multipart/form-data">
                             <div class="form-group">
@@ -885,7 +885,7 @@ $pinned_event = getPinnedEvent($conn);
                     <?php if ($pinned_event): ?>
                         <div class="event-category pinned">
                             <h3>Pinned Event</h3>
-                            <div class="event-item">
+                            <div class="event-item event-search-item">
                                 <div class="event-details">
                                     <h4><?php echo $pinned_event['title']; ?></h4>
                                     <p><i class="fas fa-calendar-alt"></i> <?php echo $pinned_event['date']; ?> at <?php echo date("h:i A", strtotime($pinned_event['time'])); ?></p>
@@ -939,7 +939,7 @@ $pinned_event = getPinnedEvent($conn);
                                 <p>No upcoming events in this category.</p>
                             <?php else: ?>
                                 <?php foreach ($category_events as $event): ?>
-                                    <div class="event-item">
+                                    <div class="event-item event-search-item">
                                         <div class="event-details">
                                             <h4><?php echo $event['title']; ?></h4>
                                             <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
@@ -1002,6 +1002,19 @@ $pinned_event = getPinnedEvent($conn);
             setTimeout(function() {
                 $('#message-alert').fadeOut();
             }, 3000);
+
+            // Event search/filter
+            $('.search-box input').on('input', function() {
+                var query = $(this).val().toLowerCase();
+                $('.event-search-item').each(function() {
+                    var text = $(this).text().toLowerCase();
+                    if (text.indexOf(query) > -1) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            });
         });
     </script>
 </body>
