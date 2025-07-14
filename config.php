@@ -2,7 +2,7 @@
 // Database configuration
 $servername = "localhost";
 $username = "root";  // Your MySQL username
-$password = "";      // Your MySQL password
+$password = "church123";      // Your MySQL password - CHANGE THIS TO YOUR ACTUAL PASSWORD
 $dbname = "churchdb";
 
 // Create connection
