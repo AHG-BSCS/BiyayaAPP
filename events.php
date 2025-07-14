@@ -794,7 +794,7 @@ $pinned_event = getPinnedEvent($conn);
                     </div>
 
                     <!-- Add Event Form -->
-                    <div class="event-form" id="add-event-form">
+                    <div class="event-form<?php echo $edit_event ? '' : ' active'; ?>" id="add-event-form">
                         <h3>Add New Event</h3>
                         <form action="" method="post" enctype="multipart/form-data">
                             <div class="form-group">
@@ -833,7 +833,7 @@ $pinned_event = getPinnedEvent($conn);
                     </div>
 
                     <!-- Edit Event Form -->
-                    <div class="event-form" id="edit-event-form">
+                    <div class="event-form<?php echo $edit_event ? ' active' : ''; ?>" id="edit-event-form">
                         <h3>Edit Event</h3>
                         <form action="" method="post" enctype="multipart/form-data">
                             <input type="hidden" name="event_id" value="<?php echo $edit_event['id'] ?? ''; ?>">
