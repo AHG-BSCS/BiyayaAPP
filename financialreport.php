@@ -17,7 +17,8 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 }
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 

@@ -15,7 +15,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     exit;
 }
 
-$current_page = 'member_contributions.php';
+$current_page = basename($_SERVER['PHP_SELF']);
 $username = $_SESSION["user"];
 $is_admin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
@@ -163,7 +163,8 @@ while ($row = $users_result->fetch_assoc()) {
 }
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST["add_contribution"])) {

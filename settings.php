@@ -11,7 +11,8 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 }
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Get user profile from database
@@ -244,7 +245,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Handle profile picture reset
         if (isset($_POST['reset_profile_picture'])) {
-            $profile_data['profile_picture'] = ''; // Clear profile picture
+            // Delete old profile picture if it exists
+            if (!empty($user_profile['profile_picture']) && file_exists($user_profile['profile_picture'])) {
+                unlink($user_profile['profile_picture']);
+            }
+            $profile_data['profile_picture'] = '';
         }
         // Handle profile picture upload
         else if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] == UPLOAD_ERR_OK) {
@@ -265,10 +270,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if (updateUserProfile($conn, $_SESSION["user"], $profile_data)) {
                 $_SESSION["user"] = $profile_data['username'];
                 $_SESSION["user_email"] = $profile_data['email'];
-            $message = "Profile updated successfully!";
-            $messageType = "success";
-                // Refresh user profile
+                // Also update the user_profile variable for immediate UI update
                 $user_profile = getUserProfile($conn, $_SESSION["user"]);
+                $message = isset($_POST['reset_profile_picture']) ? "Profile picture reset successfully!" : "Profile updated successfully!";
+                $messageType = "success";
             } else {
                 $message = "Failed to update profile.";
                 $messageType = "danger";
@@ -1320,18 +1325,18 @@ $church_logo = getChurchLogo($conn);
                         <h3>Profile Settings</h3>
                         <p>Update your profile details and picture.</p>
                         
-                        <form action="" method="post" enctype="multipart/form-data">
+                        <form action="" method="post" enctype="multipart/form-data" id="profile-form">
                             <div class="form-row">
                                 <div class="form-col">
                             <div class="form-group">
                                 <label for="username">Username</label>
-                                        <input type="text" id="username" name="username" class="form-control" value="<?php echo htmlspecialchars($user_profile['username']); ?>" required>
+                                        <input type="text" id="username" name="username" class="form-control" value="<?php echo htmlspecialchars($user_profile['username']); ?>">
                             </div>
                                 </div>
                                 <div class="form-col">
                             <div class="form-group">
                                 <label for="full_name">Full Name</label>
-                                        <input type="text" id="full_name" name="full_name" class="form-control" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
+                                        <input type="text" id="full_name" name="full_name" class="form-control" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>">
                             </div>
                                 </div>
                             </div>
@@ -1340,20 +1345,20 @@ $church_logo = getChurchLogo($conn);
                                 <div class="form-col">
                             <div class="form-group">
                                 <label for="email">Email</label>
-                                        <input type="email" id="email" name="email" class="form-control" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
+                                        <input type="email" id="email" name="email" class="form-control" value="<?php echo htmlspecialchars($user_profile['email']); ?>">
                             </div>
                                 </div>
                                 <div class="form-col">
                             <div class="form-group">
                                 <label for="contact_number">Contact Number</label>
-                                        <input type="text" id="contact_number" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($user_profile['contact_number']); ?>" required>
+                                        <input type="text" id="contact_number" name="contact_number" class="form-control" value="<?php echo htmlspecialchars($user_profile['contact_number']); ?>">
                             </div>
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <label for="address">Address</label>
-                                <textarea id="address" name="address" class="form-control" rows="3" required><?php echo htmlspecialchars($user_profile['address']); ?></textarea>
+                                <textarea id="address" name="address" class="form-control" rows="3"><?php echo htmlspecialchars($user_profile['address']); ?></textarea>
                             </div>
 
                             <div class="form-row">
@@ -1397,8 +1402,8 @@ $church_logo = getChurchLogo($conn);
                             <button type="submit" class="btn" name="update_profile">
                                 <i class="fas fa-save"></i> Save Changes
                             </button>
-                                <button type="submit" class="btn btn-outline" name="reset_profile_picture">
-                                    <i class="fas fa-undo"></i> Reset Profile Picture
+                            <button type="button" class="btn btn-outline" id="reset-profile-btn">
+                                <i class="fas fa-undo"></i> Reset Profile Picture
                             </button>
                             </div>
                         </form>
@@ -1679,6 +1684,26 @@ $church_logo = getChurchLogo($conn);
                         e.preventDefault();
                         alert('Passwords do not match!');
                     }
+                });
+            }
+
+            // Add JS to handle reset profile picture without requiring all fields
+            const resetBtn = document.getElementById('reset-profile-btn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    // Create a form and submit both reset_profile_picture and update_profile fields
+                    const form = document.getElementById('profile-form');
+                    let inputReset = document.createElement('input');
+                    inputReset.type = 'hidden';
+                    inputReset.name = 'reset_profile_picture';
+                    inputReset.value = '1';
+                    form.appendChild(inputReset);
+                    let inputUpdate = document.createElement('input');
+                    inputUpdate.type = 'hidden';
+                    inputUpdate.name = 'update_profile';
+                    inputUpdate.value = '1';
+                    form.appendChild(inputUpdate);
+                    form.submit();
                 });
             }
         });

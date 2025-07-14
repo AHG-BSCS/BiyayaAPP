@@ -565,17 +565,17 @@ $verse_of_the_day = $bible_verses[$verse_index];
             </div>
             
             <div class="dashboard-content" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                <div class="card">
+                <div class="card" style="background: linear-gradient(135deg, #e0ffe7 0%, #f5f5f5 100%);">
                     <i class="fas fa-users"></i>
                     <h3>Total Members</h3>
                     <p><?php echo $total_members; ?></p>
                 </div>
-                <div class="card">
+                <div class="card" style="background: linear-gradient(135deg, #e0ffe7 0%, #f5f5f5 100%);">
                     <i class="fas fa-calendar-alt"></i>
                     <h3>Upcoming Events</h3>
                     <p><?php echo $total_events; ?></p>
                 </div>
-                <div class="card">
+                <div class="card" style="background: linear-gradient(135deg, #e0ffe7 0%, #f5f5f5 100%);">
                     <i class="fas fa-hands-praying"></i>
                     <h3>Need Prayer</h3>
                     <p><?php echo $total_prayers; ?></p>

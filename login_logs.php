@@ -22,7 +22,8 @@ $church_logo = getChurchLogo($conn);
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Site configuration
-$church_name = "Church of Christ-Disciples";
+$site_settings = getSiteSettings($conn);
+$church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Handle delete action
