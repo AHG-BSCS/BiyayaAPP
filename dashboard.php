@@ -619,7 +619,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                 </div>
                 <div class="card">
                     <i class="fas fa-hands-praying"></i>
-                    <h3>Pending Prayers</h3>
+                    <h3>Need Prayer</h3>
                     <p><?php echo $dashboard_stats["pending_prayers"]; ?></p>
                 </div>
                 <div class="card">

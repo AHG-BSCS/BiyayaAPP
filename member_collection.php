@@ -1,12 +1,12 @@
 <?php
-// Member Dashboard page
+// Member Collection (Overview) page
 session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
 
 // Check if user is logged in
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-            header("Location: index.php");
+    header("Location: index.php");
     exit;
 }
 
@@ -47,9 +47,6 @@ if ($user_data) {
     $user_id = $username; // Fallback to session value
 }
 
-// Debug: Check what user_id we're using
-error_log("Member Dashboard - Username: {$username}, User ID: {$user_id}");
-
 // Get user's contributions from database - Fixed query to use proper user_id
 $stmt = $conn->prepare("
     SELECT 
@@ -68,14 +65,11 @@ $stmt->bind_param("s", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Debug: Check if we got any results
-$num_rows = $result->num_rows;
-error_log("Member Dashboard - Found {$num_rows} contributions for user {$user_id}");
-
 while ($row = $result->fetch_assoc()) {
     $donations[] = [
         'id' => $row['id'],
         'date' => date('M d, Y', strtotime($row['contribution_date'])),
+        'contribution_date' => $row['contribution_date'], // Add raw date for graph
         'amount' => $row['amount'],
         'purpose' => ucfirst($row['contribution_type']),
         'payment_method' => ucfirst(str_replace('_', ' ', $row['payment_method'] ?? '')),
@@ -104,73 +98,43 @@ $recent_contributions = count(array_filter($donations, function($donation) {
     return strtotime($donation['date']) >= strtotime('-30 days');
 }));
 
-// Get total members
-$result = $conn->query("SELECT COUNT(*) as total FROM membership_records");
-$row = $result->fetch_assoc();
-$total_members = $row['total'];
-// Get total events
-$result = $conn->query("SELECT COUNT(*) as total FROM events");
-$row = $result->fetch_assoc();
-$total_events = $row['total'];
-// Get total pending prayers
-$result = $conn->query("SELECT COUNT(*) as total FROM prayer_requests");
-$row = $result->fetch_assoc();
-$total_prayers = $row['total'];
-// Get user_id
-$stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
-$stmt->bind_param("s", $_SESSION["user"]);
-$stmt->execute();
-$user_result = $stmt->get_result();
-$user_data = $user_result->fetch_assoc();
-$user_id = $user_data ? $user_data['user_id'] : null;
-// Get monthly contributions for the last 12 months
-$monthly_contributions = array_fill(1, 12, 0);
+// Find the earliest and latest contribution dates
+$earliest_date = null;
+$latest_date = null;
+if (!empty($donations)) {
+    $dates = array_map(function($d) { return date('Y-m-01', strtotime($d['date'])); }, $donations);
+    $earliest_date = min($dates);
+    $latest_date = max($dates);
+} else {
+    $earliest_date = date('Y-01-01');
+    $latest_date = date('Y-m-01');
+}
+// Build month range from earliest to latest
+$start = new DateTime($earliest_date);
+$end = new DateTime($latest_date);
+$end->modify('+1 month'); // include last month
 $month_labels = [];
-for ($i = 11; $i >= 0; $i--) {
-    $month = date('Y-m', strtotime("-{$i} months"));
-    $month_labels[] = date('M Y', strtotime($month.'-01'));
-    $monthly_contributions[(int)date('n', strtotime($month.'-01'))] = 0;
-}
-if ($user_id) {
-    $stmt = $conn->prepare("SELECT DATE_FORMAT(contribution_date, '%Y-%m') as month, SUM(amount) as total FROM contributions WHERE user_id = ? AND contribution_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY month");
-    $stmt->bind_param("s", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $month_num = (int)date('n', strtotime($row['month'].'-01'));
-        $monthly_contributions[$month_num] = (float)$row['total'];
+$monthly_contributions = [];
+$month_map = [];
+foreach ($donations as $donation) {
+    // Use the original contribution_date for accurate month mapping
+    $orig_date = null;
+    if (isset($donation['contribution_date'])) {
+        $orig_date = $donation['contribution_date'];
+    } else if (isset($donation['date'])) {
+        // fallback if only formatted date is present
+        $orig_date = $donation['date'];
     }
+    $month = date('Y-m', strtotime($orig_date));
+    if (!isset($month_map[$month])) $month_map[$month] = 0;
+    $month_map[$month] += $donation['amount'];
 }
-
-// Add random Bible verse for the day
-$bible_verses = [
-    [
-        'ref' => 'Philippians 4:13',
-        'text' => 'I can do all things through Christ who strengthens me.'
-    ],
-    [
-        'ref' => 'Jeremiah 29:11',
-        'text' => 'For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future.'
-    ],
-    [
-        'ref' => 'Psalm 23:1',
-        'text' => 'The Lord is my shepherd; I shall not want.'
-    ],
-    [
-        'ref' => 'Romans 8:28',
-        'text' => 'And we know that in all things God works for the good of those who love him, who have been called according to his purpose.'
-    ],
-    [
-        'ref' => 'Proverbs 3:5-6',
-        'text' => 'Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.'
-    ],
-    [
-        'ref' => 'Isaiah 41:10',
-        'text' => 'So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you; I will uphold you with my righteous right hand.'
-    ],
-];
-$verse_index = intval(date('z')) % count($bible_verses);
-$verse_of_the_day = $bible_verses[$verse_index];
+for ($dt = clone $start; $dt < $end; $dt->modify('+1 month')) {
+    $label = $dt->format('M Y');
+    $key = $dt->format('Y-m');
+    $month_labels[] = $label;
+    $monthly_contributions[] = isset($month_map[$key]) ? $month_map[$key] : 0;
+}
 ?>
 
 <!DOCTYPE html>
@@ -178,7 +142,7 @@ $verse_of_the_day = $bible_verses[$verse_index];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Member Dashboard | <?php echo $church_name; ?></title>
+    <title>My Report | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
@@ -351,12 +315,6 @@ $verse_of_the_day = $bible_verses[$verse_index];
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        .card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 8px 24px rgba(0, 139, 30, 0.15), 0 2px 10px rgba(0,0,0,0.1);
-            cursor: pointer;
         }
         
         .card h3 {
@@ -513,9 +471,6 @@ $verse_of_the_day = $bible_verses[$verse_index];
         #contributions-table.dataTable {
             visibility: visible;
         }
-        .card.full-width {
-            grid-column: 1 / -1;
-        }
     </style>
 </head>
 <body>
@@ -541,7 +496,7 @@ $verse_of_the_day = $bible_verses[$verse_index];
         <main class="content-area">
             <div class="top-bar">
                 <div>
-                    <h2>Member Dashboard</h2>
+                    <h2>My Report</h2>
                     <p style="margin-top: 5px; color: #666; font-size: 16px;">
                         Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
                     </p>
@@ -564,27 +519,50 @@ $verse_of_the_day = $bible_verses[$verse_index];
                 </div>
             </div>
             
-            <div class="dashboard-content" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                <div class="card">
-                    <i class="fas fa-users"></i>
-                    <h3>Total Members</h3>
-                    <p><?php echo $total_members; ?></p>
+            <div class="dashboard-content">
+                <div class="card full-width">
+                    <h3>My Monthly Contributions</h3>
+                    <div class="prediction-chart">
+                        <canvas id="memberContributionsLineChart"></canvas>
+                    </div>
                 </div>
                 <div class="card">
-                    <i class="fas fa-calendar-alt"></i>
-                    <h3>Upcoming Events</h3>
-                    <p><?php echo $total_events; ?></p>
+                    <h3>Total Amount</h3>
+                    <div class="amount-display">
+                        <p id="amount-text">₱<?php echo number_format($total_donated, 2); ?></p>
+                        <button id="toggle-amount" class="toggle-btn" title="Toggle amount visibility">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="card">
-                    <i class="fas fa-hands-praying"></i>
-                    <h3>Need Prayer</h3>
-                    <p><?php echo $total_prayers; ?></p>
-                </div>
-                <div class="card full-width" style="background: linear-gradient(135deg, #e0ffe7 0%, #f5f5f5 100%);">
-                    <i class="fas fa-book-open"></i>
-                    <h3>Bible Verse of the Day</h3>
-                    <p style="font-size:16px; color:#333; font-style:italic; margin-bottom:8px;">"<?php echo $verse_of_the_day['text']; ?>"</p>
-                    <p style="font-size:14px; color:#008b1e; text-align:right; margin:0;"><b><?php echo $verse_of_the_day['ref']; ?></b></p>
+                    <h3>History</h3>
+                    <div class="table-responsive">
+                        <table id="contributions-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Type</th>
+                                    <th>Payment Method</th>
+                                    <th>Reference Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (!empty($donations)): ?>
+                                    <?php foreach ($donations as $donation): ?>
+                                        <tr>
+                                            <td><strong><?php echo htmlspecialchars($donation['date']); ?></strong></td>
+                                            <td>₱<?php echo number_format($donation['amount'], 2); ?></td>
+                                            <td><?php echo htmlspecialchars($donation['purpose']); ?></td>
+                                            <td><?php echo htmlspecialchars($donation['payment_method']); ?></td>
+                                            <td><?php echo htmlspecialchars($donation['reference_number']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>
@@ -604,7 +582,6 @@ $verse_of_the_day = $bible_verses[$verse_index];
             logoutWarningShown = false;
         }
         inactivityTimeout = setTimeout(() => {
-            console.log('Inactivity detected: showing warning and logging out soon.');
             showLogoutWarning();
             setTimeout(() => {
                 window.location.href = 'logout.php';
@@ -681,16 +658,10 @@ $verse_of_the_day = $bible_verses[$verse_index];
     resetInactivityTimer();
     </script>
     
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        $(document).ready(function() {
-            // Removed contributions table initialization
-        });
-
         const monthLabels = <?php echo json_encode($month_labels); ?>;
-        const monthlyContributions = <?php echo json_encode(array_values($monthly_contributions)); ?>;
+        const monthlyContributions = <?php echo json_encode($monthly_contributions); ?>;
         const ctx = document.getElementById('memberContributionsLineChart').getContext('2d');
         new Chart(ctx, {
             type: 'line',
@@ -731,11 +702,38 @@ $verse_of_the_day = $bible_verses[$verse_index];
                     },
                     title: {
                         display: true,
-                        text: 'My Monthly Contributions (Last 12 Months)'
+                        text: 'My Monthly Contributions'
                     }
                 }
             }
         });
     </script>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#contributions-table').DataTable({
+                columnDefs: [
+                    { width: '20%', targets: 0 }, // Date
+                    { width: '20%', targets: 1 }, // Amount
+                    { width: '15%', targets: 2 }, // Type
+                    { width: '20%', targets: 3 }, // Payment Method
+                    { width: '25%', targets: 4 }  // Reference Number
+                ],
+                autoWidth: false,
+                responsive: true,
+                scrollX: true,
+                scrollCollapse: true,
+                language: {
+                    emptyTable: "No donations recorded."
+                },
+                initComplete: function() {
+                    // Show table after initialization is complete
+                    $('#contributions-table').css('visibility', 'visible');
+                }
+            });
+        });
+    </script>
 </body>
-</html>
+</html> 
