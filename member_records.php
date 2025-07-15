@@ -20,8 +20,7 @@ $is_admin = ($_SESSION["user_role"] === "Administrator");
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Site configuration
-$site_settings = getSiteSettings($conn);
-$church_name = $site_settings['church_name'];
+$church_name = "Church of Christ-Disciples";
 $current_page = basename($_SERVER['PHP_SELF']);
 
 // Helper function to format dates
@@ -53,7 +52,7 @@ if (!isset($_SESSION['visitor_records'])) {
 
 // Fetch visitor records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Check if table exists first
@@ -71,7 +70,7 @@ try {
 
 // Fetch membership records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     $stmt = $conn->query("SELECT * FROM membership_records ORDER BY id");
@@ -84,7 +83,7 @@ try {
 
 // Fetch baptismal records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $stmt = $conn->query("SELECT * FROM baptismal_records ORDER BY id");
     $baptismal_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -96,7 +95,7 @@ try {
 
 // Fetch marriage records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $stmt = $conn->query("SELECT * FROM marriage_records ORDER BY id");
     $marriage_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -108,7 +107,7 @@ try {
 
 // Fetch child dedication records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Check if table exists first
@@ -126,7 +125,7 @@ try {
 
 // Fetch burial records from database
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Check if table exists first
@@ -149,10 +148,6 @@ try {
 // Handle form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $is_admin) {
     // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -255,11 +250,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -376,12 +366,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_admin) {
-    $id = $_POST['id'];
-    $type = isset($_POST['type']) ? $_POST['type'] : '';
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -471,11 +455,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -521,11 +500,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
 
 // Handle visitor record save (add or edit)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -608,11 +582,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
 
 // Handle visitor record deletions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -647,11 +616,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
 
 // Handle burial record save (add or edit)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -722,11 +686,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
 
 // Handle burial record deletions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -761,11 +720,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $i
 
 // Handle marriage form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -861,11 +815,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is
 
 // Handle marriage record edits
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -967,12 +916,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $i
 
 // Handle child dedication form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1043,12 +986,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]
 
 // Handle child dedication record edits
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"]) && $is_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1135,10 +1072,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
     if (!empty($message)) {
         // Do not proceed if validation failed
     } else {
-        $servername = "localhost";
-        $username = "root";
-        $password = "";
-        $dbname = "churchdb";
         try {
             $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
             $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1245,10 +1178,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     $baptism_date = $_POST['edit_bap_baptism_date'];
     $officiant = $_POST['edit_bap_officiant'];
     $venue = $_POST['edit_bap_venue'];
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
