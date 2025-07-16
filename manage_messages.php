@@ -12,7 +12,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 // Get user profile
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
-// Check if user is admin
+// Check if user is admin only (Super Admin should not access this)
 if (!isset($user_profile['role']) || $user_profile['role'] !== 'Administrator') {
     header("Location: messages.php");
     exit;

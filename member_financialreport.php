@@ -526,6 +526,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
     <title>Financial Reports | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
     <style>
         :root {
@@ -539,199 +540,327 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             --danger-color: #f44336;
             --info-color: #2196f3;
         }
-
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
         body {
             background-color: #f5f5f5;
             color: var(--primary-color);
             line-height: 1.6;
         }
-
         .dashboard-container {
             display: flex;
             min-height: 100vh;
         }
-
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--primary-color);
-            color: var(--white);
+        /* Drawer Navigation Styles (copied from superadmin_dashboard.php) */
+        .nav-toggle-container {
             position: fixed;
-            height: 100vh;
-            overflow-y: auto;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
         }
-
-        .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-        
-        .sidebar-header img {
-            height: 60px;
-            margin-bottom: 10px;
-            transition: 0.3s;
-        }
-        
-        .sidebar-header h3 {
-            font-size: 18px;
-        }
-
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-
-        .sidebar-menu ul {
-            list-style: none;
-        }
-
-        .sidebar-menu li {
-            margin-bottom: 5px;
-        }
-
-        .sidebar-menu a {
+        .nav-toggle-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: flex;
             align-items: center;
-            padding: 12px 20px;
-            color: var(--white);
-            text-decoration: none;
-            transition: all 0.3s;
-            font-size: 16px;
+            gap: 8px;
         }
-
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+        .nav-toggle-btn:hover {
+            background-color: #2563eb;
         }
-
-        .sidebar-menu a.active {
-            background-color: var(--accent-color);
+        .custom-drawer {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
+            color: #3a3a3a;
+            z-index: 1000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
-
-        .sidebar-menu i {
-            margin-right: 15px;
-            width: 20px;
-            text-align: center;
-            font-size: 20px;
+        .custom-drawer.open {
+            left: 0;
         }
-
-        .sidebar-menu span {
-            margin-left: 10px;
-        }
-
-        .content-area {
-            flex: 1;
-            margin-left: var(--sidebar-width);
+        .drawer-header {
             padding: 20px;
-        }
-
-        .top-bar {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
+            min-height: 120px;
+        }
+        .drawer-logo-section {
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            background-color: var(--white);
-            padding: 15px 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
+            gap: 10px;
+            min-height: 100px;
+            justify-content: center;
+            flex: 1;
         }
-
-        .top-bar h2 {
-            font-size: 24px;
+        .drawer-logo {
+            height: 60px;
+            width: auto;
+            max-width: 200px;
+            object-fit: contain;
+            flex-shrink: 0;
         }
-
-        .user-profile {
+        .drawer-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            text-align: center;
+            color: #3a3a3a;
+            max-width: 200px;
+            word-wrap: break-word;
+            line-height: 1.2;
+            min-height: 20px;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            color: #3a3a3a;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        .drawer-close:hover {
+            color: #666;
+        }
+        .drawer-content {
+            padding: 20px 0 0 0;
+            flex: 1;
+        }
+        .drawer-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .drawer-menu li {
+            margin: 0;
+        }
+        .drawer-link {
             display: flex;
             align-items: center;
+            padding: 12px 18px;
+            color: #3a3a3a;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            gap: 10px;
+            border-left: 4px solid transparent;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            position: relative;
         }
-
-        .user-profile .avatar {
-            width: 40px;
-            height: 40px;
+        .drawer-link i {
+            font-size: 18px;
+            min-width: 22px;
+            text-align: center;
+        }
+        .drawer-link.active {
+            background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%);
+            border-left: 4px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        .drawer-link.active i {
+            color: var(--accent-color);
+        }
+        .drawer-link:hover {
+            background: rgba(0, 139, 30, 0.07);
+            color: var(--accent-color);
+        }
+        .drawer-link:hover i {
+            color: var(--accent-color);
+        }
+        .drawer-profile {
+            padding: 24px 20px 20px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255,255,255,0.85);
+        }
+        .drawer-profile .avatar {
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            background-color: var(--accent-color);
-            color: var(--white);
+            background: var(--accent-color);
+            color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 22px;
             font-weight: bold;
-            margin-right: 10px;
             overflow: hidden;
         }
-
-        .user-profile .avatar img {
+        .drawer-profile .avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-
-        .user-info {
-            margin-right: 15px;
+        .drawer-profile .profile-info {
+            flex: 1;
         }
-
-        .user-info h4 {
-            font-size: 14px;
-            margin: 0;
-        }
-
-        .user-info p {
-            font-size: 12px;
-            margin: 0;
-            color: #666;
-        }
-
-        .logout-btn {
-            background-color: #f0f0f0;
-            color: var(--primary-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .logout-btn:hover {
-            background-color: #e0e0e0;
-        }
-
-        .financial-content {
-            margin-top: 20px;
-        }
-
-        .table-responsive {
-            background-color: var(--white);
-            border-radius: 5px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #eeeeee;
-        }
-
-        th {
-            background-color: #f5f5f5;
+        .drawer-profile .name {
+            font-size: 16px;
             font-weight: 600;
+            color: #222;
         }
-
-        tbody tr:hover {
-            background-color: #f9f9f9;
+        .drawer-profile .role {
+            font-size: 13px;
+            color: var(--accent-color);
+            font-weight: 500;
+            margin-top: 2px;
         }
-
+        .drawer-profile .logout-btn {
+            background: #f44336;
+            color: #fff;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .drawer-profile .logout-btn:hover {
+            background: #d32f2f;
+        }
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        .content-area {
+            flex: 1;
+            padding: 20px;
+            margin-left: 0;
+            padding-top: 80px;
+        }
+        @media (max-width: 768px) {
+            .dashboard-container {
+                flex-direction: column;
+            }
+            .custom-drawer {
+                width: 100%;
+                height: auto;
+                position: relative;
+                padding-top: 10px;
+            }
+            .drawer-content {
+                padding: 0;
+            }
+            .content-area {
+                margin-left: 0;
+            }
+        }
+        .live-alert {
+  display: block;
+  background: linear-gradient(90deg, #e3f0ff 0%, #f5faff 100%);
+  color: #155fa0;
+  border: 1px solid #b6d4fe;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(21,95,160,0.07);
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  position: relative;
+  transition: background 0.2s;
+}
+.live-alert .live-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.live-alert .live-alert-body {
+  margin: 6px 0 10px 0;
+  font-size: 13px;
+}
+.live-alert .live-alert-actions {
+  display: flex;
+  gap: 8px;
+}
+.live-alert .live-alert-btn {
+  background: #155fa0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.live-alert .live-alert-btn:hover {
+  background: #0d4377;
+}
+.live-alert .live-alert-dismiss {
+  background: transparent;
+  color: #155fa0;
+  border: 1px solid #b6d4fe;
+  padding: 4px 12px;
+}
+.live-alert .live-alert-dismiss:hover {
+  background: #e3f0ff;
+}
+@media (prefers-color-scheme: dark) {
+  .live-alert {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 100%);
+    color: #93c5fd;
+    border: 1px solid #334155;
+    box-shadow: 0 2px 8px rgba(30,41,59,0.12);
+  }
+  .live-alert .live-alert-btn {
+    background: #2563eb;
+    color: #fff;
+  }
+  .live-alert .live-alert-btn:hover {
+    background: #1e40af;
+  }
+  .live-alert .live-alert-dismiss {
+    color: #93c5fd;
+    border: 1px solid #334155;
+    background: transparent;
+  }
+  .live-alert .live-alert-dismiss:hover {
+    background: #1e293b;
+  }
+}
+        /* --- Tab Navigation Styles (copied from financialreport.php) --- */
         .tab-navigation {
             display: flex;
             background-color: var(--white);
@@ -740,7 +869,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
-
         .tab-navigation a {
             flex: 1;
             text-align: center;
@@ -750,361 +878,128 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             transition: background-color 0.3s;
             font-weight: 500;
         }
-
         .tab-navigation a.active {
             background-color: var(--accent-color);
             color: var(--white);
         }
-
         .tab-navigation a:hover:not(.active) {
             background-color: #f0f0f0;
         }
-
         .tab-content {
             background-color: var(--white);
             border-radius: 5px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-
         .tab-pane {
             display: none;
         }
-
         .tab-pane.active {
             display: block;
         }
-
-        .summary-content {
-            padding: 20px;
-        }
-
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+        .top-bar {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            background-color: #fff;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
-
-        .summary-card {
-            background: var(--white);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        .top-bar h2 {
+            font-size: 24px;
+            font-weight: bold;
         }
-
-        .summary-card.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .summary-card h3 {
-            margin-bottom: 15px;
-            color: var(--primary-color);
-            font-size: 18px;
-        }
-
         .prediction-chart, .trend-chart {
             height: 300px;
             margin-bottom: 20px;
             position: relative;
         }
-
         .prediction-chart canvas, .trend-chart canvas {
             width: 100% !important;
             height: 100% !important;
-        }
-
-        .prediction-details {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .prediction-metric {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-
-        .prediction-metric:last-child {
-            margin-bottom: 0;
-        }
-
-        .prediction-metric .label {
-            color: #666;
-        }
-
-        .prediction-metric .value {
-            font-weight: bold;
-            color: var(--accent-color);
-        }
-
-        .prediction-metric .value.positive {
-            color: #28a745;
-        }
-
-        .prediction-metric .value.negative {
-            color: #dc3545;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 15px;
-        }
-
-        .metric-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .metric-label {
-            display: block;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .metric-value {
-            display: block;
-            font-size: 18px;
-            font-weight: bold;
-            color: var(--accent-color);
-        }
-
-        .insights-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .insight-card {
-            background: var(--white);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .insight-card h4 {
-            margin-bottom: 15px;
-            color: var(--primary-color);
-            font-size: 16px;
-        }
-
-        .chart-container {
-            height: 300px;
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .chart-container canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
-            border-radius: 5px;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover {
-            color: black;
-        }
-
-        .profile-form .form-group {
-            margin-bottom: 20px;
-        }
-
-        .profile-form label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        .profile-form input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-
-        .profile-form input[type="checkbox"] {
-            margin-right: 8px;
-        }
-
-        .form-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: var(--accent-color);
-            color: var(--white);
-            text-decoration: none;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background-color 0.3s;
-        }
-
-        .btn:hover {
-            background-color: rgb(0, 112, 9);
-        }
-
-        .btn-primary {
-            background-color: var(--accent-color);
-            color: white;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background-color: #5a6268;
-        }
-
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-            }
-            .sidebar-header h3, .sidebar-menu span {
-                display: none;
-            }
-            .content-area {
-                margin-left: 70px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
-            .tab-navigation {
-                flex-direction: column;
-            }
-            .tab-navigation a {
-                border-bottom: 1px solid #eee;
-            }
+            max-height: 300px;
         }
     </style>
 </head>
 <body>
-<div class="dashboard-container">
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo">
-            <h3><?php echo $church_name; ?></h3>
+    <div class="dashboard-container">
+        <!-- Navigation Toggle Button -->
+        <div class="nav-toggle-container">
+           <button class="nav-toggle-btn" type="button" id="nav-toggle">
+           <i class="fas fa-bars"></i> Menu
+           </button>
         </div>
-        <div class="sidebar-menu">
-            <ul>
-                <li><a href="member_dashboard.php" class="<?php echo $current_page == 'member_dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                <li><a href="member_events.php" class="<?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
-                <li><a href="member_messages.php" class="<?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
-                <li><a href="member_prayers.php" class="<?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
-                <li><a href="member_financialreport.php" class="<?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                <li><a href="member_collection.php" class="<?php echo $current_page == 'member_collection.php' ? 'active' : ''; ?>"><i class="fas fa-list-alt"></i> <span>My Report</span></a></li>
-                <li><a href="member_settings.php" class="<?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
-            </ul>
-        </div>
-    </aside>
-
-    <main class="content-area">
-        <div class="top-bar">
-            <h2>Financial Reports</h2>
-            <div class="user-profile">
-                <div class="avatar" onclick="openProfileModal()" style="cursor: pointer;" title="Click to change profile picture">
+        <!-- Custom Drawer Navigation -->
+        <div id="drawer-navigation" class="custom-drawer">
+            <div class="drawer-header">
+                <div class="drawer-logo-section">
+                    <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo" class="drawer-logo">
+                    <h5 class="drawer-title"><?php echo $church_name; ?></h5>
+                </div>
+                <button type="button" class="drawer-close" id="drawer-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="drawer-content">
+                <ul class="drawer-menu">
+                    <li><a href="member_dashboard.php" class="drawer-link <?php echo $current_page == 'member_dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
+                    <li><a href="member_events.php" class="drawer-link <?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i><span>Events</span></a></li>
+                    <li><a href="member_messages.php" class="drawer-link <?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i><span>Messages</span></a></li>
+                    <li><a href="member_prayers.php" class="drawer-link <?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i><span>Prayer Requests</span></a></li>
+                    <li><a href="member_financialreport.php" class="drawer-link <?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
+                    <li><a href="member_collection.php" class="drawer-link <?php echo $current_page == 'member_collection.php' ? 'active' : ''; ?>"><i class="fas fa-list-alt"></i><span>My Report</span></a></li>
+                    <li><a href="member_settings.php" class="drawer-link <?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                </ul>
+            </div>
+            <div class="drawer-profile">
+                <div class="avatar">
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
                         <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
-                <div class="user-info">
-                    <h4><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></h4>
-                    <p><?php echo htmlspecialchars($user_profile['role'] ?? 'User'); ?></p>
+                <div class="profile-info">
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Member'); ?></div>
                 </div>
-                <form action="logout.php" method="post">
+                <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
                 </form>
+            </div>
+        </div>
+        <!-- Drawer Overlay -->
+        <div id="drawer-overlay" class="drawer-overlay"></div>
+        <main class="content-area">
+<?php
+$live_message = getLiveMessage($conn);
+?>
+<?php if ($live_message): ?>
+<div class="live-alert" role="alert">
+  <div class="live-alert-header">
+    <svg width="18" height="18" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>
+    Live Service Ongoing
+  </div>
+  <div class="live-alert-body">
+    The church service is currently live! Join us now or watch the ongoing stream below.
+  </div>
+  <div class="live-alert-actions">
+    <a href="member_messages.php?message=0" class="live-alert-btn">
+      <svg width="13" height="13" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 14"><path d="M10 0C4.612 0 0 5.336 0 7c0 1.742 3.546 7 10 7 6.454 0 10-5.258 10-7 0-1.664-4.612-7-10-7Zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>
+      View Live
+    </a>
+    <button type="button" class="live-alert-btn live-alert-dismiss" aria-label="Close" onclick="this.closest('.live-alert').style.display='none';">Dismiss</button>
+  </div>
+</div>
+<?php endif; ?>
+        <div class="top-bar">
+            <div>
+                <h2>Financial Reports</h2>
+                <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
+                    Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
+                </p>
             </div>
         </div>
 
@@ -1335,53 +1230,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
     </main>
 </div>
 
-<!-- Profile Picture Modal -->
-<div id="profileModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Update Profile Picture</h3>
-            <span class="close" onclick="closeProfileModal()">&times;</span>
-        </div>
-        <form method="POST" action="" enctype="multipart/form-data" class="profile-form">
-            <div class="form-group">
-                <label for="profile_picture">Select New Profile Picture</label>
-                <input type="file" id="profile_picture" name="profile_picture" accept="image/*" required>
-                <small style="color: #666; font-size: 12px;">Supported formats: JPG, PNG, GIF (Max 5MB)</small>
-            </div>
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="reset_profile_picture" value="1"> Remove current profile picture
-                </label>
-            </div>
-            <div class="form-actions">
-                <button type="submit" name="update_profile_picture" class="btn btn-primary">Update Picture</button>
-                <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
 <script>
-    // Profile Modal Functions
-    function openProfileModal() {
-        document.getElementById('profileModal').style.display = 'block';
-    }
-
-    function closeProfileModal() {
-        document.getElementById('profileModal').style.display = 'none';
-    }
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const modal = document.getElementById('profileModal');
-        if (event.target == modal) {
-            modal.style.display = 'none';
-        }
-    }
-
     // Tab Navigation
     document.addEventListener('DOMContentLoaded', function() {
         // Tab functionality
@@ -1648,6 +1500,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
                 }
             });
         })();
+    });
+</script>
+<script>
+// Drawer Navigation JS
+    document.addEventListener('DOMContentLoaded', function() {
+        const navToggle = document.getElementById('nav-toggle');
+        const drawer = document.getElementById('drawer-navigation');
+        const drawerClose = document.getElementById('drawer-close');
+        const overlay = document.getElementById('drawer-overlay');
+
+        // Open drawer
+        navToggle.addEventListener('click', function() {
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        });
+
+        // Close drawer
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        drawerClose.addEventListener('click', closeDrawer);
+        overlay.addEventListener('click', closeDrawer);
+
+        // Close drawer on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDrawer();
+            }
+        });
     });
 </script>
 </body>

@@ -112,7 +112,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $_SESSION["loggedin"] = true;
             
             // Redirect based on role
-            if ($user['role'] === "Administrator") {
+            if ($user['role'] === "Super Admin") {
+                header("Location: superadmin_dashboard.php");
+            } elseif ($user['role'] === "Administrator") {
                 header("Location: dashboard.php");
             } else {
                 header("Location: member_dashboard.php");

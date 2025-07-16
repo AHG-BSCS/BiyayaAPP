@@ -1,8 +1,8 @@
 <?php
-// Database configuration
+
 $servername = "localhost";
-$username = "root";  // Your MySQL username
-$password = "";      // Your MySQL password - CHANGE THIS TO YOUR ACTUAL PASSWORD
+$username = "root";  
+$password = "";      
 $dbname = "churchdb";
 
 // Create connection
@@ -67,7 +67,7 @@ $sql = "CREATE TABLE IF NOT EXISTS user_profiles (
     address TEXT,
     password VARCHAR(255) NOT NULL,
     profile_picture VARCHAR(255),
-    role ENUM('Member', 'Pastor', 'Administrator') NOT NULL DEFAULT 'Member',
+    role ENUM('Member', 'Pastor', 'Administrator', 'Super Admin') NOT NULL DEFAULT 'Member',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )";
@@ -84,6 +84,20 @@ if ($conn->query($sql) === TRUE) {
                 VALUES ('admin', 'admin', 'Administrator', 'cocd1910@gmail.com', ?, 'Administrator')";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("s", $admin_password);
+        $stmt->execute();
+    }
+    
+    // Check if super admin profile exists
+    $result = $conn->query("SELECT COUNT(*) as count FROM user_profiles WHERE user_id = 'superadmin'");
+    $row = $result->fetch_assoc();
+    
+    if ($row['count'] == 0) {
+        // Insert super admin profile with hashed password
+        $superadmin_password = password_hash('cocd1910@', PASSWORD_DEFAULT);
+        $sql = "INSERT INTO user_profiles (user_id, username, full_name, email, password, role) 
+                VALUES ('superadmin', 'superadmin', 'Super Administrator', 'cocd1910@gmail.com', ?, 'Super Admin')";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("s", $superadmin_password);
         $stmt->execute();
     }
 }
@@ -413,6 +427,38 @@ if ($conn->query($sql) === TRUE) {
     
 
 }
+
+// Create messages table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS messages (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(255) NOT NULL,
+    youtube_id VARCHAR(100) NOT NULL,
+    date DATE NOT NULL,
+    outline TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)";
+$conn->query($sql);
+if ($conn->error) {
+    die("Error creating messages table: " . $conn->error);
+}
+
+// Create contributions table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS contributions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(50) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    contribution_type ENUM('tithe', 'offering') NOT NULL,
+    contribution_date DATE NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    reference_number VARCHAR(100),
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user_profiles(user_id)
+)";
+$conn->query($sql);
 
 // Function to get site settings
 function getSiteSettings($conn) {

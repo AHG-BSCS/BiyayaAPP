@@ -38,7 +38,7 @@ function getUserProfile($conn, $username) {
         'username' => $username,
         'full_name' => $username, // Use username as fallback for full_name
         'email' => '',
-        'role' => 'Member',  // Always default to Member if not found in database
+        'role' => 'Member',  // Always default to Member if not found in database (Super Admin should be explicitly set)
         'profile_picture' => '',
         'created_at' => date('Y-m-d H:i:s'),
         'updated_at' => date('Y-m-d H:i:s')
@@ -116,5 +116,39 @@ function handleFileUpload($file, $upload_dir) {
     } else {
         return ["success" => false, "message" => "Failed to upload file."];
     }
+}
+
+/**
+ * Get the latest live message (title or outline contains 'live' or 'ongoing')
+ * @param mysqli $conn
+ * @return array|null
+ */
+function getLiveMessage($conn) {
+    $sql = "SELECT * FROM messages ORDER BY date DESC LIMIT 10";
+    $result = $conn->query($sql);
+    if ($result && $result->num_rows > 0) {
+        $today = date('Y-m-d');
+        while ($row = $result->fetch_assoc()) {
+            $outline = json_decode($row['outline'], true);
+            $is_live = false;
+            if ((stripos($row['title'], 'live') !== false || stripos($row['title'], 'ongoing') !== false)) {
+                $is_live = true;
+            } elseif (is_array($outline)) {
+                foreach ($outline as $point) {
+                    $text = is_array($point) && isset($point['text']) ? $point['text'] : (is_string($point) ? $point : '');
+                    if (stripos($text, 'live') !== false || stripos($text, 'ongoing') !== false) {
+                        $is_live = true;
+                        break;
+                    }
+                }
+            }
+            // Only show alert if the message date is today or in the future
+            if ($is_live && isset($row['date']) && $row['date'] >= $today) {
+                $row['outline'] = $outline;
+                return $row;
+            }
+        }
+    }
+    return null;
 }
 ?> 

@@ -1,5 +1,4 @@
 <?php
-// Member Prayer Requests page
 session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
@@ -9,14 +8,13 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-            header("Location: index.php");
+    header("Location: index.php");
     exit;
 }
 
-// Check if the user is a member
-$is_member = ($_SESSION["user_role"] === "Member");
-
-if (!$is_member) {
+// Check if the user is an admin
+$is_admin = ($_SESSION["user_role"] === "Administrator");
+if (!$is_admin) {
     header("Location: dashboard.php");
     exit;
 }
@@ -41,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["submit_prayer"])) {
     
     if (!empty($category) && !empty($request)) {
         // Use full name if available, otherwise username
-        $member_name = $anonymous ? "Anonymous" : ($user_profile['full_name'] ?? ($_SESSION["user"] ?? "Unknown Member"));
+        $member_name = $anonymous ? "Anonymous" : ($user_profile['full_name'] ?? ($user_profile['username'] ?? ($_SESSION["user"] ?? "Unknown Admin")));
         
         $sql = "INSERT INTO prayer_requests (member_name, prayer_request, category, urgency, anonymous) VALUES (?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
@@ -118,15 +116,15 @@ if ($result && $result->num_rows > 0) {
 
 $live_message = getLiveMessage($conn);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Member Prayer Requests | <?php echo $church_name; ?></title>
+    <title>Admin Prayer Requests | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -1031,7 +1029,7 @@ $live_message = getLiveMessage($conn);
 </head>
 <body>
     <div class="dashboard-container">
-        <!-- Drawer Navigation Markup (from superadmin_dashboard.php, adapted for member) -->
+        <!-- Drawer Navigation for Admin -->
         <div class="nav-toggle-container">
            <button class="nav-toggle-btn" type="button" id="nav-toggle">
            <i class="fas fa-bars"></i> Menu
@@ -1049,13 +1047,16 @@ $live_message = getLiveMessage($conn);
             </div>
             <div class="drawer-content">
                 <ul class="drawer-menu">
-                    <li><a href="member_dashboard.php" class="drawer-link <?php echo $current_page == 'member_dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
-                    <li><a href="member_events.php" class="drawer-link <?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i><span>Events</span></a></li>
-                    <li><a href="member_messages.php" class="drawer-link <?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i><span>Messages</span></a></li>
-                    <li><a href="member_prayers.php" class="drawer-link <?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i><span>Prayer Requests</span></a></li>
-                    <li><a href="member_financialreport.php" class="drawer-link <?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
-                    <li><a href="member_collection.php" class="drawer-link <?php echo $current_page == 'member_collection.php' ? 'active' : ''; ?>"><i class="fas fa-list-alt"></i><span>My Report</span></a></li>
-                    <li><a href="member_settings.php" class="drawer-link <?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                    <li><a href="dashboard.php" class="drawer-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
+                    <li><a href="admin_events.php" class="drawer-link <?php echo $current_page == 'admin_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i><span>Events</span></a></li>
+                    <li><a href="admin_prayers.php" class="drawer-link <?php echo $current_page == 'admin_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i><span>Prayer Requests</span></a></li>
+                    <li><a href="admin_messages.php" class="drawer-link <?php echo $current_page == 'admin_messages.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-video"></i>
+                        <span>Messages</span>
+                    </a></li>
+                    <li><a href="financialreport.php" class="drawer-link <?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
+                    <li><a href="member_contributions.php" class="drawer-link <?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-list-alt"></i><span>Stewardship Report</span></a></li>
+                    <li><a href="admin_settings.php" class="drawer-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
                 </ul>
             </div>
             <div class="drawer-profile">
@@ -1063,12 +1064,12 @@ $live_message = getLiveMessage($conn);
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'A', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Member'); ?></div>
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown Admin'); ?></div>
+                    <div class="role">Admin</div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
@@ -1076,7 +1077,6 @@ $live_message = getLiveMessage($conn);
             </div>
         </div>
         <div id="drawer-overlay" class="drawer-overlay"></div>
-        <!-- Drawer Navigation JS (from superadmin_dashboard.php) -->
         <script>
         document.addEventListener('DOMContentLoaded', function() {
             const drawer = document.getElementById('drawer-navigation');
@@ -1105,7 +1105,6 @@ $live_message = getLiveMessage($conn);
                 if (e.key === 'Escape') closeDrawer();
             });
 
-            // Remove drawer-open class on resize if needed
             window.addEventListener('resize', function() {
                 if (window.innerWidth <= 992) {
                     document.body.classList.remove('drawer-open');
@@ -1113,7 +1112,6 @@ $live_message = getLiveMessage($conn);
             });
         });
         </script>
-        
         <main class="content-area">
             <?php if ($live_message): ?>
 <div class="live-alert" role="alert">
@@ -1125,7 +1123,7 @@ $live_message = getLiveMessage($conn);
     The church service is currently live! Join us now or watch the ongoing stream below.
   </div>
   <div class="live-alert-actions">
-    <a href="member_messages.php?message=0" class="live-alert-btn">
+    <a href="admin_messages.php?message=0" class="live-alert-btn">
       <svg width="13" height="13" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 14"><path d="M10 0C4.612 0 0 5.336 0 7c0 1.742 3.546 7 10 7 6.454 0 10-5.258 10-7 0-1.664-4.612-7-10-7Zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>
       View Live
     </a>
@@ -1141,24 +1139,19 @@ $live_message = getLiveMessage($conn);
                     </p>
                 </div>
             </div>
-            
             <div class="prayer-content">
                 <?php if (!empty($message)): ?>
-                    <div class="alert alert-<?php echo $messageType; ?>">
+                    <div class="alert alert-<?php echo $messageType; ?>" id="prayer-success-alert">
                         <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
                         <?php echo $message; ?>
                     </div>
                 <?php endif; ?>
-
-                <!-- Action Bar -->
                 <div class="action-bar">
                     <button class="btn-primary" onclick="openPrayerModal()">
                         <i class="fas fa-plus-circle"></i>
                         Submit a Prayer Request
                     </button>
                 </div>
-
-                <!-- Prayer Requests List -->
                 <div class="card">
                     <h3><i class="fas fa-hands-praying"></i> Prayer Requests from Members</h3>
                     <?php if (empty($prayer_requests)): ?>
@@ -1177,16 +1170,13 @@ $live_message = getLiveMessage($conn);
                                         </div>
                                     </div>
                                 </div>
-                                
                                 <div class="prayer-content-text">
                                     <?php echo nl2br(htmlspecialchars($prayer['request'])); ?>
                                 </div>
-                                
                                 <div class="prayer-footer">
                                     <div class="prayer-date">
                                         <i class="fas fa-calendar"></i> <?php echo date('F j, Y', strtotime($prayer['date'])); ?>
                                     </div>
-                                    
                                     <div class="reaction-buttons">
                                         <button class="reaction-btn heart" onclick="react(<?php echo $prayer['id']; ?>, 'heart', event)">
                                             <i class="fas fa-heart"></i>
@@ -1209,8 +1199,6 @@ $live_message = getLiveMessage($conn);
             </div>
         </main>
     </div>
-
-    <!-- Prayer Request Modal -->
     <div class="modal" id="prayerModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1230,13 +1218,11 @@ $live_message = getLiveMessage($conn);
                         <option value="Other">Other</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="prayer_request">Your Prayer Request</label>
                     <textarea id="prayer_request" name="prayer_request" class="form-control" placeholder="Please share your prayer request in detail. We are here to support you in prayer." required rows="6"></textarea>
                     <small class="form-text">Your prayer request will be kept confidential and shared only with the prayer team.</small>
                 </div>
-
                 <div class="form-group">
                     <label for="prayer_urgency">Urgency Level</label>
                     <div class="urgency-levels">
@@ -1254,14 +1240,12 @@ $live_message = getLiveMessage($conn);
                         </label>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" name="anonymous" id="anonymous">
                         <span>Submit anonymously</span>
                     </label>
                 </div>
-
                 <div class="form-actions">
                     <button type="submit" class="btn" name="submit_prayer">
                         <i class="fas fa-paper-plane"></i> Submit Prayer Request
@@ -1273,7 +1257,6 @@ $live_message = getLiveMessage($conn);
             </form>
         </div>
     </div>
-
     <script>
         function react(prayerId, reactionType, event) {
             const formData = new FormData();
@@ -1293,7 +1276,6 @@ $live_message = getLiveMessage($conn);
                     const countSpan = button.querySelector('.reaction-count');
                     const currentCount = parseInt(countSpan.textContent);
                     countSpan.textContent = currentCount + 1;
-                    
                     // Add visual feedback
                     button.style.transform = 'scale(1.1)';
                     setTimeout(() => {
@@ -1305,31 +1287,40 @@ $live_message = getLiveMessage($conn);
                 console.error('Error:', error);
             });
         }
-
         // Modal functions
         function openPrayerModal() {
             document.getElementById('prayerModal').classList.add('active');
             document.body.style.overflow = 'hidden'; // Prevent background scrolling
         }
-
         function closePrayerModal() {
             document.getElementById('prayerModal').classList.remove('active');
             document.body.style.overflow = 'auto'; // Restore scrolling
         }
-
         // Close modal when clicking outside
         document.getElementById('prayerModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closePrayerModal();
             }
         });
-
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closePrayerModal();
             }
         });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var alertSuccess = document.getElementById('prayer-success-alert');
+            if (alertSuccess && alertSuccess.classList.contains('alert-success')) {
+                setTimeout(function() {
+                    alertSuccess.style.transition = 'opacity 0.5s ease-out';
+                    alertSuccess.style.opacity = '0';
+                    setTimeout(function() {
+                        alertSuccess.style.display = 'none';
+                    }, 500);
+                }, 2000);
+            }
+        });
     </script>
 </body>
-</html>
+</html> 

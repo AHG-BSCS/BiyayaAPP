@@ -314,7 +314,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         /* Main Content Area */
         .content-area {
             flex: 1;
-            margin-left: var(--sidebar-width);
+            margin-left: 0;
             padding: 20px;
             min-height: 100vh;
             background-color: #f5f5f5;
@@ -330,9 +330,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             border-radius: 5px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
         }
 
         .top-bar h2 {
@@ -841,48 +838,309 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #95a5a6;
             color: white;
         }
+        /* --- Drawer Navigation Styles (EXACT from superadmin_dashboard.php) --- */
+        .nav-toggle-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
+        }
+        .nav-toggle-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-toggle-btn:hover {
+            background-color: #2563eb;
+        }
+        .custom-drawer {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
+            color: #3a3a3a;
+            z-index: 1000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .custom-drawer.open {
+            left: 0;
+        }
+        .drawer-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            min-height: 120px;
+        }
+        .drawer-logo-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            min-height: 100px;
+            justify-content: center;
+            flex: 1;
+        }
+        .drawer-logo {
+            height: 60px;
+            width: auto;
+            max-width: 200px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .drawer-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            text-align: center;
+            color: #3a3a3a;
+            max-width: 200px;
+            word-wrap: break-word;
+            line-height: 1.2;
+            min-height: 20px;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            color: #3a3a3a;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        .drawer-close:hover {
+            color: #666;
+        }
+        .drawer-content {
+            padding: 20px 0 0 0;
+            flex: 1;
+        }
+        .drawer-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .drawer-menu li {
+            margin: 0;
+        }
+        .drawer-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 18px;
+            color: #3a3a3a;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            gap: 10px;
+            border-left: 4px solid transparent;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            position: relative;
+        }
+        .drawer-link i {
+            font-size: 18px;
+            min-width: 22px;
+            text-align: center;
+        }
+        .drawer-link.active {
+            background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%);
+            border-left: 4px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        .drawer-link.active i {
+            color: var(--accent-color);
+        }
+        .drawer-link:hover {
+            background: rgba(0, 139, 30, 0.07);
+            color: var(--accent-color);
+        }
+        .drawer-link:hover i {
+            color: var(--accent-color);
+        }
+        .drawer-profile {
+            padding: 24px 20px 20px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255,255,255,0.85);
+        }
+        .drawer-profile .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            overflow: hidden;
+        }
+        .drawer-profile .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .drawer-profile .profile-info {
+            flex: 1;
+        }
+        .drawer-profile .name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #222;
+        }
+        .drawer-profile .role {
+            font-size: 13px;
+            color: var(--accent-color);
+            font-weight: 500;
+            margin-top: 2px;
+        }
+        .drawer-profile .logout-btn {
+            background: #f44336;
+            color: #fff;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .drawer-profile .logout-btn:hover {
+            background: #d32f2f;
+        }
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        /* Ensure content doesn't overlap with the button */
+        .content-area {
+            padding-top: 80px;
+        }
     </style>
 </head>
 <body>
     <div class="dashboard-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo">
-                <h3><?php echo $church_name; ?></h3>
+        <div class="nav-toggle-container">
+           <button class="nav-toggle-btn" type="button" id="nav-toggle">
+           <i class="fas fa-bars"></i> Menu
+           </button>
+        </div>
+        <!-- Custom Drawer Navigation -->
+        <div id="drawer-navigation" class="custom-drawer">
+            <div class="drawer-header">
+                <div class="drawer-logo-section">
+                    <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo" class="drawer-logo">
+                    <h5 class="drawer-title"><?php echo $church_name; ?></h5>
+                </div>
+                <button type="button" class="drawer-close" id="drawer-close">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="sidebar-menu">
-                <ul>
-                    <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                    <li><a href="events.php" class="<?php echo $current_page == 'events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
-                    <li><a href="messages.php" class="<?php echo $current_page == 'messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
-                    <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
-                    <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
-                    <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
-                    <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
-                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
-            </ul>
+            <div class="drawer-content">
+                <ul class="drawer-menu">
+                    <li>
+                        <a href="dashboard.php" class="drawer-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_events.php" class="drawer-link <?php echo $current_page == 'admin_events.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Events</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_prayers.php" class="drawer-link <?php echo $current_page == 'admin_prayers.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-hands-praying"></i>
+                            <span>Prayer Requests</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_messages.php" class="drawer-link <?php echo $current_page == 'admin_messages.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-video"></i>
+                            <span>Messages</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="financialreport.php" class="drawer-link <?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Financial Reports</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="member_contributions.php" class="drawer-link <?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-list-alt"></i>
+                            <span>Stewardship Report</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_settings.php" class="drawer-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                </ul>
             </div>
-        </aside>
+            <div class="drawer-profile">
+                <div class="avatar">
+                    <?php if (!empty($user_profile['profile_picture'])): ?>
+                        <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
+                    <?php else: ?>
+                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                    <?php endif; ?>
+                </div>
+                <div class="profile-info">
+                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                </div>
+                <form action="logout.php" method="post" style="margin:0;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+        </div>
+        <!-- Drawer Overlay -->
+        <div id="drawer-overlay" class="drawer-overlay"></div>
 
         <main class="content-area">
-            <div class="top-bar">
-                <h2>Stewardship Report</h2>
-                <div class="user-profile">
-                    <div class="avatar">
-                        <?php if (!empty($user_profile['profile_picture'])): ?>
-                            <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
-                        <?php else: ?>
-                            <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
-                        <?php endif; ?>
-                    </div>
-                    <div class="user-info">
-                        <h4><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></h4>
-                        <p><?php echo htmlspecialchars($user_profile['role'] ?? 'User'); ?></p>
-                    </div>
-                    <form action="logout.php" method="post">
-                        <button type="submit" class="logout-btn">Logout</button>
-                    </form>
+            <div class="top-bar" style="background-color: #fff; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; margin-top: 0;">
+                <div>
+                    <h2>Stewardship Report</h2>
+                    <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
+                        Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
+                    </p>
                 </div>
             </div>
 
@@ -1055,6 +1313,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     alert.style.display = 'none';
                 }, 300);
             }, 3000);
+        });
+
+        // Drawer Navigation JS (copied from superadmin_dashboard.php)
+        document.addEventListener('DOMContentLoaded', function() {
+            const navToggle = document.getElementById('nav-toggle');
+            const drawer = document.getElementById('drawer-navigation');
+            const drawerClose = document.getElementById('drawer-close');
+            const overlay = document.getElementById('drawer-overlay');
+
+            // Open drawer
+            navToggle.addEventListener('click', function() {
+                drawer.classList.add('open');
+                overlay.classList.add('open');
+                document.body.style.overflow = 'hidden';
+            });
+
+            // Close drawer
+            function closeDrawer() {
+                drawer.classList.remove('open');
+                overlay.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+
+            drawerClose.addEventListener('click', closeDrawer);
+            overlay.addEventListener('click', closeDrawer);
+
+            // Close drawer on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeDrawer();
+                }
+            });
         });
     </script>
 </body>
