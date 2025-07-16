@@ -1,9 +1,5 @@
 <?php
-// Database configuration
-$servername = "localhost";
-$username = "root";  // Your MySQL username
-$password = "";      // Your MySQL password - CHANGE THIS TO YOUR ACTUAL PASSWORD
-$dbname = "churchdb";
+require 'config.php';
 
 // Create connection
 $conn = new mysqli($servername, $username, $password);
