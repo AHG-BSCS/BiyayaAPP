@@ -23,11 +23,7 @@ jobs:
           server-dir: /public_html/         # Adjust this to match your hPanel target directory
           protocol: ftps                    # Or ftp/sftp depending on your setup
           exclude: |
-                .git*
+                .git/**
                 .github/**
                 node_modules/**
-                README.md
                 .env
-                *.log
-                package-lock.json
-                tests/**
