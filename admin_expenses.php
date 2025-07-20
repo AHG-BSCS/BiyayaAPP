@@ -24,7 +24,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
 $username = $_SESSION["user"];
 $is_admin = isset($_SESSION["is_admin"]) && $_SESSION["is_admin"] === true;
 
-
 // Get user's user_id from username
 $stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
 $stmt->bind_param("s", $username);
@@ -33,178 +32,122 @@ $user_result = $stmt->get_result();
 $user_data = $user_result->fetch_assoc();
 $user_id = $user_data ? $user_data['user_id'] : null;
 
-// Get user's contributions
-$contributions = null;
-if ($user_id) {
-    $stmt = $conn->prepare("
-        SELECT 
-            c.id,
-            c.amount,
-            c.contribution_type,
-            c.contribution_date,
-            c.payment_method,
-            c.reference_number,
-            c.status,
-            c.notes,
-            up.full_name as member_name,
-            up.role as member_role
-        FROM contributions c
-        JOIN user_profiles up ON c.user_id = up.user_id
-        WHERE c.user_id = ?
-        ORDER BY c.contribution_date DESC
-    ");
-    $stmt->bind_param("s", $user_id);
-    $stmt->execute();
-    $contributions = $stmt->get_result();
-}
-
-// Get total contributions for the user
-$totals = [
-    'total_tithe' => 0,
-    'total_offering' => 0,
-    'total_contributions' => 0
-];
-if ($user_id) {
-    $stmt = $conn->prepare("
-        SELECT 
-            SUM(CASE WHEN c.contribution_type = 'tithe' THEN c.amount ELSE 0 END) as total_tithe,
-            SUM(CASE WHEN c.contribution_type = 'offering' THEN c.amount ELSE 0 END) as total_offering,
-            SUM(c.amount) as total_contributions
-        FROM contributions c
-        JOIN user_profiles up ON c.user_id = up.user_id
-        WHERE up.user_id = ?
-    ");
-    $stmt->bind_param("s", $user_id);
-    $stmt->execute();
-    $totals = $stmt->get_result()->fetch_assoc();
-}
-
-// Handle form submission for new contribution
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contribution'])) {
-    $amount = floatval($_POST['amount']);
-    $contribution_type = $_POST['contribution_type'];
-    $payment_method = $_POST['payment_method'];
-    $reference_number = $_POST['reference_number'];
+// Handle form submission for new expense entry
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_expense'])) {
+    $month = $_POST['month'];
+    $income = floatval($_POST['income']);
+    $expenses = floatval($_POST['expenses']);
     $notes = $_POST['notes'];
-    if ($user_id) {
+    
+    // Check if entry for this month already exists
+    $check_stmt = $conn->prepare("SELECT id FROM monthly_expenses WHERE month = ?");
+    $check_stmt->bind_param("s", $month);
+    $check_stmt->execute();
+    $existing = $check_stmt->get_result();
+    
+    if ($existing->num_rows > 0) {
+        $_SESSION['error_message'] = "An entry for this month already exists. Please update the existing entry.";
+    } else {
         $stmt = $conn->prepare("
-            INSERT INTO contributions (
-                user_id, amount, contribution_type, contribution_date, 
-                payment_method, reference_number, status, notes
-            ) VALUES (?, ?, ?, NOW(), ?, ?, 'pending', ?)
+            INSERT INTO monthly_expenses (
+                month, income, expenses, notes, created_by, created_at
+            ) VALUES (?, ?, ?, ?, ?, NOW())
         ");
-        $stmt->bind_param("sdssss", $user_id, $amount, $contribution_type, $payment_method, $reference_number, $notes);
+        $stmt->bind_param("sddss", $month, $income, $expenses, $notes, $user_id);
         if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Contribution submitted successfully!";
-            header("Location: member_contributions.php");
+            $_SESSION['success_message'] = "Monthly expense entry added successfully!";
+            header("Location: admin_expenses.php");
             exit();
         } else {
-            $_SESSION['error_message'] = "Error submitting contribution. Please try again.";
+            $_SESSION['error_message'] = "Error adding expense entry. Please try again.";
         }
-    } else {
-        $_SESSION['error_message'] = "User profile not found.";
     }
 }
 
-// Get all contributions for admin view
-$contributions_query = "
+// Handle form submission for updating expense entry
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_expense'])) {
+    $expense_id = $_POST['expense_id'];
+    $income = floatval($_POST['income']);
+    $expenses = floatval($_POST['expenses']);
+    $notes = $_POST['notes'];
+    
+    $stmt = $conn->prepare("
+        UPDATE monthly_expenses 
+        SET income = ?, expenses = ?, notes = ?, updated_at = NOW()
+        WHERE id = ?
+    ");
+    $stmt->bind_param("ddsi", $income, $expenses, $notes, $expense_id);
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Expense entry updated successfully!";
+        header("Location: admin_expenses.php");
+        exit();
+    } else {
+        $_SESSION['error_message'] = "Error updating expense entry. Please try again.";
+    }
+}
+
+// Handle deletion of expense entry
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_expense'])) {
+    $expense_id = $_POST['expense_id'];
+    
+    $stmt = $conn->prepare("DELETE FROM monthly_expenses WHERE id = ?");
+    $stmt->bind_param("i", $expense_id);
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Expense entry deleted successfully!";
+        header("Location: admin_expenses.php");
+        exit();
+    } else {
+        $_SESSION['error_message'] = "Error deleting expense entry. Please try again.";
+    }
+}
+
+// Get all monthly expenses
+$expenses_query = "
     SELECT 
-        c.id,
-        c.amount,
-        c.contribution_type,
-        c.contribution_date,
-        c.payment_method,
-        c.reference_number,
-        up.full_name as member_name,
-        up.role as member_role
-    FROM contributions c
-    JOIN user_profiles up ON c.user_id = up.user_id
-    ORDER BY c.contribution_date DESC
+        me.id,
+        me.month,
+        me.income,
+        me.expenses,
+        (me.income - me.expenses) as difference,
+        me.notes,
+        me.created_at,
+        me.updated_at,
+        up.full_name as created_by_name
+    FROM monthly_expenses me
+    LEFT JOIN user_profiles up ON me.created_by = up.user_id
+    ORDER BY me.month ASC
 ";
-$all_contributions = $conn->query($contributions_query);
+$all_expenses = $conn->query($expenses_query);
 
-// Update the admin contribution submission code
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribution'])) {
-    $member_user_id = $_POST['member_id'];
-    $amount = floatval($_POST['amount']);
-    $contribution_type = $_POST['contribution_type'];
-    $payment_method = $_POST['payment_method'];
-    $reference_number = $_POST['reference_number'];
-    $contribution_date = $_POST['contribution_date'];
-    // Check if the user exists in user_profiles
-    $user_query = "SELECT user_id, full_name FROM user_profiles WHERE user_id = ?";
-    $stmt = $conn->prepare($user_query);
-    $stmt->bind_param("s", $member_user_id);
-    $stmt->execute();
-    $user_result = $stmt->get_result();
-    $user_data = $user_result->fetch_assoc();
-    if ($user_data) {
-        // Now insert the contribution using the user_id and specified date
-        $stmt = $conn->prepare("
-            INSERT INTO contributions (
-                user_id, amount, contribution_type, contribution_date, 
-                payment_method, reference_number, status
-            ) VALUES (?, ?, ?, ?, ?, ?, 'approved')
-        ");
-        $stmt->bind_param("sdssss", $member_user_id, $amount, $contribution_type, $contribution_date, $payment_method, $reference_number);
-        if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Contribution added successfully for " . $user_data['full_name'] . "!";
-            header("Location: member_contributions.php");
-            exit();
-        } else {
-            $_SESSION['error_message'] = "Error adding contribution: " . $stmt->error;
-        }
-    } else {
-        $_SESSION['error_message'] = "User not found in the user profiles.";
+// Calculate totals and averages
+$totals = [
+    'total_income' => 0,
+    'total_expenses' => 0,
+    'total_difference' => 0,
+    'count' => 0
+];
+
+$expenses_data = [];
+if ($all_expenses) {
+    while ($row = $all_expenses->fetch_assoc()) {
+        $expenses_data[] = $row;
+        $totals['total_income'] += $row['income'];
+        $totals['total_expenses'] += $row['expenses'];
+        $totals['total_difference'] += $row['difference'];
+        $totals['count']++;
     }
 }
 
-// Get all users for admin dropdown
-$users_query = "SELECT user_id, full_name FROM user_profiles WHERE role IN ('Member', 'Pastor') ORDER BY full_name";
-$users_result = $conn->query($users_query);
-$users = [];
-while ($row = $users_result->fetch_assoc()) {
-    $users[] = $row;
-}
+// Calculate averages
+$averages = [
+    'avg_income' => $totals['count'] > 0 ? $totals['total_income'] / $totals['count'] : 0,
+    'avg_expenses' => $totals['count'] > 0 ? $totals['total_expenses'] / $totals['count'] : 0,
+    'avg_difference' => $totals['count'] > 0 ? $totals['total_difference'] / $totals['count'] : 0
+];
 
 // Site configuration
 $site_settings = getSiteSettings($conn);
 $church_name = $site_settings['church_name'];
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST["add_contribution"])) {
-        $member_user_id = $_POST["member_id"];
-        $amount = $_POST["amount"];
-        $contribution_type = $_POST["contribution_type"];
-        $contribution_date = $_POST["contribution_date"];
-        $payment_method = $_POST["payment_method"];
-        $notes = $_POST["notes"];
-
-        // Get member name from user_profiles
-        $stmt = $conn->prepare("SELECT full_name FROM user_profiles WHERE user_id = ?");
-        $stmt->bind_param("s", $member_user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $member = $result->fetch_assoc();
-
-        if (!$member) {
-            $message = "Member not found in the system.";
-            $messageType = "danger";
-        } else {
-            // Insert contribution
-            $stmt = $conn->prepare("INSERT INTO contributions (user_id, amount, contribution_type, contribution_date, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("sdssss", $member_user_id, $amount, $contribution_type, $contribution_date, $payment_method, $notes);
-            
-            if ($stmt->execute()) {
-                $message = "Contribution added successfully!";
-                $messageType = "success";
-            } else {
-                $message = "Error adding contribution: " . $conn->error;
-                $messageType = "danger";
-            }
-        }
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -212,7 +155,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stewardship Report | <?php echo $church_name; ?></title>
+    <title>Monthly Expenses | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="//cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
@@ -439,7 +382,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         /* Forms */
-        .contribution-form {
+        .expense-form {
             padding: 20px;
         }
 
@@ -455,12 +398,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
 
         .form-group input,
-        .form-group select {
+        .form-group select,
+        .form-group textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
             font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
         }
 
         .form-actions {
@@ -500,6 +449,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #5a6268;
         }
 
+        .form-actions .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .form-actions .btn-danger:hover {
+            background-color: #d32f2f;
+        }
+
         /* Alerts */
         .alert {
             padding: 15px;
@@ -515,84 +473,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .alert-error {
             background-color: rgba(244, 67, 54, 0.1);
             color: var(--danger-color);
-        }
-
-        /* Status Badges */
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .status-badge.pending {
-            background-color: rgba(255, 152, 0, 0.1);
-            color: var(--warning-color);
-        }
-
-        .status-badge.approved {
-            background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
-        }
-
-        .status-badge.rejected {
-            background-color: rgba(244, 67, 54, 0.1);
-            color: var(--danger-color);
-        }
-
-        /* Responsive Design */
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-            }
-            .sidebar-header h3,
-            .sidebar-menu span {
-                display: none;
-            }
-            .content-area {
-                margin-left: 70px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
         }
 
         /* Action Bar Styles */
@@ -690,30 +570,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             color: var(--primary-color);
         }
 
-        /* Status Badge Updates */
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: capitalize;
-        }
-
-        .status-badge.pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-
-        .status-badge.approved {
-            background-color: #d4edda;
-            color: #155724;
-        }
-
-        .status-badge.rejected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
         /* Alert Updates */
         .alert {
             padding: 15px 20px;
@@ -780,7 +636,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             width: 100%;
             border-collapse: collapse;
             min-width: 1000px;
-            table-layout: fixed; /* Prevent layout shifts */
+            table-layout: fixed;
         }
         
         table th, table td {
@@ -788,7 +644,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             text-align: left;
             border-bottom: 1px solid #eee;
             vertical-align: middle;
-            word-wrap: break-word; /* Handle long content */
+            word-wrap: break-word;
             overflow-wrap: break-word;
         }
         
@@ -796,7 +652,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #f8f9fa;
             font-weight: 600;
             color: #333;
-            position: sticky; /* Keep headers visible */
+            position: sticky;
             top: 0;
             z-index: 10;
         }
@@ -804,7 +660,76 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         table tr:hover {
             background-color: #f5f5f5;
         }
-        
+
+        /* Summary row styling */
+        .summary-row {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            border-top: 2px solid #dee2e6;
+        }
+
+        .summary-row td {
+            color: #495057;
+        }
+
+        .positive-difference {
+            color: var(--success-color);
+        }
+
+        .negative-difference {
+            color: var(--danger-color);
+        }
+
+        .positive-income {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+
+        .negative-expenses {
+            color: var(--danger-color);
+            font-weight: bold;
+        }
+
+        /* Action buttons in table */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: white;
+        }
+
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
+        }
+
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
+        }
+
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
+        }
+
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .action-btn i {
+            font-size: 14px;
+        }
+
         /* Prevent DataTable layout shifts */
         .dataTables_wrapper {
             width: 100%;
@@ -815,35 +740,81 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         
         /* Ensure table doesn't move during initialization */
-        #contributionsTable {
+        #expensesTable {
             visibility: hidden;
         }
         
-        #contributionsTable.dataTable {
+        #expensesTable.dataTable {
             visibility: visible;
         }
-        /* Role Badge Styles (copied from settings.php) */
-        .role-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
+
+        /* Preserve custom styling for DataTable columns */
+        .month-column {
+            font-weight: bold !important;
+            text-align: left !important;
+            vertical-align: middle !important;
+            padding: 12px 15px !important;
+            border-bottom: 1px solid #eee !important;
         }
-        .role-badge.administrator {
-            background-color: #4a90e2;
-            color: white;
+
+        .month-column strong {
+            font-weight: bold !important;
         }
-        .role-badge.pastor {
-            background-color: #2ecc71;
-            color: white;
+
+        /* Override DataTable default styling */
+        .dataTables_wrapper .dataTable td.month-column {
+            font-weight: bold !important;
+            text-align: left !important;
+            vertical-align: middle !important;
+            padding: 12px 15px !important;
+            border-bottom: 1px solid #eee !important;
+            border-right: 1px solid #ddd !important;
         }
-        .role-badge.member {
-            background-color: #95a5a6;
-            color: white;
+
+        .dataTables_wrapper .dataTable th.month-column {
+            font-weight: 600 !important;
+            text-align: left !important;
+            vertical-align: middle !important;
+            padding: 12px 15px !important;
+            background-color: #f8f9fa !important;
+            border-bottom: 1px solid #eee !important;
+            border-right: 1px solid #ddd !important;
         }
-        /* --- Drawer Navigation Styles (EXACT from superadmin_dashboard.php) --- */
+
+        /* Ensure all table cells have proper borders */
+        .dataTables_wrapper .dataTable td,
+        .dataTables_wrapper .dataTable th {
+            border-bottom: 1px solid #eee !important;
+            border-right: 1px solid #ddd !important;
+        }
+
+        /* Remove right border from last column */
+        .dataTables_wrapper .dataTable td:last-child,
+        .dataTables_wrapper .dataTable th:last-child {
+            border-right: none !important;
+        }
+
+        /* Hide or style sorting indicators */
+        .dataTables_wrapper .dataTable th.sorting,
+        .dataTables_wrapper .dataTable th.sorting_asc,
+        .dataTables_wrapper .dataTable th.sorting_desc {
+            background-image: none !important;
+        }
+
+        /* Optional: Add custom sorting indicators if needed */
+        .dataTables_wrapper .dataTable th.sorting_asc::after {
+            content: " ▲";
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        .dataTables_wrapper .dataTable th.sorting_desc::after {
+            content: " ▼";
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* --- Drawer Navigation Styles --- */
         .nav-toggle-container {
             position: fixed;
             top: 20px;
@@ -1053,6 +1024,129 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .content-area {
             padding-top: 80px;
         }
+
+        /* Tab Navigation Styles */
+        .tab-navigation {
+            display: flex;
+            background-color: var(--white);
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .tab-navigation a {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: background-color 0.3s;
+            font-weight: 500;
+        }
+
+        .tab-navigation a.active {
+            background-color: var(--accent-color);
+            color: var(--white);
+        }
+
+        .tab-navigation a:hover:not(.active) {
+            background-color: #f0f0f0;
+        }
+
+        .tab-content {
+            background-color: var(--white);
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        /* Insights Tab Styles */
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .insight-card {
+            background: var(--white);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .insight-card h3 {
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .insight-card h3 i {
+            color: var(--accent-color);
+        }
+
+        .insight-metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .insight-metric:last-child {
+            margin-bottom: 0;
+        }
+
+        .insight-metric .label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .insight-metric .value {
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .insight-metric .value.positive {
+            color: var(--success-color);
+        }
+
+        .insight-metric .value.negative {
+            color: var(--danger-color);
+        }
+
+        /* DataTable Styling (matching member_contributions.php) */
+        .dataTables_wrapper {
+            width: 100%;
+        }
+        
+        .dataTables_scroll {
+            overflow-x: auto;
+        }
+        
+        /* Ensure table doesn't move during initialization */
+        #expensesTable {
+            visibility: hidden;
+        }
+        
+        #expensesTable.dataTable {
+            visibility: visible;
+        }
+
     </style>
 </head>
 <body>
@@ -1148,7 +1242,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <main class="content-area">
             <div class="top-bar" style="background-color: #fff; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; margin-top: 0;">
                 <div>
-                    <h2>Stewardship Report</h2>
+                    <h2>Monthly Expenses</h2>
                     <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
                         Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
                     </p>
@@ -1174,144 +1268,213 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                 <?php endif; ?>
 
-                <!-- Admin Button - Always show for testing -->
-                <div class="action-bar">
-                    <button class="btn btn-primary" onclick="openAdminModal()">
-                        <i class="fas fa-plus-circle"></i> Add New Contribution
-                    </button>
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <a href="#monthly-expenses" class="active" data-tab="monthly-expenses">Monthly Expenses</a>
+                    <a href="#insights" data-tab="insights">Insights</a>
                 </div>
 
-                <!-- Contributions Table -->
-                <div class="card">
-                    <h2>Stewardship Report</h2>
-                    <div class="table-responsive">
-                        <table id="contributionsTable">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Member Name</th>
-                                    <th>Role</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
-                                    <th>Payment Method</th>
-                                    <th>Reference Number</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php while ($row = $all_contributions->fetch_assoc()): ?>
-                                <tr>
-                                    <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
-                                    <td><?php echo htmlspecialchars($row['member_name']); ?></td>
-                                    <td>
-                                        <span class="role-badge <?php echo strtolower($row['member_role']); ?>">
-                                            <?php echo htmlspecialchars($row['member_role']); ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo ucfirst($row['contribution_type']); ?></td>
-                                    <td>₱<?php echo number_format($row['amount'], 2); ?></td>
-                                    <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
-                                    <td><?php echo htmlspecialchars($row['reference_number']); ?></td>
-                                </tr>
-                                <?php endwhile; ?>
-                            </tbody>
-                        </table>
+                <div class="tab-content">
+                    <!-- Monthly Expenses Tab -->
+                    <div class="tab-pane active" id="monthly-expenses">
+                        <!-- Action Button -->
+                        <div class="action-bar">
+                            <button class="btn btn-primary" onclick="openExpenseModal()">
+                                <i class="fas fa-plus-circle"></i> Add Monthly Expense
+                            </button>
+                        </div>
+
+                        <!-- Expenses Table -->
+                        <div class="card">
+                            <h2>Monthly Financial Summary</h2>
+                            <div class="table-responsive">
+                                <table id="expensesTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="month-column">Month</th>
+                                            <th>Income (₱)</th>
+                                            <th>Expenses (₱)</th>
+                                            <th>Difference (₱)</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($expenses_data as $row): ?>
+                                        <tr>
+                                            <td class="month-column" data-order="<?php echo strtotime($row['month'] . '-01'); ?>"><strong><?php echo date('F Y', strtotime($row['month'] . '-01')); ?></strong></td>
+                                            <td class="<?php echo $row['income'] > $row['expenses'] ? 'positive-income' : ''; ?>">₱<?php echo number_format($row['income'], 2); ?></td>
+                                            <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ''; ?>">₱<?php echo number_format($row['expenses'], 2); ?></td>
+                                            <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ($row['difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
+                                                ₱<?php echo number_format($row['difference'], 2); ?>
+                                            </td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="action-btn edit-btn" onclick="editExpense(<?php echo $row['id']; ?>, '<?php echo $row['month']; ?>', <?php echo $row['income']; ?>, <?php echo $row['expenses']; ?>, '<?php echo htmlspecialchars($row['notes']); ?>')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="action-btn delete-btn" onclick="deleteExpense(<?php echo $row['id']; ?>)">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="summary-row">
+                                            <td><strong>AVERAGE</strong></td>
+                                            <td><strong>₱<?php echo number_format($averages['avg_income'], 2); ?></strong></td>
+                                            <td><strong>₱<?php echo number_format($averages['avg_expenses'], 2); ?></strong></td>
+                                            <td class="<?php echo $averages['avg_expenses'] > $averages['avg_income'] ? 'negative-expenses' : ($averages['avg_difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
+                                                <strong>₱<?php echo number_format($averages['avg_difference'], 2); ?></strong>
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insights Tab -->
+                    <div class="tab-pane" id="insights">
+                        <div class="max-w-sm w-full bg-white rounded-lg shadow-sm dark:bg-gray-800 p-4 md:p-6">
+                            <div class="mb-4">
+                                <div>
+                                    <h5 class="leading-none text-2xl font-bold text-gray-900 dark:text-white pb-1">₱<?php echo number_format($totals['total_income'], 2); ?></h5>
+                                    <p class="text-sm font-normal text-gray-500 dark:text-gray-400">Total Income</p>
+                                </div>
+                            </div>
+                            <div id="legend-chart" style="margin-top: 20px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Admin Contribution Modal -->
-    <div id="adminContributionModal" class="modal">
+    <!-- Add Expense Modal -->
+    <div id="expenseModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Add Member Contribution</h3>
-                <span class="close" onclick="closeAdminModal()">&times;</span>
+                <h3 id="modalTitle">Add Monthly Expense</h3>
+                <span class="close" onclick="closeExpenseModal()">&times;</span>
             </div>
-            <form method="POST" action="" class="contribution-form">
+            <form method="POST" action="" class="expense-form" id="expenseForm">
+                <input type="hidden" id="expense_id" name="expense_id">
                 <div class="form-group">
-                    <label for="member_id">Member Name</label>
-                    <select id="member_id" name="member_id" required>
-                        <option value="">Select Member</option>
-                        <?php foreach ($users as $user): ?>
-                            <option value="<?php echo $user['user_id']; ?>">
-                                <?php echo htmlspecialchars($user['full_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label for="month">Month</label>
+                    <input type="month" id="month" name="month" required>
                 </div>
                 <div class="form-group">
-                    <label for="contribution_date">Date</label>
-                    <input type="date" id="contribution_date" name="contribution_date" required>
-                    <small style="color: #666; font-size: 12px;">Select the date when the transaction was made</small>
+                    <label for="income">Income (₱)</label>
+                    <input type="number" id="income" name="income" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="amount">Amount (₱)</label>
-                    <input type="number" id="amount" name="amount" step="0.01" required>
+                    <label for="expenses">Expenses (₱)</label>
+                    <input type="number" id="expenses" name="expenses" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="contribution_type">Contribution Type</label>
-                    <select id="contribution_type" name="contribution_type" required>
-                        <option value="tithe">Tithe</option>
-                        <option value="offering">Offering</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="payment_method">Payment Method</label>
-                    <select id="payment_method" name="payment_method" required>
-                        <option value="cash">Cash</option>
-                        <option value="gcash">GCash</option>
-                        <option value="maya">Maya</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reference_number">Reference Number</label>
-                    <input type="text" id="reference_number" name="reference_number">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" placeholder="Optional notes about this month's finances..."></textarea>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" name="admin_submit_contribution" class="btn btn-primary">Submit Contribution</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeAdminModal()">Cancel</button>
+                    <button type="submit" name="submit_expense" id="submitBtn" class="btn btn-primary">Add Expense</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <div style="padding: 20px;">
+                <p>Are you sure you want to delete this expense entry? This action cannot be undone.</p>
+                <form method="POST" action="" id="deleteForm">
+                    <input type="hidden" id="delete_expense_id" name="expense_id">
+                    <div class="form-actions">
+                        <button type="submit" name="delete_expense" class="btn btn-danger">Delete</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script>
         $(document).ready(function() {
-            $('#contributionsTable').DataTable({
+            $('#expensesTable').DataTable({
                 columnDefs: [
-                    { width: '15%', targets: 0 }, // Date
-                    { width: '20%', targets: 1 }, // Member Name
-                    { width: '10%', targets: 2 }, // Role
-                    { width: '10%', targets: 3 }, // Type
-                    { width: '15%', targets: 4 }, // Amount
-                    { width: '15%', targets: 5 }, // Payment Method
-                    { width: '25%', targets: 6 }  // Reference Number
+                    { width: '20%', targets: 0 }, // Month
+                    { width: '20%', targets: 1 }, // Income
+                    { width: '20%', targets: 2 }, // Expenses
+                    { width: '20%', targets: 3 }, // Difference
+                    { width: '20%', targets: 4 }  // Actions
                 ],
                 autoWidth: false,
-                responsive: true
+                responsive: true,
+                order: [[0, 'asc']], // Sort by first column (Month) in ascending order
+                orderClasses: false
             });
         });
 
-        function openAdminModal() {
-            document.getElementById('adminContributionModal').style.display = 'block';
-            // Set default date to today
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('contribution_date').value = today;
+        function openExpenseModal() {
+            document.getElementById('modalTitle').textContent = 'Add Monthly Expense';
+            document.getElementById('expenseForm').reset();
+            document.getElementById('expense_id').value = '';
+            document.getElementById('submitBtn').textContent = 'Add Expense';
+            document.getElementById('submitBtn').name = 'submit_expense';
+            document.getElementById('expenseModal').style.display = 'block';
+            
+            // Set default month to current month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            document.getElementById('month').value = `${year}-${month}`;
         }
 
-        function closeAdminModal() {
-            document.getElementById('adminContributionModal').style.display = 'none';
+        function editExpense(id, month, income, expenses, notes) {
+            document.getElementById('modalTitle').textContent = 'Edit Monthly Expense';
+            document.getElementById('expense_id').value = id;
+            document.getElementById('month').value = month;
+            document.getElementById('income').value = income;
+            document.getElementById('expenses').value = expenses;
+            document.getElementById('notes').value = notes;
+            document.getElementById('submitBtn').textContent = 'Update Expense';
+            document.getElementById('submitBtn').name = 'update_expense';
+            document.getElementById('expenseModal').style.display = 'block';
         }
 
-        // Close modal when clicking outside
+        function closeExpenseModal() {
+            document.getElementById('expenseModal').style.display = 'none';
+        }
+
+        function deleteExpense(id) {
+            document.getElementById('delete_expense_id').value = id;
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+        }
+
+        // Close modals when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('adminContributionModal');
-            if (event.target == modal) {
-                modal.style.display = 'none';
+            const expenseModal = document.getElementById('expenseModal');
+            const deleteModal = document.getElementById('deleteModal');
+            if (event.target == expenseModal) {
+                expenseModal.style.display = 'none';
+            }
+            if (event.target == deleteModal) {
+                deleteModal.style.display = 'none';
             }
         }
 
@@ -1326,7 +1489,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }, 3000);
         });
 
-        // Drawer Navigation JS (copied from superadmin_dashboard.php)
+        // Tab Navigation JS
+        document.querySelectorAll('.tab-navigation a').forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.tab-navigation a').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+                
+                this.classList.add('active');
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Drawer Navigation JS
         document.addEventListener('DOMContentLoaded', function() {
             const navToggle = document.getElementById('nav-toggle');
             const drawer = document.getElementById('drawer-navigation');
@@ -1357,6 +1533,125 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }
             });
         });
+
+        // Chart Configuration
+        <?php
+        // Prepare data for the chart
+        $chart_income = [];
+        $chart_expenses = [];
+        $chart_categories = [];
+        
+        // Get the last 6 months of data for the chart
+        $chart_data = array_slice($expenses_data, -6);
+        
+        foreach ($chart_data as $row) {
+            $chart_income[] = $row['income'];
+            $chart_expenses[] = $row['expenses'];
+            $chart_categories[] = date('M Y', strtotime($row['month'] . '-01'));
+        }
+        ?>
+
+        const options = {
+            series: [
+                {
+                    name: "Income",
+                    data: <?php echo json_encode($chart_income); ?>,
+                    color: "#10B981", // Green color for income
+                },
+                {
+                    name: "Expenses",
+                    data: <?php echo json_encode($chart_expenses); ?>,
+                    color: "#EF4444", // Red color for expenses
+                },
+            ],
+            chart: {
+                height: "100%",
+                maxWidth: "100%",
+                type: "area",
+                fontFamily: "Inter, sans-serif",
+                dropShadow: {
+                    enabled: false,
+                },
+                toolbar: {
+                    show: false,
+                },
+            },
+            tooltip: {
+                enabled: true,
+                x: {
+                    show: false,
+                },
+            },
+            legend: {
+                show: true
+            },
+            fill: {
+                type: "gradient",
+                gradient: {
+                    opacityFrom: 0.55,
+                    opacityTo: 0,
+                    shade: "#1C64F2",
+                    gradientToColors: ["#1C64F2"],
+                },
+            },
+            dataLabels: {
+                enabled: false,
+            },
+            stroke: {
+                width: 6,
+            },
+            grid: {
+                show: false,
+                strokeDashArray: 4,
+                padding: {
+                    left: 2,
+                    right: 2,
+                    top: -26
+                },
+            },
+            xaxis: {
+                categories: <?php echo json_encode($chart_categories); ?>,
+                labels: {
+                    show: true,
+                    style: {
+                        colors: '#666',
+                        fontSize: '12px',
+                        fontFamily: 'Inter, sans-serif',
+                    },
+                },
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false,
+                },
+            },
+            yaxis: {
+                show: true,
+                labels: {
+                    show: true,
+                    formatter: function (value) {
+                        return '₱' + value.toLocaleString();
+                    },
+                    style: {
+                        colors: '#666',
+                        fontSize: '12px',
+                        fontFamily: 'Inter, sans-serif',
+                    }
+                },
+                axisBorder: {
+                    show: false,
+                },
+                axisTicks: {
+                    show: false,
+                },
+            },
+        }
+
+        if (document.getElementById("legend-chart") && typeof ApexCharts !== 'undefined') {
+            const chart = new ApexCharts(document.getElementById("legend-chart"), options);
+            chart.render();
+        }
     </script>
 </body>
 </html> 

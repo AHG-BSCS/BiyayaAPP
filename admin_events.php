@@ -1,5 +1,5 @@
 <?php
-// events.php
+// admin_events.php
 session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
@@ -7,20 +7,13 @@ require_once 'user_functions.php';
 // Get church logo
 $church_logo = getChurchLogo($conn);
 
-// Check if user is logged in
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
+// Check if user is logged in and is administrator only
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Administrator") {
     header("Location: index.php");
     exit;
 }
-
-// Check user role
-$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
-
-// Restrict access to Super Admin only
-if (!$is_super_admin) {
-    header("Location: index.php");
-    exit;
-}
+// Define $is_admin as true for use in the rest of the file
+$is_admin = true;
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
@@ -82,12 +75,12 @@ function getPinnedEvent($conn) {
     return null;
 }
 
-// Handle event submission (Add) - Super Admin only
+// Handle event submission (Add) - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_event"])) {
     $title = htmlspecialchars(trim($_POST["title"]));
     $category = htmlspecialchars(trim($_POST["category"]));
-    $event_date = $_POST["date"];
-    $event_time = $_POST["time"];
+    $event_date = date("Y-m-d", strtotime($_POST["datetime"]));
+    $event_time = date("H:i:s", strtotime($_POST["datetime"]));
     $description = htmlspecialchars(trim($_POST["description"]));
     $created_by = $_SESSION["user"];
     $event_image = "";
@@ -136,7 +129,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_event"])) {
     }
 }
 
-// Handle event removal - Super Admin only
+// Handle event removal - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["remove_event"])) {
     $event_id = (int)$_POST["event_id"];
     
@@ -153,13 +146,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["remove_event"])) {
     }
 }
 
-// Handle event edit - Super Admin only
+// Handle event edit - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_event"])) {
     $event_id = (int)$_POST["event_id"];
     $title = htmlspecialchars(trim($_POST["title"]));
     $category = htmlspecialchars(trim($_POST["category"]));
-    $event_date = $_POST["date"];
-    $event_time = $_POST["time"];
+    $event_date = date("Y-m-d", strtotime($_POST["datetime"]));
+    $event_time = date("H:i:s", strtotime($_POST["datetime"]));
     $description = htmlspecialchars(trim($_POST["description"]));
 
     // Get current event image
@@ -219,7 +212,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_event"])) {
     }
 }
 
-// Handle pinning event - Super Admin only
+// Handle pinning event - Admin only
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["pin_event"])) {
     $event_id = (int)$_POST["event_id"];
     
@@ -253,7 +246,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["pin_event"])) {
     $messageType = "success";
 }
 
-// Get event to edit (for pre-populating form) - Super Admin only
+// Get event to edit (for pre-populating form) - Admin only
 $edit_event = null;
 if (isset($_POST["prepare_edit"])) {
     $event_id = (int)$_POST["event_id"];
@@ -270,21 +263,18 @@ if (isset($_POST["prepare_edit"])) {
 
 // Get all events from database
 $events = getAllEvents($conn);
-
 // Get pinned event
 $pinned_event = getPinnedEvent($conn);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Events | <?php echo $church_name; ?></title>
+    <title>Admin Events | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-
     <style>
         :root {
             --primary-color: #3a3a3a;
@@ -945,355 +935,342 @@ $pinned_event = getPinnedEvent($conn);
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <!-- Navigation Toggle Button -->
-        <div class="nav-toggle-container">
-           <button class="nav-toggle-btn" type="button" id="nav-toggle">
-           <i class="fas fa-bars"></i> Menu
-           </button>
-        </div>
-
-        <!-- Custom Drawer Navigation -->
-        <div id="drawer-navigation" class="custom-drawer">
-            <div class="drawer-header">
-                <div class="drawer-logo-section">
-                    <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo" class="drawer-logo">
-                    <h5 class="drawer-title"><?php echo $church_name; ?></h5>
-                </div>
-                <button type="button" class="drawer-close" id="drawer-close">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="drawer-content">
-                <ul class="drawer-menu">
-                    <li>
-                        <a href="superadmin_dashboard.php" class="drawer-link <?php echo $current_page == 'superadmin_dashboard.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-home"></i>
-                            <span>Dashboard</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="events.php" class="drawer-link <?php echo $current_page == 'events.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-calendar-alt"></i>
-                            <span>Events</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="prayers.php" class="drawer-link <?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-hands-praying"></i>
-                            <span>Prayer Requests</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="messages.php" class="drawer-link <?php echo $current_page == 'messages.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-video"></i>
-                            <span>Messages</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="member_records.php" class="drawer-link <?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-address-book"></i>
-                            <span>Member Records</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="superadmin_financialreport.php" class="drawer-link <?php echo $current_page == 'superadmin_financialreport.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-chart-line"></i>
-                            <span>Financial Reports</span>
-                        </a>
-                    </li>
-                    <?php if ($is_super_admin): ?>
-                    <li>
-                        <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-hand-holding-dollar"></i>
-                            <span>Stewardship Report</span>
-                        </a>
-                    </li>
-                    <?php endif; ?>
-                    <li>
-                        <a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-cog"></i>
-                            <span>Settings</span>
-                        </a>
-                    </li>
-<?php if ($is_super_admin): ?>
-                    <li>
-                        <a href="login_logs.php" class="drawer-link <?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-sign-in-alt"></i>
-                            <span>Login Logs</span>
-                        </a>
-                    </li>
-<?php endif; ?>
-                </ul>
-            </div>
-            <div class="drawer-profile">
-                <div class="avatar">
-                    <?php if (!empty($user_profile['profile_picture'])): ?>
-                        <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
-                    <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
-                    <?php endif; ?>
-                </div>
-                <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role">Super Admin</div>
-                </div>
-                <form action="logout.php" method="post" style="margin:0;">
-                    <button type="submit" class="logout-btn">Logout</button>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Drawer Overlay -->
-        <div id="drawer-overlay" class="drawer-overlay"></div>
-
-        <main class="content-area">
-            <div class="top-bar">
-                <div>
-                    <h2>Events</h2>
-                    <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
-                        Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
-                    </p>
-                </div>
-            </div>
-
-            <div class="events-content">
-                <?php if (!empty($message)): ?>
-                    <div class="alert alert-<?php echo $messageType; ?>" id="message-alert">
-                        <i class="fas fa-info-circle"></i>
-                        <?php echo $message; ?>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Add/Edit Event Form (Super Admin Only) -->
-                <?php if ($is_super_admin): ?>
-                    <div class="action-bar">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" placeholder="Search events...">
-                        </div>
-                        <button class="btn" id="add-event-btn">
-                            <i class="fas fa-plus"></i> Add Event
-                        </button>
-                    </div>
-
-                    <!-- Add Event Form -->
-                    <div class="event-form" id="add-event-form">
-                        <h3>Add New Event</h3>
-                        <form action="" method="post" enctype="multipart/form-data">
-                            <div class="form-group">
-                                <label for="add_title">Event Title</label>
-                                <input type="text" id="add_title" name="title" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="add_category">Category</label>
-                                <select id="add_category" name="category" class="form-control" required>
-                                    <option value="AMEN Fellowship">AMEN Fellowship</option>
-                                    <option value="WOW Fellowship">WOW Fellowship</option>
-                                    <option value="Youth Fellowship">Youth Fellowship</option>
-                                    <option value="Sunday School Outreach">Sunday School Outreach</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="add_date">Date</label>
-                                <div style="position: relative; max-width: 300px;">
-                                  <div style="position: absolute; top: 0; bottom: 0; left: 0; display: flex; align-items: center; padding-left: 12px; pointer-events: none;">
-                                     <svg style="width: 12px; height: 12px; color: #6b7280;" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/>
-                                      </svg>
-                                  </div>
-                                  <input id="add_date" name="date" type="date" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 10px 10px 40px; width: 100%; box-sizing: border-box;" required>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="add_time">Time</label>
-                                <input id="add_time" name="time" type="time" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 15px; width: 100%; box-sizing: border-box;" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="add_description">Description</label>
-                                <textarea id="add_description" name="description" class="form-control" rows="4" required></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="add_event_image">Event Image (Optional)</label>
-                                <input type="file" id="add_event_image" name="event_image" class="form-control" accept="image/*">
-                                <small class="form-text text-muted">Upload JPEG, PNG, or GIF image. This image will be displayed on the homepage.</small>
-                            </div>
-                            <button type="submit" class="btn" name="add_event">
-                                <i class="fas fa-calendar-plus"></i> Add Event
-                            </button>
-                            <button type="button" class="btn" id="add-cancel-btn" style="background-color: #f0f0f0; color: var(--primary-color); margin-left: 10px;">
-                                Cancel
-                            </button>
-                        </form>
-                    </div>
-
-                    <!-- Edit Event Form -->
-                    <div class="event-form<?php echo $edit_event ? ' active' : ''; ?>" id="edit-event-form">
-                        <h3>Edit Event</h3>
-                        <form action="" method="post" enctype="multipart/form-data">
-                            <input type="hidden" name="event_id" value="<?php echo $edit_event['id'] ?? ''; ?>">
-                            <div class="form-group">
-                                <label for="edit_title">Event Title</label>
-                                <input type="text" id="edit_title" name="title" class="form-control" value="<?php echo $edit_event['title'] ?? ''; ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_category">Category</label>
-                                <select id="edit_category" name="category" class="form-control" required>
-                                    <option value="AMEN Fellowship" <?php echo ($edit_event['category'] ?? '') === 'AMEN Fellowship' ? 'selected' : ''; ?>>AMEN Fellowship</option>
-                                    <option value="WOW Fellowship" <?php echo ($edit_event['category'] ?? '') === 'WOW Fellowship' ? 'selected' : ''; ?>>WOW Fellowship</option>
-                                    <option value="Youth Fellowship" <?php echo ($edit_event['category'] ?? '') === 'Youth Fellowship' ? 'selected' : ''; ?>>Youth Fellowship</option>
-                                    <option value="Sunday School Outreach" <?php echo ($edit_event['category'] ?? '') === 'Sunday School Outreach' ? 'selected' : ''; ?>>Sunday School Outreach</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_date">Date</label>
-                                <div style="position: relative; max-width: 300px;">
-                                  <div style="position: absolute; top: 0; bottom: 0; left: 0; display: flex; align-items: center; padding-left: 12px; pointer-events: none;">
-                                     <svg style="width: 12px; height: 12px; color: #6b7280;" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/>
-                                      </svg>
-                                  </div>
-                                  <input id="edit_date" name="date" type="date" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 10px 10px 40px; width: 100%; box-sizing: border-box;" value="<?php echo ($edit_event ? $edit_event['event_date'] : ''); ?>" required>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_time">Time</label>
-                                <input id="edit_time" name="time" type="time" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 15px; width: 100%; box-sizing: border-box;" value="<?php echo ($edit_event ? $edit_event['event_time'] : ''); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_description">Description</label>
-                                <textarea id="edit_description" name="description" class="form-control" rows="4" required><?php echo $edit_event['description'] ?? ''; ?></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="edit_event_image">Event Image (Optional)</label>
-                                <?php if (!empty($edit_event['event_image'])): ?>
-                                    <div class="current-image">
-                                        <p><strong>Current Image:</strong></p>
-                                        <img src="<?php echo htmlspecialchars($edit_event['event_image']); ?>" alt="Current Event Image" style="max-width: 200px; height: auto; margin: 10px 0;">
-                                    </div>
-                                <?php endif; ?>
-                                <input type="file" id="edit_event_image" name="event_image" class="form-control" accept="image/*">
-                                <small class="form-text text-muted">Upload a new image to replace the current one. Leave empty to keep the current image.</small>
-                            </div>
-                            <button type="submit" class="btn" name="edit_event">
-                                <i class="fas fa-save"></i> Save Changes
-                            </button>
-                            <button type="button" class="btn" id="edit-cancel-btn" style="background-color: #f0f0f0; color: var(--primary-color); margin-left: 10px;">
-                                Cancel
-                            </button>
-                        </form>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Events Display -->
-                <div class="events-grid">
-                    <!-- Pinned Event Box -->
-                    <?php if ($pinned_event): ?>
-                        <div class="event-category pinned">
-                            <h3>Pinned Event</h3>
-                            <div class="event-item event-search-item">
-                                <div class="event-details">
-                                    <?php if (!empty($pinned_event['event_image'])): ?>
-                                        <img src="<?php echo htmlspecialchars($pinned_event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
-                                    <?php endif; ?>
-                                    <h4><?php echo $pinned_event['title']; ?></h4>
-                                    <p><i class="fas fa-calendar-alt"></i> <?php echo $pinned_event['date']; ?> at <?php echo date("h:i A", strtotime($pinned_event['time'])); ?></p>
-                                    <p><?php echo $pinned_event['description']; ?></p>
-                                                                                <?php if ($is_super_admin): ?>
-                                        <div class="event-actions">
-                                            <form action="" method="post" style="display: inline;">
-                                                <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
-                                                <button type="submit" class="btn btn-warning" name="prepare_edit">
-                                                    <i class="fas fa-edit"></i> Edit
-                                                </button>
-                                            </form>
-                                            <form action="" method="post" style="display: inline;">
-                                                <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
-                                                <button type="submit" class="btn btn-danger" name="remove_event">
-                                                    <i class="fas fa-trash"></i> Remove
-                                                </button>
-                                            </form>
-                                            <form action="" method="post" style="display: inline;">
-                                                <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
-                                                <button type="submit" class="btn btn-info" name="pin_event">
-                                                    <i class="fas fa-thumbtack"></i> Unpin
-                                                </button>
-                                            </form>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- Category Boxes -->
-                    <?php
-                    $categories = ["AMEN Fellowship", "WOW Fellowship", "Youth Fellowship", "Sunday School Outreach"];
-                    foreach ($categories as $category):
-                        // Filter events for this category, excluding pinned event only if there are other events to show
-                        $category_events = array_filter($events, function($event) use ($category, $pinned_event) {
-                            return $event['category'] === $category && (!$pinned_event || $event['id'] !== $pinned_event['id']);
-                        });
-                        // Check if there are any events in this category, including pinned event if it matches
-                        $all_category_events = array_filter($events, function($event) use ($category) {
-                            return $event['category'] === $category;
-                        });
-                        
-                        // Only show category if it has events to display (not all pinned)
-                        if (!empty($category_events) || empty($all_category_events)):
-                    ?>
-                        <div class="event-category">
-                            <h3><?php echo $category; ?></h3>
-                            <?php if (empty($all_category_events)): ?>
-                                <p>No upcoming events in this category.</p>
-                            <?php else: ?>
-                                <?php foreach ($category_events as $event): ?>
-                                    <div class="event-item event-search-item">
-                                        <div class="event-details">
-                                            <?php if (!empty($event['event_image'])): ?>
-                                                <img src="<?php echo htmlspecialchars($event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
-                                            <?php endif; ?>
-                                            <h4><?php echo $event['title']; ?></h4>
-                                            <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
-                                            <p><?php echo $event['description']; ?></p>
-                                            <?php if ($is_super_admin): ?>
-                                                <div class="event-actions">
-                                                    <form action="" method="post" style="display: inline;">
-                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                        <button type="submit" class="btn btn-warning" name="prepare_edit">
-                                                            <i class="fas fa-edit"></i> Edit
-                                                        </button>
-                                                    </form>
-                                                    <form action="" method="post" style="display: inline;">
-                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                        <button type="submit" class="btn btn-danger" name="remove_event">
-                                                            <i class="fas fa-trash"></i> Remove
-                                                        </button>
-                                                    </form>
-                                                    <form action="" method="post" style="display: inline;">
-                                                        <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
-                                                        <button type="submit" class="btn btn-info" name="pin_event">
-                                                            <i class="fas fa-thumbtack"></i> Pin
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                    <?php 
-                        endif;
-                    endforeach; 
-                    ?>
-                </div>
-            </div>
-        </main>
+<div class="dashboard-container">
+    <div class="nav-toggle-container">
+       <button class="nav-toggle-btn" type="button" id="nav-toggle">
+       <i class="fas fa-bars"></i> Menu
+       </button>
     </div>
+    <!-- Custom Drawer Navigation -->
+    <div id="drawer-navigation" class="custom-drawer">
+        <div class="drawer-header">
+            <div class="drawer-logo-section">
+                <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo" class="drawer-logo">
+                <h5 class="drawer-title"><?php echo $church_name; ?></h5>
+            </div>
+            <button type="button" class="drawer-close" id="drawer-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="drawer-content">
+            <ul class="drawer-menu">
+                <li>
+                    <a href="dashboard.php" class="drawer-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-home"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="admin_events.php" class="drawer-link <?php echo $current_page == 'admin_events.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="admin_prayers.php" class="drawer-link <?php echo $current_page == 'admin_prayers.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-hands-praying"></i>
+                        <span>Prayer Requests</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="admin_messages.php" class="drawer-link <?php echo $current_page == 'admin_messages.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-video"></i>
+                        <span>Messages</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="financialreport.php" class="drawer-link <?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Financial Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="admin_expenses.php" class="drawer-link <?php echo $current_page == 'admin_expenses.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-receipt"></i>
+                        <span>Monthly Expenses</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="member_contributions.php" class="drawer-link <?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-hand-holding-dollar"></i>
+                        <span>Stewardship Report</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="admin_settings.php" class="drawer-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-cog"></i>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="drawer-profile">
+            <div class="avatar">
+                <?php if (!empty($user_profile['profile_picture'])): ?>
+                    <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
+                <?php else: ?>
+                    <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                <?php endif; ?>
+            </div>
+            <div class="profile-info">
+                <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
+                <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+            </div>
+            <form action="logout.php" method="post" style="margin:0;">
+                <button type="submit" class="logout-btn">Logout</button>
+            </form>
+        </div>
+    </div>
+    <!-- Drawer Overlay -->
+    <div id="drawer-overlay" class="drawer-overlay"></div>
+    <main class="content-area">
+        <div class="top-bar">
+            <div>
+                <h2>Events</h2>
+                <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
+                    Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
+                </p>
+            </div>
+        </div>
+
+        <div class="events-content">
+            <?php if (!empty($message)): ?>
+                <div class="alert alert-<?php echo $messageType; ?>" id="message-alert">
+                    <i class="fas fa-info-circle"></i>
+                    <?php echo $message; ?>
+                </div>
+            <?php endif; ?>
+
+            <!-- Add/Edit Event Form (Admin and Super Admin Only) -->
+            <?php if ($is_admin): ?>
+                <div class="action-bar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Search events...">
+                    </div>
+                    <button class="btn" id="add-event-btn">
+                        <i class="fas fa-plus"></i> Add Event
+                    </button>
+                </div>
+
+                <!-- Add Event Form -->
+                <div class="event-form" id="add-event-form">
+                    <h3>Add New Event</h3>
+                    <form action="" method="post" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="add_title">Event Title</label>
+                            <input type="text" id="add_title" name="title" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="add_category">Category</label>
+                            <select id="add_category" name="category" class="form-control" required>
+                                <option value="AMEN Fellowship">AMEN Fellowship</option>
+                                <option value="WOW Fellowship">WOW Fellowship</option>
+                                <option value="Youth Fellowship">Youth Fellowship</option>
+                                <option value="Sunday School Outreach">Sunday School Outreach</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="add_datetime">Date & Time</label>
+                            <input type="text" id="add_datetime" name="datetime" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="add_description">Description</label>
+                            <textarea id="add_description" name="description" class="form-control" rows="4" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="add_event_image">Event Image (Optional)</label>
+                            <input type="file" id="add_event_image" name="event_image" class="form-control" accept="image/*">
+                            <small class="form-text text-muted">Upload JPEG, PNG, or GIF image. This image will be displayed on the homepage.</small>
+                        </div>
+                        <button type="submit" class="btn" name="add_event">
+                            <i class="fas fa-calendar-plus"></i> Add Event
+                        </button>
+                        <button type="button" class="btn" id="add-cancel-btn" style="background-color: #f0f0f0; color: var(--primary-color); margin-left: 10px;">
+                            Cancel
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Edit Event Form -->
+                <div class="event-form<?php echo $edit_event ? ' active' : ''; ?>" id="edit-event-form">
+                    <h3>Edit Event</h3>
+                    <form action="" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="event_id" value="<?php echo $edit_event['id'] ?? ''; ?>">
+                        <div class="form-group">
+                            <label for="edit_title">Event Title</label>
+                            <input type="text" id="edit_title" name="title" class="form-control" value="<?php echo $edit_event['title'] ?? ''; ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_category">Category</label>
+                            <select id="edit_category" name="category" class="form-control" required>
+                                <option value="AMEN Fellowship" <?php echo ($edit_event['category'] ?? '') === 'AMEN Fellowship' ? 'selected' : ''; ?>>AMEN Fellowship</option>
+                                <option value="WOW Fellowship" <?php echo ($edit_event['category'] ?? '') === 'WOW Fellowship' ? 'selected' : ''; ?>>WOW Fellowship</option>
+                                <option value="Youth Fellowship" <?php echo ($edit_event['category'] ?? '') === 'Youth Fellowship' ? 'selected' : ''; ?>>Youth Fellowship</option>
+                                <option value="Sunday School Outreach" <?php echo ($edit_event['category'] ?? '') === 'Sunday School Outreach' ? 'selected' : ''; ?>>Sunday School Outreach</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_datetime">Date & Time</label>
+                            <input type="text" id="edit_datetime" name="datetime" class="form-control" value="<?php echo ($edit_event ? $edit_event['event_date'] . ' ' . $edit_event['event_time'] : ''); ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_description">Description</label>
+                            <textarea id="edit_description" name="description" class="form-control" rows="4" required><?php echo $edit_event['description'] ?? ''; ?></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_event_image">Event Image (Optional)</label>
+                            <?php if (!empty($edit_event['event_image'])): ?>
+                                <div class="current-image">
+                                    <p><strong>Current Image:</strong></p>
+                                    <img src="<?php echo htmlspecialchars($edit_event['event_image']); ?>" alt="Current Event Image" style="max-width: 200px; height: auto; margin: 10px 0;">
+                                </div>
+                            <?php endif; ?>
+                            <input type="file" id="edit_event_image" name="event_image" class="form-control" accept="image/*">
+                            <small class="form-text text-muted">Upload a new image to replace the current one. Leave empty to keep the current image.</small>
+                        </div>
+                        <button type="submit" class="btn" name="edit_event">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                        <button type="button" class="btn" id="edit-cancel-btn" style="background-color: #f0f0f0; color: var(--primary-color); margin-left: 10px;">
+                            Cancel
+                        </button>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            <!-- Events Display -->
+            <div class="events-grid">
+                <!-- Pinned Event Box -->
+                <?php if ($pinned_event): ?>
+                    <div class="event-category pinned">
+                        <h3>Pinned Event</h3>
+                        <div class="event-item event-search-item">
+                            <div class="event-details">
+                                <?php if (!empty($pinned_event['event_image'])): ?>
+                                    <img src="<?php echo htmlspecialchars($pinned_event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
+                                <?php endif; ?>
+                                <h4><?php echo $pinned_event['title']; ?></h4>
+                                <p><i class="fas fa-calendar-alt"></i> <?php echo $pinned_event['date']; ?> at <?php echo date("h:i A", strtotime($pinned_event['time'])); ?></p>
+                                <p><?php echo $pinned_event['description']; ?></p>
+                                <?php if ($is_admin): ?>
+                                    <form action="" method="post" style="display: inline;">
+                                        <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
+                                        <button type="submit" class="btn btn-warning" name="prepare_edit">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                    </form>
+                                    <form action="" method="post" style="display: inline;">
+                                        <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
+                                        <button type="submit" class="btn btn-danger" name="remove_event">
+                                            <i class="fas fa-trash"></i> Remove
+                                        </button>
+                                    </form>
+                                    <form action="" method="post" style="display: inline;">
+                                        <input type="hidden" name="event_id" value="<?php echo $pinned_event['id']; ?>">
+                                        <button type="submit" class="btn btn-info" name="pin_event">
+                                            <i class="fas fa-thumbtack"></i> Unpin
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Category Boxes -->
+                <?php
+                $categories = [
+                    'AMEN Fellowship',
+                    'WOW Fellowship',
+                    'Youth Fellowship',
+                    'Sunday School Outreach'
+                ];
+                foreach ($categories as $category):
+                    $category_events = array_filter($events, function($event) use ($category, $pinned_event) {
+                        return $event['category'] === $category && (!$pinned_event || $event['id'] != $pinned_event['id']);
+                    });
+                    $all_category_events = $category_events;
+                ?>
+                    <div class="event-category">
+                        <h3><?php echo $category; ?></h3>
+                        <?php if (empty($all_category_events)): ?>
+                            <p>No upcoming events in this category.</p>
+                        <?php else: ?>
+                            <?php foreach ($category_events as $event): ?>
+                                <div class="event-item event-search-item">
+                                    <div class="event-details">
+                                        <?php if (!empty($event['event_image'])): ?>
+                                            <img src="<?php echo htmlspecialchars($event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
+                                        <?php endif; ?>
+                                        <h4><?php echo $event['title']; ?></h4>
+                                        <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
+                                        <p><?php echo $event['description']; ?></p>
+                                        <?php if ($is_admin): ?>
+                                            <div class="event-actions">
+                                                <form action="" method="post" style="display: inline;">
+                                                    <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                    <button type="submit" class="btn btn-warning" name="prepare_edit">
+                                                        <i class="fas fa-edit"></i> Edit
+                                                    </button>
+                                                </form>
+                                                <form action="" method="post" style="display: inline;">
+                                                    <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                    <button type="submit" class="btn btn-danger" name="remove_event">
+                                                        <i class="fas fa-trash"></i> Remove
+                                                    </button>
+                                                </form>
+                                                <form action="" method="post" style="display: inline;">
+                                                    <input type="hidden" name="event_id" value="<?php echo $event['id']; ?>">
+                                                    <button type="submit" class="btn btn-info" name="pin_event">
+                                                        <i class="fas fa-thumbtack"></i> Pin
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </main>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        // Drawer Navigation JS (copied from financialreport.php)
+        document.addEventListener('DOMContentLoaded', function() {
+            const navToggle = document.getElementById('nav-toggle');
+            const drawer = document.getElementById('drawer-navigation');
+            const drawerClose = document.getElementById('drawer-close');
+            const overlay = document.getElementById('drawer-overlay');
+
+            // Open drawer
+            navToggle.addEventListener('click', function() {
+                drawer.classList.add('open');
+                overlay.classList.add('open');
+                document.body.style.overflow = 'hidden';
+            });
+
+            // Close drawer
+            function closeDrawer() {
+                drawer.classList.remove('open');
+                overlay.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+
+            drawerClose.addEventListener('click', closeDrawer);
+            overlay.addEventListener('click', closeDrawer);
+
+            // Close drawer on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeDrawer();
+                }
+            });
+        });
 
         // Event form handling
         $(document).ready(function() {
@@ -1328,40 +1305,6 @@ $pinned_event = getPinnedEvent($conn);
                 });
             });
         });
-
-        // Custom Drawer Navigation JavaScript
-        document.addEventListener('DOMContentLoaded', function() {
-            const navToggle = document.getElementById('nav-toggle');
-            const drawer = document.getElementById('drawer-navigation');
-            const drawerClose = document.getElementById('drawer-close');
-            const overlay = document.getElementById('drawer-overlay');
-
-            // Open drawer
-            navToggle.addEventListener('click', function() {
-                drawer.classList.add('open');
-                overlay.classList.add('open');
-                document.body.style.overflow = 'hidden';
-            });
-
-            // Close drawer
-            function closeDrawer() {
-                drawer.classList.remove('open');
-                overlay.classList.remove('open');
-                document.body.style.overflow = '';
-            }
-
-            drawerClose.addEventListener('click', closeDrawer);
-            overlay.addEventListener('click', closeDrawer);
-
-            // Close drawer on escape key
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    closeDrawer();
-                }
-            });
-
-
-        });
     </script>
 </body>
-</html>
+</html> 

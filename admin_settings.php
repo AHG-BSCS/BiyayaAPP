@@ -1,5 +1,5 @@
 <?php
-// Member Settings page
+// Admin Settings page
 session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
@@ -7,19 +7,13 @@ require_once 'user_functions.php';
 // Get church logo
 $church_logo = getChurchLogo($conn);
 
-// Check if user is logged in
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-            header("Location: index.php");
-    exit;
-}
-
-// Check if the user is a member
-$is_member = ($_SESSION["user_role"] === "Member");
-
-if (!$is_member) {
+// Check if user is logged in and is administrator only
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Administrator") {
     header("Location: index.php");
     exit;
 }
+// Define $is_admin as true for use in the rest of the file
+$is_admin = true;
 
 // Site configuration
 $site_settings = getSiteSettings($conn);
@@ -103,7 +97,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     error_log("Profile updated successfully. New profile picture: " . $profile_data['profile_picture']);
                     
                     // Redirect to refresh the page and show updated profile picture
-                    header("Location: member_settings.php?updated=1");
+                    header("Location: admin_settings.php?updated=1");
                     exit;
                 } else {
                     $message = "Failed to update profile.";
@@ -136,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             error_log("Profile picture reset successfully");
             
             // Redirect to refresh the page
-            header("Location: member_settings.php?updated=1");
+            header("Location: admin_settings.php?updated=1");
             exit;
         } else {
             $message = "Failed to reset profile picture.";
@@ -152,7 +146,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Member Settings | <?php echo $church_name; ?></title>
+    <title>Admin Settings | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -167,432 +161,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             --danger-color: #f44336;
             --info-color: #2196f3;
         }
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
         body {
             background-color: #f5f5f5;
             color: var(--primary-color);
             line-height: 1.6;
         }
-        
         .dashboard-container {
             display: flex;
             min-height: 100vh;
         }
-        
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--primary-color);
-            color: var(--white);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-        
-        .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .sidebar-header img {
-            height: 60px;
-            margin-bottom: 10px;
-        }
-        
-        .sidebar-header h3 {
-            font-size: 18px;
-        }
-        
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-        
-        .sidebar-menu ul {
-            list-style: none;
-        }
-        
-        .sidebar-menu li {
-            margin-bottom: 5px;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: var(--white);
-            text-decoration: none;
-            transition: background-color 0.3s;
-        }
-        
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        .sidebar-menu a.active {
-            background-color: var(--accent-color);
-        }
-        
-        .sidebar-menu i {
-            margin-right: 10px;
-            width: 20px;
-            text-align: center;
-        }
-        
-        .content-area {
-            flex: 1;
-            padding: 20px;
-            margin-left: 0 !important;
-            max-width: 100%;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--white);
-            padding: 15px 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            margin-top: 60px;
-        }
-        
-        .top-bar h2 {
-            font-size: 24px;
-        }
-        
-        .user-profile {
-            display: flex;
-            align-items: center;
-        }
-        
-        .user-profile .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--accent-color);
-            color: var(--white);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 10px;
-            overflow: hidden;
-        }
-        
-        .user-profile .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .user-info {
-            margin-right: 15px;
-        }
-        
-        .user-info p {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .logout-btn {
-            background-color: #f0f0f0;
-            color: var(--primary-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        
-        .logout-btn:hover {
-            background-color: #e0e0e0;
-        }
-        
-        .settings-content {
-            margin-top: 20px;
-        }
-        
-        .tab-navigation {
-            display: none;
-        }
-        
-        .tab-content {
-            background-color: var(--white);
-            border-radius: 5px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        .tab-pane {
-            display: none;
-        }
-        
-        .tab-pane.active {
-            display: block;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-        
-        .form-control {
-            width: 100%;
-            padding: 10px 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        .form-control:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-        
-        .form-row {
-            display: flex;
-            gap: 20px;
-        }
-        
-        .form-col {
-            flex: 1;
-        }
-        
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: var(--accent-color);
-            color: var(--white);
-            text-decoration: none;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background-color 0.3s;
-        }
-        
-        .btn:hover {
-            background-color: rgb(0, 112, 9);
-        }
-        
-        .btn i {
-            margin-right: 5px;
-        }
-        
-        .btn-outline {
-            background-color: transparent;
-            border: 1px solid var(--accent-color);
-            color: var(--accent-color);
-        }
-        
-        .btn-outline:hover {
-            background-color: var(--accent-color);
-            color: var(--white);
-        }
-        
-        .alert {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            transition: opacity 0.3s ease;
-        }
-        
-        .alert i {
-            margin-right: 10px;
-            font-size: 20px;
-        }
-        
-        .alert-success {
-            background-color: rgba(76, 175, 80, 0.1);
-            color: var(--success-color);
-        }
-        
-        .alert-danger {
-            background-color: rgba(244, 67, 54, 0.1);
-            color: var(--danger-color);
-        }
-        
-        .info-box {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-        
-        .info-box p {
-            margin-bottom: 8px;
-        }
-        
-        .info-box p:last-child {
-            margin-bottom: 0;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        
-        .live-alert {
-          display: block;
-          background: linear-gradient(90deg, #e3f0ff 0%, #f5faff 100%);
-          color: #155fa0;
-          border: 1px solid #b6d4fe;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(21,95,160,0.07);
-          padding: 12px 18px;
-          margin-bottom: 16px;
-          font-size: 14px;
-          position: relative;
-          transition: background 0.2s;
-        }
-        .live-alert .live-alert-header {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 600;
-          font-size: 15px;
-        }
-        .live-alert .live-alert-body {
-          margin: 6px 0 10px 0;
-          font-size: 13px;
-        }
-        .live-alert .live-alert-actions {
-          display: flex;
-          gap: 8px;
-        }
-        .live-alert .live-alert-btn {
-          background: #155fa0;
-          color: #fff;
-          border: none;
-          border-radius: 6px;
-          padding: 4px 12px;
-          font-size: 13px;
-          cursor: pointer;
-          transition: background 0.2s;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .live-alert .live-alert-btn:hover {
-          background: #0d4377;
-        }
-        .live-alert .live-alert-dismiss {
-          background: transparent;
-          color: #155fa0;
-          border: 1px solid #b6d4fe;
-          padding: 4px 12px;
-        }
-        .live-alert .live-alert-dismiss:hover {
-          background: #e3f0ff;
-        }
-        @media (prefers-color-scheme: dark) {
-          .live-alert {
-            background: linear-gradient(90deg, #1e293b 0%, #334155 100%);
-            color: #93c5fd;
-            border: 1px solid #334155;
-            box-shadow: 0 2px 8px rgba(30,41,59,0.12);
-          }
-          .live-alert .live-alert-btn {
-            background: #2563eb;
-            color: #fff;
-          }
-          .live-alert .live-alert-btn:hover {
-            background: #1e40af;
-          }
-          .live-alert .live-alert-dismiss {
-            color: #93c5fd;
-            border: 1px solid #334155;
-            background: transparent;
-          }
-          .live-alert .live-alert-dismiss:hover {
-            background: #1e293b;
-          }
-        }
-        
-        @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-            }
-            .sidebar-header h3, .sidebar-menu span {
-                display: none;
-            }
-            .content-area {
-                margin-left: 70px;
-            }
-            .form-row {
-                flex-direction: column;
-                gap: 0;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
-            .tab-navigation {
-                flex-direction: column;
-            }
-            .tab-navigation a {
-                padding: 10px;
-            }
-        }
-        /* Drawer Navigation CSS (from member_collection.php) */
+        /* --- Drawer Navigation Styles (EXACT from superadmin_dashboard.php) --- */
         .nav-toggle-container {
             position: fixed;
             top: 20px;
@@ -798,21 +382,182 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             opacity: 1;
             visibility: visible;
         }
-        @media (max-width: 992px) {
-            .content-area {
-                margin-left: 0 !important;
+        .content-area {
+            flex: 1;
+            padding: 20px 24px 24px 24px;
+            margin-left: 0;
+            transition: margin-left 0.3s;
+        }
+        /* Responsive Drawer Navigation (EXACT from superadmin_dashboard.php) */
+        @media (max-width: 900px) {
+            .custom-drawer {
+                left: -300px;
+                width: 80vw;
+                min-width: 200px;
+                max-width: 320px;
             }
+            .custom-drawer.open {
+                left: 0;
+            }
+            .content-area {
+                margin-left: 0;
+            }
+            .nav-toggle-container {
+                display: block;
+            }
+        }
+        @media (max-width: 700px) {
+            .custom-drawer {
+                width: 90vw;
+                min-width: 180px;
+                max-width: 98vw;
+            }
+            .drawer-link {
+                padding: 12px 10px;
+                font-size: 14px;
+            }
+            .drawer-header {
+                padding: 14px 10px 8px 10px;
+            }
+            .drawer-profile {
+                padding: 16px 10px 10px 10px;
+            }
+        }
+        /* --- Settings Content Styles (match member_settings.php) --- */
+        .settings-content {
+            margin-top: 20px;
+        }
+        .tab-navigation {
+            display: none;
+        }
+        .tab-content {
+            background-color: var(--white);
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 0;
+        }
+        .tab-pane {
+            display: none;
+        }
+        .tab-pane.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        .form-col {
+            flex: 1;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: var(--accent-color);
+            color: var(--white);
+            text-decoration: none;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: rgb(0, 112, 9);
+        }
+        .btn i {
+            margin-right: 5px;
+        }
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        .btn-outline:hover {
+            background-color: var(--accent-color);
+            color: var(--white);
+        }
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            transition: opacity 0.3s ease;
+        }
+        .alert i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        .alert-success {
+            background-color: rgba(76, 175, 80, 0.1);
+            color: var(--success-color);
+        }
+        .alert-danger {
+            background-color: rgba(244, 67, 54, 0.1);
+            color: var(--danger-color);
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .info-box p {
+            margin-bottom: 8px;
+        }
+        .info-box p:last-child {
+            margin-bottom: 0;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--white);
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            margin-top: 60px;
         }
     </style>
 </head>
 <body>
     <div class="dashboard-container">
-        <!-- Drawer Navigation Markup (from member_collection.php) -->
+        <!-- Navigation Toggle Button -->
         <div class="nav-toggle-container">
            <button class="nav-toggle-btn" type="button" id="nav-toggle">
            <i class="fas fa-bars"></i> Menu
            </button>
         </div>
+        <!-- Custom Drawer Navigation -->
         <div id="drawer-navigation" class="custom-drawer">
             <div class="drawer-header">
                 <div class="drawer-logo-section">
@@ -825,13 +570,54 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <div class="drawer-content">
                 <ul class="drawer-menu">
-                    <li><a href="member_dashboard.php" class="drawer-link <?php echo $current_page == 'member_dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i><span>Dashboard</span></a></li>
-                    <li><a href="member_events.php" class="drawer-link <?php echo $current_page == 'member_events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i><span>Events</span></a></li>
-                    <li><a href="member_messages.php" class="drawer-link <?php echo $current_page == 'member_messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i><span>Messages</span></a></li>
-                    <li><a href="member_prayers.php" class="drawer-link <?php echo $current_page == 'member_prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i><span>Prayer Requests</span></a></li>
-                    <li><a href="member_financialreport.php" class="drawer-link <?php echo $current_page == 'member_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
-                    <li><a href="member_collection.php" class="drawer-link <?php echo $current_page == 'member_collection.php' ? 'active' : ''; ?>"><i class="fas fa-list-alt"></i><span>My Report</span></a></li>
-                    <li><a href="member_settings.php" class="drawer-link <?php echo $current_page == 'member_settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
+                    <li>
+                        <a href="dashboard.php" class="drawer-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_events.php" class="drawer-link <?php echo $current_page == 'admin_events.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Events</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_prayers.php" class="drawer-link <?php echo $current_page == 'admin_prayers.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-hands-praying"></i>
+                            <span>Prayer Requests</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_messages.php" class="drawer-link <?php echo $current_page == 'admin_messages.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-video"></i>
+                            <span>Messages</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="financialreport.php" class="drawer-link <?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Financial Reports</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_expenses.php" class="drawer-link <?php echo $current_page == 'admin_expenses.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-receipt"></i>
+                            <span>Monthly Expenses</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="member_contributions.php" class="drawer-link <?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-list-alt"></i>
+                            <span>Stewardship Report</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="admin_settings.php" class="drawer-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
                 </ul>
             </div>
             <div class="drawer-profile">
@@ -839,56 +625,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Member'); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
                 </form>
             </div>
         </div>
+        <!-- Drawer Overlay -->
         <div id="drawer-overlay" class="drawer-overlay"></div>
-        <!-- Drawer Navigation JS (from member_collection.php) -->
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const drawer = document.getElementById('drawer-navigation');
-            const overlay = document.getElementById('drawer-overlay');
-            const openBtn = document.getElementById('nav-toggle');
-            const closeBtn = document.getElementById('drawer-close');
-
-            function openDrawer() {
-                drawer.classList.add('open');
-                overlay.classList.add('open');
-                if (window.innerWidth > 992) {
-                    document.body.classList.add('drawer-open');
-                }
-            }
-            function closeDrawer() {
-                drawer.classList.remove('open');
-                overlay.classList.remove('open');
-                document.body.classList.remove('drawer-open');
-            }
-
-            openBtn.addEventListener('click', openDrawer);
-            closeBtn.addEventListener('click', closeDrawer);
-            overlay.addEventListener('click', closeDrawer);
-
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') closeDrawer();
-            });
-
-            // Remove drawer-open class on resize if needed
-            window.addEventListener('resize', function() {
-                if (window.innerWidth <= 992) {
-                    document.body.classList.remove('drawer-open');
-                }
-            });
-        });
-        </script>
+        
         <main class="content-area">
             <?php
             $live_message = getLiveMessage($conn);
@@ -903,7 +654,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 The church service is currently live! Join us now or watch the ongoing stream below.
               </div>
               <div class="live-alert-actions">
-                <a href="member_messages.php?message=0" class="live-alert-btn">
+                <a href="messages.php?message=0" class="live-alert-btn">
                   <svg width="13" height="13" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 14"><path d="M10 0C4.612 0 0 5.336 0 7c0 1.742 3.546 7 10 7 6.454 0 10-5.258 10-7 0-1.664-4.612-7-10-7Zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/></svg>
                   View Live
                 </a>
@@ -913,7 +664,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php endif; ?>
             <div class="top-bar">
                 <div>
-                    <h2>Settings</h2>
+                    <h2>Admin Settings</h2>
                     <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
                         Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
                     </p>
@@ -932,7 +683,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 <div class="tab-content">
                     <div class="tab-pane active" id="profile-settings">
-                        <h3>Profile Settings</h3>
+                        <h3 style="background: none; color: inherit;">Profile Settings</h3>
                         <p>Update your profile details and picture.</p>
                         
                         <form action="" method="post" enctype="multipart/form-data">
@@ -1028,46 +779,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 
     <script>
+        // Custom Drawer Navigation JavaScript (EXACT from superadmin_dashboard.php)
         document.addEventListener('DOMContentLoaded', function() {
-            // Auto-hide success messages after 3 seconds
-            const messageAlert = document.getElementById('message-alert');
-            if (messageAlert) {
-                setTimeout(function() {
-                    messageAlert.style.opacity = '0';
-                    setTimeout(function() {
-                        messageAlert.style.display = 'none';
-                    }, 300);
-                }, 3000);
-            }
-            
-            // Tab navigation
-            const tabLinks = document.querySelectorAll('.tab-navigation a');
-            const tabPanes = document.querySelectorAll('.tab-pane');
-            
-            tabLinks.forEach(function(link) {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    
-                    // Remove active class from all tabs
-                    tabLinks.forEach(function(link) {
-                        link.classList.remove('active');
-                    });
-                    
-                    // Hide all tab panes
-                    tabPanes.forEach(function(pane) {
-                        pane.classList.remove('active');
-                    });
-                    
-                    // Add active class to clicked tab
-                    this.classList.add('active');
-                    
-                    // Show the corresponding tab pane
-                    const tabId = this.getAttribute('data-tab');
-                    document.getElementById(tabId).classList.add('active');
-                });
-            });
-            
+            const navToggle = document.getElementById('nav-toggle');
+            const drawer = document.getElementById('drawer-navigation');
+            const drawerClose = document.getElementById('drawer-close');
+            const overlay = document.getElementById('drawer-overlay');
 
+            // Open drawer
+            navToggle.addEventListener('click', function() {
+                drawer.classList.add('open');
+                overlay.classList.add('open');
+                document.body.style.overflow = 'hidden';
+            });
+
+            // Close drawer
+            function closeDrawer() {
+                drawer.classList.remove('open');
+                overlay.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+
+            drawerClose.addEventListener('click', closeDrawer);
+            overlay.addEventListener('click', closeDrawer);
+
+            // Close drawer on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeDrawer();
+                }
+            });
         });
     </script>
 </body>

@@ -7,16 +7,13 @@ require_once 'user_functions.php';
 // Get church logo
 $church_logo = getChurchLogo($conn);
 
-// Check if user is logged in
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
+// Check if user is logged in and is super administrator only
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Super Admin") {
             header("Location: index.php");
     exit;
 }
-// Restrict access to Administrator only
-if ($_SESSION["user_role"] !== "Administrator") {
-    header("Location: index.php");
-    exit;
-}
+// Define $is_super_admin as true for use in the rest of the file
+$is_super_admin = true;
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
@@ -30,36 +27,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
 if (!isset($_SESSION["user_email"])) {
     $_SESSION["user_email"] = "admin@example.com";
 }
-
-// Add random Bible verse for the day (copied from superadmin_dashboard.php)
-$bible_verses = [
-    [
-        'ref' => 'Philippians 4:13',
-        'text' => 'I can do all things through Christ who strengthens me.'
-    ],
-    [
-        'ref' => 'Jeremiah 29:11',
-        'text' => 'For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future.'
-    ],
-    [
-        'ref' => 'Psalm 23:1',
-        'text' => 'The Lord is my shepherd; I shall not want.'
-    ],
-    [
-        'ref' => 'Romans 8:28',
-        'text' => 'And we know that in all things God works for the good of those who love him, who have been called according to his purpose.'
-    ],
-    [
-        'ref' => 'Proverbs 3:5-6',
-        'text' => 'Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.'
-    ],
-    [
-        'ref' => 'Isaiah 41:10',
-        'text' => 'So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you; I will uphold you with my righteous right hand.'
-    ],
-];
-$verse_index = intval(date('z')) % count($bible_verses);
-$verse_of_the_day = $bible_verses[$verse_index];
 
 // Get total members count from database
 try {
@@ -109,6 +76,36 @@ $dashboard_stats = [
     "pending_prayers" => $total_prayers
 ];
 
+// Add random Bible verse for the day (copied from member_dashboard.php)
+$bible_verses = [
+    [
+        'ref' => 'Philippians 4:13',
+        'text' => 'I can do all things through Christ who strengthens me.'
+    ],
+    [
+        'ref' => 'Jeremiah 29:11',
+        'text' => 'For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future.'
+    ],
+    [
+        'ref' => 'Psalm 23:1',
+        'text' => 'The Lord is my shepherd; I shall not want.'
+    ],
+    [
+        'ref' => 'Romans 8:28',
+        'text' => 'And we know that in all things God works for the good of those who love him, who have been called according to his purpose.'
+    ],
+    [
+        'ref' => 'Proverbs 3:5-6',
+        'text' => 'Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.'
+    ],
+    [
+        'ref' => 'Isaiah 41:10',
+        'text' => 'So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you; I will uphold you with my righteous right hand.'
+    ],
+];
+$verse_index = intval(date('z')) % count($bible_verses);
+$verse_of_the_day = $bible_verses[$verse_index];
+
 ?>
 
 <!DOCTYPE html>
@@ -116,7 +113,7 @@ $dashboard_stats = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard | <?php echo $church_name; ?></title>
+    <title>Super Admin Dashboard | <?php echo $church_name; ?></title>
     <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($church_logo); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -220,8 +217,8 @@ $dashboard_stats = [
 
         .content-area {
             flex: 1;
-            margin-left: var(--sidebar-width);
             padding: 20px;
+            margin-left: 0;
         }
 
         .top-bar {
@@ -233,7 +230,6 @@ $dashboard_stats = [
             border-radius: 5px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            margin-top: 60px;
         }
 
         .top-bar h2 {
@@ -296,90 +292,328 @@ $dashboard_stats = [
 
         .dashboard-content {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-top: 20px;
         }
-
-        .card {
-            background-color: var(--white);
+        .summary-card {
+            background: #fff;
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             transition: transform 0.3s;
+                position: relative;
+            border: 1px solid #f0f0f0;
+                display: flex;
+            align-items: center;
+            margin-bottom: 0;
+            min-width: 0;
+                width: 100%;
+            max-width: none;
         }
-
-        .card:hover {
+        .summary-card:hover {
             transform: translateY(-10px);
         }
-
-        .card h3 {
-            margin-bottom: 15px;
-            font-size: 18px;
+        .summary-card.full-width {
+            grid-column: 1 / -1;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+        .summary-card .card-icon {
+            background: #fff;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 20px;
+        }
+        .summary-card .card-content {
+            flex: 1;
+            text-align: left;
+        }
+        .summary-card h3 {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .summary-card .card-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 6px;
+            line-height: 1;
+        }
+        .summary-card .card-subtitle {
+            font-size: 13px;
+            color: #888;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .summary-card .card-decoration {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+            border-radius: 0 0 16px 16px;
+        }
+        .summary-card:hover .card-decoration {
+            transform: translateX(100%);
         }
 
-        .card p {
+        /* Individual Card Themes */
+        .members-card {
+            background: var(--white);
+            border-left: 4px solid #ffffff;
+        }
+
+        .members-card .card-icon {
+            background: #ffffff;
+        }
+
+        .events-card {
+            background: var(--white);
+            border-left: 4px solid #ffffff;
+        }
+
+        .events-card .card-icon {
+            background: #ffffff;
+        }
+
+        .prayers-card {
+            background: var(--white);
+            border-left: 4px solid #ffffff;
+        }
+
+        .prayers-card .card-icon {
+            background: #ffffff;
+        }
+
+        /* Gender Card Styling */
+        .gender-card {
+            background: var(--white);
+            border-left: 4px solid #ffffff;
+        }
+
+        .gender-card .card-icon {
+            background: #ffffff;
+        }
+
+        /* Gender Stats Styling */
+        .gender-stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .gender-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+
+        .gender-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .gender-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .gender-item.male .gender-icon {
+            background: #ffffff;
+        }
+
+        .gender-item.female .gender-icon {
+            background: #ffffff;
+        }
+
+        .gender-item:hover .gender-icon {
+            transform: scale(1.05);
+        }
+
+        .gender-info {
+            flex: 1;
+        }
+
+        .gender-number {
             font-size: 24px;
+            font-weight: 700;
+            color: #333;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .gender-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Gender Chart Container */
+        .gender-card .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Animation for gender items */
+        .gender-item {
+            animation: slideInUp 0.6s ease-out;
+        }
+
+        .gender-item:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .gender-item:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Pulse animation for gender icons */
+        .gender-icon {
+            animation: genderPulse 3s infinite;
+        }
+
+        @keyframes genderPulse {
+            0% {
+                box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3);
+            }
+            50% {
+                box-shadow: 0 6px 20px rgba(255, 255, 255, 0.5);
+            }
+            100% {
+                box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3);
+            }
+        }
+
+        /* Animation for card numbers */
+        .card-number {
+            animation: countUp 2s ease-out;
+        }
+
+        @keyframes countUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Pulse animation for icons */
+        .card-icon {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 8px 25px rgba(255, 255, 255, 0.4);
+            }
+            50% {
+                box-shadow: 0 8px 35px rgba(255, 255, 255, 0.6);
+            }
+            100% {
+                box-shadow: 0 8px 25px rgba(255, 255, 255, 0.4);
+            }
+        }
+        .prediction-chart {
+            height: 300px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .prediction-chart canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .prediction-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .prediction-metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .prediction-metric:last-child {
+            margin-bottom: 0;
+        }
+        .prediction-metric .label {
+            color: #666;
+        }
+        .prediction-metric .value {
             font-weight: bold;
             color: var(--accent-color);
         }
-
-        .card i {
-            font-size: 30px;
-            margin-bottom: 10px;
-            color: var(--accent-color);
+        .prediction-metric .value.positive {
+            color: #28a745;
+        }
+        .prediction-metric .value.negative {
+            color: #dc3545;
         }
 
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-                padding-top: 10px;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
-        }
-
-        /* --- Drawer Navigation Styles (copied from superadmin_dashboard.php) --- */
+        /* Custom Drawer Navigation Styles */
         .nav-toggle-container {
             position: fixed;
             top: 20px;
             left: 20px;
             z-index: 50;
         }
+
         .nav-toggle-btn {
             background-color: #3b82f6;
             color: white;
@@ -395,9 +629,11 @@ $dashboard_stats = [
             align-items: center;
             gap: 8px;
         }
+
         .nav-toggle-btn:hover {
             background-color: #2563eb;
         }
+
         .custom-drawer {
             position: fixed;
             top: 0;
@@ -414,9 +650,11 @@ $dashboard_stats = [
             flex-direction: column;
             justify-content: space-between;
         }
+
         .custom-drawer.open {
             left: 0;
         }
+
         .drawer-header {
             padding: 20px;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
@@ -425,6 +663,7 @@ $dashboard_stats = [
             align-items: flex-start;
             min-height: 120px;
         }
+
         .drawer-logo-section {
             display: flex;
             flex-direction: column;
@@ -434,6 +673,7 @@ $dashboard_stats = [
             justify-content: center;
             flex: 1;
         }
+
         .drawer-logo {
             height: 60px;
             width: auto;
@@ -441,6 +681,7 @@ $dashboard_stats = [
             object-fit: contain;
             flex-shrink: 0;
         }
+
         .drawer-title {
             font-size: 16px;
             font-weight: bold;
@@ -452,6 +693,7 @@ $dashboard_stats = [
             line-height: 1.2;
             min-height: 20px;
         }
+
         .drawer-close {
             background: none;
             border: none;
@@ -460,54 +702,64 @@ $dashboard_stats = [
             cursor: pointer;
             padding: 5px;
         }
+
         .drawer-close:hover {
             color: #666;
         }
+
         .drawer-content {
             padding: 20px 0 0 0;
             flex: 1;
         }
+
         .drawer-menu {
             list-style: none;
             margin: 0;
             padding: 0;
         }
+
         .drawer-menu li {
             margin: 0;
         }
+
         .drawer-link {
             display: flex;
             align-items: center;
-            padding: 12px 18px;
+            padding: 12px 18px; /* reduced padding */
             color: #3a3a3a;
             text-decoration: none;
-            font-size: 15px;
+            font-size: 15px; /* reduced font size */
             font-weight: 500;
-            gap: 10px;
+            gap: 10px; /* reduced gap */
             border-left: 4px solid transparent;
             transition: background 0.2s, border-color 0.2s, color 0.2s;
             position: relative;
         }
         .drawer-link i {
-            font-size: 18px;
+            font-size: 18px; /* reduced icon size */
             min-width: 22px;
             text-align: center;
         }
+
         .drawer-link.active {
             background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%);
             border-left: 4px solid var(--accent-color);
             color: var(--accent-color);
         }
+
         .drawer-link.active i {
             color: var(--accent-color);
         }
+
         .drawer-link:hover {
             background: rgba(0, 139, 30, 0.07);
             color: var(--accent-color);
         }
+
         .drawer-link:hover i {
             color: var(--accent-color);
         }
+
         .drawer-profile {
             padding: 24px 20px 20px 20px;
             border-top: 1px solid #e5e7eb;
@@ -563,6 +815,7 @@ $dashboard_stats = [
         .drawer-profile .logout-btn:hover {
             background: #d32f2f;
         }
+
         .drawer-overlay {
             position: fixed;
             top: 0;
@@ -575,195 +828,88 @@ $dashboard_stats = [
             visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s ease;
         }
+
         .drawer-overlay.open {
             opacity: 1;
             visibility: visible;
         }
+
         /* Ensure content doesn't overlap with the button */
         .content-area {
             padding-top: 80px;
-            margin-left: 0;
-            padding: 20px;
         }
-        /* --- SUMMARY CARDS (MATCH SUPERADMIN DASHBOARD) --- */
-        .dashboard-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .summary-card {
-            background: #fff;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-            position: relative;
-            border: 1px solid #f0f0f0;
+        /* --- ULTRA-COMPACT SUMMARY CARDS --- */
+        .simple-summary {
             display: flex;
-            align-items: center;
-            margin-bottom: 0;
-            min-width: 0;
-            width: 100%;
-            max-width: none;
+            gap: 4px;
+            margin-bottom: 8px;
         }
-        .summary-card:hover {
-            transform: translateY(-10px);
-        }
-        .summary-card.full-width {
-            grid-column: 1 / -1;
+        .simple-card {
+            background: #fff;
             border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            margin-bottom: 20px;
-        }
-        .summary-card .card-icon {
-            background: #fff;
-            border-radius: 50%;
-            width: 48px;
-            height: 48px;
+            padding: 4px 0 2px 0;
+            box-shadow: none;
+            text-align: center;
+            border: 1px solid #eee;
+            min-width: 80px;
+            min-height: unset;
+            margin: 0;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
-            margin-right: 20px;
         }
-        .summary-card .card-content {
-            flex: 1;
-            text-align: left;
-        }
-        .summary-card h3 {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .summary-card .card-number {
-            font-size: 36px;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 6px;
-            line-height: 1;
-            animation: countUp 2s ease-out;
-        }
-        @keyframes countUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .summary-card .card-subtitle {
-            font-size: 13px;
-            color: #888;
+        .simple-card-title {
+            font-size: 10px;
+            color: #444;
+            margin-bottom: 0;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            line-height: 1.1;
         }
-        .summary-card .card-decoration {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
-            transform: translateX(-100%);
-            transition: transform 0.6s ease;
-            border-radius: 0 0 16px 16px;
+        .simple-card-value {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #008b1e;
+            line-height: 1.1;
         }
-        .summary-card:hover .card-decoration {
-            transform: translateX(100%);
+        .simple-gender {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 0;
         }
-        /* Individual Card Themes */
-        .members-card,
-        .events-card,
-        .prayers-card,
-        .gender-card {
-            background: var(--white);
-            border-left: 4px solid #ffffff;
+        .simple-gender-item {
+            text-align: center;
         }
-        .members-card .card-icon,
-        .events-card .card-icon,
-        .prayers-card .card-icon,
-        .gender-card .card-icon {
-            background: #ffffff;
+        .simple-gender-value {
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #444;
+            line-height: 1.1;
+            padding: 0 2px;
         }
         .summary-card .card-icon i,
         .gender-icon i {
             color: #008b1e !important;
             font-size: 24px;
         }
-        /* Gender Card Styling */
-        .gender-stats {
-            display: flex;
-            justify-content: space-between;
-            gap: 15px;
-            margin: 15px 0;
+        /* Remove per-card border-left color and background overrides */
+        .members-card,
+        .events-card,
+        .prayers-card,
+        .gender-card {
+            border-left: none !important;
         }
-        .gender-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px;
-            border-radius: 8px;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
-            flex: 1;
-        }
-        .gender-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        .gender-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            color: white;
-            transition: all 0.3s ease;
-        }
-        .gender-item.male .gender-icon,
-        .gender-item.female .gender-icon {
-            background: #ffffff;
-        }
-        .gender-item:hover .gender-icon {
-            transform: scale(1.05);
-        }
-        .gender-info {
-            flex: 1;
-        }
-        .gender-number {
-            font-size: 24px;
-            font-weight: 700;
-            color: #333;
-            line-height: 1;
-            margin-bottom: 2px;
-            animation: countUp 2s ease-out;
-        }
-        .gender-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        /* Remove chart, prediction, and unused code below */
     </style>
 </head>
 <body>
     <div class="dashboard-container">
+        <!-- Navigation Toggle Button -->
         <div class="nav-toggle-container">
            <button class="nav-toggle-btn" type="button" id="nav-toggle">
            <i class="fas fa-bars"></i> Menu
            </button>
         </div>
+
         <!-- Custom Drawer Navigation -->
         <div id="drawer-navigation" class="custom-drawer">
             <div class="drawer-header">
@@ -778,53 +924,63 @@ $dashboard_stats = [
             <div class="drawer-content">
                 <ul class="drawer-menu">
                     <li>
-                        <a href="dashboard.php" class="drawer-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+                        <a href="superadmin_dashboard.php" class="drawer-link <?php echo $current_page == 'superadmin_dashboard.php' ? 'active' : ''; ?>">
                             <i class="fas fa-home"></i>
                             <span>Dashboard</span>
                         </a>
                     </li>
                     <li>
-                        <a href="admin_events.php" class="drawer-link <?php echo $current_page == 'admin_events.php' ? 'active' : ''; ?>">
+                        <a href="events.php" class="drawer-link <?php echo $current_page == 'events.php' ? 'active' : ''; ?>">
                             <i class="fas fa-calendar-alt"></i>
                             <span>Events</span>
                         </a>
                     </li>
                     <li>
-                        <a href="admin_prayers.php" class="drawer-link <?php echo $current_page == 'admin_prayers.php' ? 'active' : ''; ?>">
+                        <a href="prayers.php" class="drawer-link <?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>">
                             <i class="fas fa-hands-praying"></i>
                             <span>Prayer Requests</span>
                         </a>
                     </li>
                     <li>
-                        <a href="admin_messages.php" class="drawer-link <?php echo $current_page == 'admin_messages.php' ? 'active' : ''; ?>">
+                        <a href="messages.php" class="drawer-link <?php echo $current_page == 'messages.php' ? 'active' : ''; ?>">
                             <i class="fas fa-video"></i>
                             <span>Messages</span>
                         </a>
                     </li>
                     <li>
-                        <a href="financialreport.php" class="drawer-link <?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>">
+                        <a href="member_records.php" class="drawer-link <?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-address-book"></i>
+                            <span>Member Records</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="superadmin_financialreport.php" class="drawer-link <?php echo $current_page == 'superadmin_financialreport.php' ? 'active' : ''; ?>">
                             <i class="fas fa-chart-line"></i>
                             <span>Financial Reports</span>
                         </a>
                     </li>
+                    <?php if ($is_super_admin): ?>
                     <li>
-                        <a href="admin_expenses.php" class="drawer-link <?php echo $current_page == 'admin_expenses.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-receipt"></i>
-                            <span>Monthly Expenses</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="member_contributions.php" class="drawer-link <?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>">
-                            <i class="fas fa-list-alt"></i>
+                        <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-hand-holding-dollar"></i>
                             <span>Stewardship Report</span>
                         </a>
                     </li>
+                    <?php endif; ?>
                     <li>
-                        <a href="admin_settings.php" class="drawer-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>">
+                        <a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
                             <i class="fas fa-cog"></i>
                             <span>Settings</span>
                         </a>
                     </li>
+                    <?php if ($is_super_admin): ?>
+                    <li>
+                        <a href="login_logs.php" class="drawer-link <?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-sign-in-alt"></i>
+                            <span>Login Logs</span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                 </ul>
             </div>
             <div class="drawer-profile">
@@ -832,29 +988,32 @@ $dashboard_stats = [
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role">Super Admin</div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
                 </form>
             </div>
         </div>
+        
         <!-- Drawer Overlay -->
         <div id="drawer-overlay" class="drawer-overlay"></div>
+        
         <main class="content-area">
             <div class="top-bar">
                 <div>
-                    <h2>Dashboard</h2>
+                    <h2>Super Admin Dashboard</h2>
                     <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
                         Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
                     </p>
                 </div>
             </div>
+            
             <div class="dashboard-content">
                 <div class="summary-card members-card">
                     <div class="card-icon">
@@ -967,37 +1126,111 @@ $dashboard_stats = [
                 }
             });
         });
+    </script>
+    <script>
 
-        // Gender Distribution Chart
-        const ctxGender = document.getElementById('genderChart').getContext('2d');
-        new Chart(ctxGender, {
-            type: 'pie',
+        // Actual vs Predicted Income Chart (placeholder data)
+        // TODO: Replace with real data from financialreport.php
+        const months2025 = <?php echo json_encode($months_2025); ?>;
+        const actualData2025 = <?php echo json_encode($actual_data_2025); ?>;
+        const predictedData2025 = <?php echo json_encode($predicted_data_2025); ?>;
+        const ctxDashboardActualVsPredicted = document.getElementById('dashboardActualVsPredictedChart').getContext('2d');
+        new Chart(ctxDashboardActualVsPredicted, {
+            type: 'bar',
             data: {
-                labels: ['Male', 'Female'],
-                datasets: [{
-                    data: [<?php echo $male_count; ?>, <?php echo $female_count; ?>],
-                    backgroundColor: [
-                        'rgba(54, 162, 235, 0.8)',
-                        'rgba(255, 99, 132, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
-                    borderWidth: 1
-                }]
+                labels: months2025,
+                datasets: [
+                    {
+                        label: 'Actual Income',
+                        data: actualData2025,
+                        backgroundColor: 'rgba(255, 140, 0, 0.85)',
+                        borderColor: 'rgba(255, 140, 0, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Predicted Amount',
+                        data: predictedData2025,
+                        backgroundColor: 'rgba(0, 100, 0, 0.85)',
+                        borderColor: 'rgba(0, 100, 0, 1)',
+                        borderWidth: 2
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount (₱)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    }
+                },
                 plugins: {
                     legend: {
+                        display: true
+                    },
+                    title: {
                         display: true,
-                        position: 'top'
+                        text: 'Actual Income vs Predicted Amount (2025)'
+                    }
+                }
+            }
+        });
+
+        // Monthly Income Predictions Chart (2025)
+        const ctxDashboardPrediction2025 = document.getElementById('dashboardPredictionChart2025').getContext('2d');
+        new Chart(ctxDashboardPrediction2025, {
+            type: 'bar',
+            data: {
+                labels: months2025,
+                datasets: [
+                    {
+                        label: 'Predicted Amount',
+                        data: predictedData2025,
+                        backgroundColor: 'rgba(0, 100, 0, 0.8)',
+                        borderColor: 'rgba(0, 100, 0, 1)',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount (₱)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Month'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Monthly Income Predictions (2025)'
                     }
                 }
             }
         });
     </script>
 </body>
-</html>
+</html> 

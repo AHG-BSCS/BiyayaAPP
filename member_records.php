@@ -9,12 +9,18 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-            header("Location: index.php");
+    header("Location: index.php");
     exit;
 }
 
-// Check if user is an admin
-$is_admin = ($_SESSION["user_role"] === "Administrator");
+// Check if user is a super administrator only
+$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
+
+// Restrict access to Super Administrator only
+if (!$is_super_admin) {
+    header("Location: index.php");
+    exit;
+}
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
@@ -53,30 +59,30 @@ if (!isset($_SESSION['visitor_records'])) {
 
 // Fetch visitor records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Check if table exists first
+    // Use the existing mysqli connection from config.php
     $stmt = $conn->query("SHOW TABLES LIKE 'visitor_records'");
-    if ($stmt->rowCount() > 0) {
+    if ($stmt->num_rows > 0) {
         $stmt = $conn->query("SELECT * FROM visitor_records ORDER BY id");
-        $visitor_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $visitor_records = [];
+        while ($row = $stmt->fetch_assoc()) {
+            $visitor_records[] = $row;
+        }
     } else {
         $visitor_records = [];
     }
-} catch(PDOException $e) {
+} catch(Exception $e) {
     $visitor_records = [];
     // Don't show error message for missing table
 }
 
 // Fetch membership records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
     $stmt = $conn->query("SELECT * FROM membership_records ORDER BY id");
-    $membership_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
+    $membership_records = [];
+    while ($row = $stmt->fetch_assoc()) {
+        $membership_records[] = $row;
+    }
+} catch(Exception $e) {
     $membership_records = [];
     $message = "Error fetching records: " . $e->getMessage();
     $messageType = "danger";
@@ -84,11 +90,12 @@ try {
 
 // Fetch baptismal records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $stmt = $conn->query("SELECT * FROM baptismal_records ORDER BY id");
-    $baptismal_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
+    $baptismal_records = [];
+    while ($row = $stmt->fetch_assoc()) {
+        $baptismal_records[] = $row;
+    }
+} catch(Exception $e) {
     $baptismal_records = [];
     $message = "Error fetching baptismal records: " . $e->getMessage();
     $messageType = "danger";
@@ -96,11 +103,12 @@ try {
 
 // Fetch marriage records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $stmt = $conn->query("SELECT * FROM marriage_records ORDER BY id");
-    $marriage_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
+    $marriage_records = [];
+    while ($row = $stmt->fetch_assoc()) {
+        $marriage_records[] = $row;
+    }
+} catch(Exception $e) {
     $marriage_records = [];
     $message = "Error fetching marriage records: " . $e->getMessage();
     $messageType = "danger";
@@ -108,55 +116,50 @@ try {
 
 // Fetch child dedication records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Check if table exists first
     $stmt = $conn->query("SHOW TABLES LIKE 'child_dedication_records'");
-    if ($stmt->rowCount() > 0) {
+    if ($stmt->num_rows > 0) {
         $stmt = $conn->query("SELECT * FROM child_dedication_records ORDER BY id");
-        $child_dedication_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $child_dedication_records = [];
+        while ($row = $stmt->fetch_assoc()) {
+            $child_dedication_records[] = $row;
+        }
     } else {
         $child_dedication_records = [];
     }
-} catch(PDOException $e) {
+} catch(Exception $e) {
     $child_dedication_records = [];
     // Don't show error message for missing table
 }
 
 // Fetch burial records from database
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Check if table exists first
     $stmt = $conn->query("SHOW TABLES LIKE 'burial_records'");
-    if ($stmt->rowCount() > 0) {
+    if ($stmt->num_rows > 0) {
         $stmt = $conn->query("SELECT * FROM burial_records ORDER BY id");
-        $burial_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $burial_records = [];
+        while ($row = $stmt->fetch_assoc()) {
+            $burial_records[] = $row;
+        }
         // Debug: Log the burial records
         error_log("Burial records fetched: " . print_r($burial_records, true));
     } else {
         $burial_records = [];
         error_log("Burial records table does not exist");
     }
-} catch(PDOException $e) {
+} catch(Exception $e) {
     $burial_records = [];
     error_log("Error fetching burial records: " . $e->getMessage());
     // Don't show error message for missing table
 }
 
 // Handle form submissions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $is_admin) {
-    // Database connection
-
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $is_super_admin) {
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
+        // Use existing mysqli connection from config.php
+        
         // Get the next ID
         $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM membership_records");
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetch_assoc();
         $next_id = "M" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
         // Store POST values in variables
@@ -194,44 +197,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
             email, civil_status, sex, birthday, father_name, mother_name, children, 
             education, course, school, year, company, position, business, 
             spiritual_birthday, inviter, how_know, attendance_duration, previous_church, membership_class_officiant
-        ) VALUES (
-            :id, :name, :join_date, :status, :nickname, :address, :telephone, :cellphone,
-            :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children,
-            :education, :course, :school, :year, :company, :position, :business,
-            :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :membership_class_officiant
-        )";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $stmt = $conn->prepare($sql);
         
-        // Bind parameters using variables
-        $stmt->bindParam(':id', $next_id);
-        $stmt->bindParam(':name', $name);
-        $stmt->bindParam(':join_date', $join_date);
-        $stmt->bindParam(':status', $status);
-        $stmt->bindParam(':nickname', $nickname);
-        $stmt->bindParam(':address', $address);
-        $stmt->bindParam(':telephone', $telephone);
-        $stmt->bindParam(':cellphone', $cellphone);
-        $stmt->bindParam(':email', $email);
-        $stmt->bindParam(':civil_status', $civil_status);
-        $stmt->bindParam(':sex', $sex);
-        $stmt->bindParam(':birthday', $birthday);
-        $stmt->bindParam(':father_name', $father_name);
-        $stmt->bindParam(':mother_name', $mother_name);
-        $stmt->bindParam(':children', $children);
-        $stmt->bindParam(':education', $education);
-        $stmt->bindParam(':course', $course);
-        $stmt->bindParam(':school', $school);
-        $stmt->bindParam(':year', $year);
-        $stmt->bindParam(':company', $company);
-        $stmt->bindParam(':position', $position);
-        $stmt->bindParam(':business', $business);
-        $stmt->bindParam(':spiritual_birthday', $spiritual_birthday);
-        $stmt->bindParam(':inviter', $inviter);
-        $stmt->bindParam(':how_know', $how_know);
-        $stmt->bindParam(':attendance_duration', $attendance_duration);
-        $stmt->bindParam(':previous_church', $previous_church);
-        $stmt->bindParam(':membership_class_officiant', $membership_class_officiant);
+        // Bind parameters using mysqli
+        $stmt->bind_param("ssssssssssssssssssssssssssss", 
+            $next_id, $name, $join_date, $status, $nickname, $address, $telephone, $cellphone,
+            $email, $civil_status, $sex, $birthday, $father_name, $mother_name, $children,
+            $education, $course, $school, $year, $company, $position, $business,
+            $spiritual_birthday, $inviter, $how_know, $attendance_duration, $previous_church, $membership_class_officiant
+        );
 
         // Execute the statement
         $stmt->execute();
@@ -250,7 +226,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
     $conn = null;
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -366,7 +347,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
     $conn = null;
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_super_admin) {
+    $id = $_POST['id'];
+    $type = isset($_POST['type']) ? $_POST['type'] : '';
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -455,7 +442,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
 
 
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -500,7 +492,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
 }
 
 // Handle visitor record save (add or edit)
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -582,7 +579,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
 }
 
 // Handle visitor record deletions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -616,7 +618,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
 }
 
 // Handle burial record save (add or edit)
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -686,7 +693,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
 }
 
 // Handle burial record deletions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -720,7 +732,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $i
 }
 
 // Handle marriage form submissions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -815,7 +832,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is
 }
 
 // Handle marriage record edits
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
 
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
@@ -916,7 +938,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $i
 }
 
 // Handle child dedication form submissions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -986,7 +1014,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]
 }
 
 // Handle child dedication record edits
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"]) && $is_super_admin) {
+    // Database connection
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
+
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1056,7 +1090,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"
 }
 
 // Handle form submissions
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $is_super_admin) {
     $required_fields = [
         'name', 'nickname', 'address', 'telephone', 'cellphone', 'email', 'civil_status', 'sex', 'birthday',
         'father_name', 'mother_name', 'children', 'education', 'course', 'school', 'year', 'company', 'position',
@@ -1073,6 +1107,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
     if (!empty($message)) {
         // Do not proceed if validation failed
     } else {
+        $servername = "localhost";
+        $username = "root";
+        $password = "";
+        $dbname = "churchdb";
         try {
             $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
             $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1150,7 +1188,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
     }
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $is_admin) {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $is_super_admin) {
     $id = $_POST['edit_bap_id'];
     $name = $_POST['edit_bap_name'];
     $nickname = $_POST['edit_bap_nickname'];
@@ -1179,6 +1217,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     $baptism_date = $_POST['edit_bap_baptism_date'];
     $officiant = $_POST['edit_bap_officiant'];
     $venue = $_POST['edit_bap_venue'];
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "churchdb";
     try {
         $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -1238,7 +1280,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             --accent-color: rgb(0, 139, 30);
             --light-gray: #d0d0d0;
             --white: #ffffff;
-            --sidebar-width: 250px;
             --success-color: #4caf50;
             --warning-color: #ff9800;
             --danger-color: #f44336;
@@ -1263,77 +1304,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             min-height: 100vh;
         }
 
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--primary-color);
-            color: var(--white);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
 
-        .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        .sidebar-header img {
-            height: 60px;
-            margin-bottom: 10px;
-            transition: 0.3s;
-        }
-
-        .sidebar-header h3 {
-            font-size: 18px;
-        }
-
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-
-        .sidebar-menu ul {
-            list-style: none;
-        }
-
-        .sidebar-menu li {
-            margin-bottom: 5px;
-        }
-
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: var(--white);
-            text-decoration: none;
-            transition: all 0.3s;
-            font-size: 16px;
-        }
-
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-menu a.active {
-            background-color: var(--accent-color);
-        }
-
-        .sidebar-menu i {
-            margin-right: 15px;
-            width: 20px;
-            text-align: center;
-            font-size: 20px;
-        }
-
-        .sidebar-menu span {
-            margin-left: 10px;
-        }
 
         .content-area {
             flex: 1;
-            margin-left: var(--sidebar-width);
+            margin-left: 0; /* No sidebar */
             padding: 20px;
+            padding-top: 80px; /* Ensure content doesn't overlap with the menu button */
         }
 
         .top-bar {
@@ -1849,45 +1826,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         }
 
         @media (max-width: 992px) {
-            .sidebar {
-                width: 70px;
-            }
-            .sidebar-header h3, .sidebar-menu span {
-                display: none;
-            }
             .content-area {
-                margin-left: 70px;
+                margin-left: 0;
             }
         }
 
         @media (max-width: 768px) {
             .dashboard-container {
                 flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
             }
             .content-area {
                 margin-left: 0;
@@ -2008,48 +1954,361 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                 padding: 15px;
             }
         }
+
+        /* Custom Drawer Navigation Styles */
+        .nav-toggle-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
+        }
+        .nav-toggle-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-toggle-btn:hover {
+            background-color: #2563eb;
+        }
+        .custom-drawer {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
+            color: #3a3a3a;
+            z-index: 1000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .custom-drawer.open {
+            left: 0;
+        }
+        .drawer-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            min-height: 120px;
+        }
+        .drawer-logo-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            min-height: 100px;
+            justify-content: center;
+            flex: 1;
+        }
+        .drawer-logo {
+            height: 60px;
+            width: auto;
+            max-width: 200px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .drawer-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            text-align: center;
+            color: #3a3a3a;
+            max-width: 200px;
+            word-wrap: break-word;
+            line-height: 1.2;
+            min-height: 20px;
+        }
+        .drawer-close {
+            background: none;
+            border: none;
+            color: #3a3a3a;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+        .drawer-close:hover {
+            color: #666;
+        }
+        .drawer-content {
+            padding: 20px 0 0 0;
+            flex: 1;
+        }
+        .drawer-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .drawer-menu li {
+            margin: 0;
+        }
+        .drawer-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 18px; /* reduced padding */
+            color: #3a3a3a;
+            text-decoration: none;
+            font-size: 15px; /* reduced font size */
+            font-weight: 500;
+            gap: 10px; /* reduced gap */
+            border-left: 4px solid transparent;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            position: relative;
+        }
+        .drawer-link i {
+            font-size: 18px; /* reduced icon size */
+            min-width: 22px;
+            text-align: center;
+        }
+        .drawer-link.active {
+            background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%);
+            border-left: 4px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        .drawer-link.active i {
+            color: var(--accent-color);
+        }
+        .drawer-link:hover {
+            background: rgba(0, 139, 30, 0.07);
+            color: var(--accent-color);
+        }
+        .drawer-link:hover i {
+            color: var(--accent-color);
+        }
+        .drawer-profile {
+            padding: 24px 20px 20px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255,255,255,0.85);
+        }
+        .drawer-profile .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            overflow: hidden;
+        }
+        .drawer-profile .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .drawer-profile .profile-info {
+            flex: 1;
+        }
+        .drawer-profile .name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #222;
+        }
+        .drawer-profile .role {
+            font-size: 13px;
+            color: var(--accent-color);
+            font-weight: 500;
+            margin-top: 2px;
+        }
+        .drawer-profile .logout-btn {
+            background: #f44336;
+            color: #fff;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .drawer-profile .logout-btn:hover {
+            background: #d32f2f;
+        }
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+        /* Ensure content doesn't overlap with the button */
+        .content-area {
+            padding-top: 80px;
+        }
     </style>
+    <script>
+    // Custom Drawer Navigation JavaScript
+    document.addEventListener('DOMContentLoaded', function() {
+        const navToggle = document.getElementById('nav-toggle');
+        const drawer = document.getElementById('drawer-navigation');
+        const drawerClose = document.getElementById('drawer-close');
+        const overlay = document.getElementById('drawer-overlay');
+
+        // Open drawer
+        navToggle.addEventListener('click', function() {
+            drawer.classList.add('open');
+            overlay.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        });
+
+        // Close drawer
+        function closeDrawer() {
+            drawer.classList.remove('open');
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        drawerClose.addEventListener('click', closeDrawer);
+        overlay.addEventListener('click', closeDrawer);
+
+        // Close drawer on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDrawer();
+            }
+        });
+    });
+    </script>
 </head>
 <body>
     <div class="dashboard-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo">
-                <h3><?php echo $church_name; ?></h3>
+        <!-- Navigation Toggle Button -->
+        <div class="nav-toggle-container">
+           <button class="nav-toggle-btn" type="button" id="nav-toggle">
+           <i class="fas fa-bars"></i> Menu
+           </button>
+        </div>
+
+        <!-- Custom Drawer Navigation -->
+        <div id="drawer-navigation" class="custom-drawer">
+            <div class="drawer-header">
+                <div class="drawer-logo-section">
+                    <img src="<?php echo htmlspecialchars($church_logo); ?>" alt="Church Logo" class="drawer-logo">
+                    <h5 class="drawer-title"><?php echo $church_name; ?></h5>
+                </div>
+                <button type="button" class="drawer-close" id="drawer-close">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="sidebar-menu">
-                <ul>
-                    <li><a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-                    <li><a href="events.php" class="<?php echo $current_page == 'events.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-alt"></i> <span>Events</span></a></li>
-                    <li><a href="messages.php" class="<?php echo $current_page == 'messages.php' ? 'active' : ''; ?>"><i class="fas fa-video"></i> <span>Messages</span></a></li>
-                    <li><a href="member_records.php" class="<?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-users"></i> <span>Member Records</span></a></li>
-                    <li><a href="prayers.php" class="<?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>"><i class="fas fa-hands-praying"></i> <span>Prayer Requests</span></a></li>
-                    <li><a href="financialreport.php" class="<?php echo $current_page == 'financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i> <span>Financial Reports</span></a></li>
-                    <li><a href="member_contributions.php" class="<?php echo $current_page == 'member_contributions.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i> <span>Stewardship Report</span></a></li>
-                    <li><a href="settings.php" class="<?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
-                    <li><a href="login_logs.php" class="<?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i> <span>Login Logs</span></a></li>
+            <div class="drawer-content">
+                <ul class="drawer-menu">
+                    <li>
+                        <a href="superadmin_dashboard.php" class="drawer-link <?php echo $current_page == 'superadmin_dashboard.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-home"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="events.php" class="drawer-link <?php echo $current_page == 'events.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Events</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="prayers.php" class="drawer-link <?php echo $current_page == 'prayers.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-hands-praying"></i>
+                            <span>Prayer Requests</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="messages.php" class="drawer-link <?php echo $current_page == 'messages.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-video"></i>
+                            <span>Messages</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="member_records.php" class="drawer-link <?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-address-book"></i>
+                            <span>Member Records</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="superadmin_financialreport.php" class="drawer-link <?php echo $current_page == 'superadmin_financialreport.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Financial Reports</span>
+                        </a>
+                    </li>
+                    <?php if (isset($is_super_admin) && $is_super_admin): ?>
+                    <li>
+                        <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-hand-holding-dollar"></i>
+                            <span>Stewardship Report</span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-cog"></i>
+                            <span>Settings</span>
+                        </a>
+                    </li>
+                    <?php if (isset($is_super_admin) && $is_super_admin): ?>
+                    <li>
+                        <a href="login_logs.php" class="drawer-link <?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-sign-in-alt"></i>
+                            <span>Login Logs</span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                 </ul>
             </div>
-        </aside>
+            <div class="drawer-profile">
+                <div class="avatar">
+                    <?php if (!empty($user_profile['profile_picture'])): ?>
+                        <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
+                    <?php else: ?>
+                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                    <?php endif; ?>
+                </div>
+                <div class="profile-info">
+                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role">Super Admin</div>
+                </div>
+                <form action="logout.php" method="post" style="margin:0;">
+                    <button type="submit" class="logout-btn">Logout</button>
+                </form>
+            </div>
+        </div>
+        <!-- Drawer Overlay -->
+        <div id="drawer-overlay" class="drawer-overlay"></div>
 
         <main class="content-area">
-            <div class="top-bar">
-                <h2>Member Records</h2>
-                <div class="user-profile">
-                    <div class="avatar">
-                        <?php if (!empty($user_profile['profile_picture'])): ?>
-                            <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
-                        <?php else: ?>
-                            <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
-                        <?php endif; ?>
-                    </div>
-                    <div class="user-info">
-                        <h4><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></h4>
-                        <p><?php echo htmlspecialchars($user_profile['role'] ?? 'User'); ?></p>
-                    </div>
-                    <form action="logout.php" method="post">
-                        <button type="submit" class="logout-btn">Logout</button>
-                    </form>
+            <div class="top-bar" style="background-color: #fff; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; margin-top: 0;">
+                <div>
+                    <h2>Member Records</h2>
+                    <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
+                        Welcome, <?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username']); ?>
+                    </p>
                 </div>
             </div>
 
@@ -2074,7 +2333,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Membership Tab -->
                     <div class="tab-pane active" id="membership">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-membership-btn">
                                     <i class="fas fa-user-plus"></i> Add New Member
                                 </button>
@@ -2108,7 +2367,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="membership-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="membership"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn status-btn <?php echo strtolower($record['status']) === 'active' ? 'status-active' : 'status-inactive'; ?>" 
                                                                 id="membership-status-<?php echo htmlspecialchars($record['id']); ?>"
                                                                 data-id="<?php echo htmlspecialchars($record['id']); ?>" 
@@ -2130,7 +2389,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Baptismal Tab -->
                     <div class="tab-pane" id="baptismal">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-baptismal-btn">
                                     <i class="fas fa-plus"></i> Add New Baptismal
                                 </button>
@@ -2159,7 +2418,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="baptismal-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn edit-btn" id="baptismal-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" id="baptismal-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="baptismal"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
@@ -2175,7 +2434,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Marriage Tab -->
                     <div class="tab-pane" id="marriage">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-marriage-btn">
                                     <i class="fas fa-plus"></i> Add New Marriage
                                 </button>
@@ -2202,7 +2461,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="marriage-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn edit-btn" id="marriage-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" id="marriage-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="marriage"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
@@ -2218,7 +2477,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Child Dedication Tab -->
                     <div class="tab-pane" id="child-dedication">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-child-dedication-btn">
                                     <i class="fas fa-plus"></i> Add New Child Dedication
                                 </button>
@@ -2247,7 +2506,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="child-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn edit-btn" id="child-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" id="child-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="child_dedication"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
@@ -2263,7 +2522,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Visitor's Record Tab -->
                     <div class="tab-pane" id="visitor">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-visitor-btn">
                                     <i class="fas fa-user-plus"></i> Add New Visitor
                                 </button>
@@ -2300,7 +2559,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="visitor-view-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn edit-btn" id="visitor-edit-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" id="visitor-delete-<?php echo $record['id']; ?>" data-id="<?php echo $record['id']; ?>" data-type="visitor"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
@@ -2316,7 +2575,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <!-- Burial Records Tab -->
                     <div class="tab-pane" id="burial">
                         <div class="action-bar">
-                            <?php if ($is_admin): ?>
+                            <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-burial-btn">
                                     <i class="fas fa-plus"></i> Add New Burial Record
                                 </button>
@@ -2345,7 +2604,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="action-btn view-btn" id="burial-view-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-eye"></i></button>
-                                                    <?php if ($is_admin): ?>
+                                                    <?php if ($is_super_admin): ?>
                                                         <button class="action-btn edit-btn" id="burial-edit-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-edit"></i></button>
                                                         <button class="action-btn delete-btn" id="burial-delete-<?php echo htmlspecialchars($record['id']); ?>" data-id="<?php echo htmlspecialchars($record['id']); ?>" data-type="burial"><i class="fas fa-trash"></i></button>
                                                     <?php endif; ?>
