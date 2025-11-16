@@ -1,9 +1,9 @@
 <?php
 
-$servername = "";
-$username = "";  
+$servername = "localhost";
+$username = "root";  
 $password = "";      
-$dbname = "";
+$dbname = "churchdb";
 
 // Create connection
 $conn = new mysqli($servername, $username, $password);
@@ -640,6 +640,4 @@ function getChurchLogo($conn) {
 
 // Include user functions
 require_once 'user_functions.php';
-
 ?> 
-
