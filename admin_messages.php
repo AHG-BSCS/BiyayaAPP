@@ -181,8 +181,6 @@ if (preg_match('/<style>(.*?)<\/style>/s', $messages_file, $matches)) {
             <div class="search-container">
                 <input type="text" id="search-input" placeholder="Search messages by title, date, or content..." required>
                 <button onclick="searchMessages()">Search</button>
-                <button class="add-message-btn" id="add-message-btn">Add New Message</button>
-                <button class="manage-messages-btn" onclick="window.location.href='manage_messages.php'">Manage Messages</button>
             </div>
             <div class="search-results" id="search-results"></div>
             <?php if (isset($_SESSION['success_message'])): ?>
@@ -201,30 +199,6 @@ if (preg_match('/<style>(.*?)<\/style>/s', $messages_file, $matches)) {
                 ?>
             </div>
             <?php endif; ?>
-            <div class="message-form" id="message-form">
-                <form action="add_message.php" method="POST" id="addMessageForm">
-                    <div class="form-group">
-                        <label for="title">Message Title:</label>
-                        <input type="text" id="title" name="title" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="youtube_id">YouTube Video ID:</label>
-                        <input type="text" id="youtube_id" name="youtube_id" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="date">Date:</label>
-                        <input type="date" id="date" name="date" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="outline">Message Outline (one point per line):</label>
-                        <textarea id="outline" name="outline" required></textarea>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="submit-btn">Save Message</button>
-                        <button type="button" class="cancel-btn" id="cancel-btn">Cancel</button>
-                    </div>
-                </form>
-            </div>
             <div class="video-container">
                 <div class="message-title">
                     <?php echo $message['title']; ?>
@@ -426,29 +400,6 @@ if (preg_match('/<style>(.*?)<\/style>/s', $messages_file, $matches)) {
             const isShown = outline.classList.contains('show');
             outline.classList.toggle('show');
             this.textContent = isShown ? 'Show Outline' : 'Hide Outline';
-        });
-        // Add Message Form Toggle
-        const addMessageBtn = document.getElementById('add-message-btn');
-        const messageForm = document.getElementById('message-form');
-        const cancelBtn = document.getElementById('cancel-btn');
-        addMessageBtn.addEventListener('click', function() {
-            messageForm.classList.add('show');
-            addMessageBtn.style.display = 'none';
-        });
-        cancelBtn.addEventListener('click', function() {
-            messageForm.classList.remove('show');
-            addMessageBtn.style.display = 'block';
-        });
-        document.getElementById('addMessageForm').addEventListener('submit', function(e) {
-            const title = document.getElementById('title').value.trim();
-            const youtubeId = document.getElementById('youtube_id').value.trim();
-            const date = document.getElementById('date').value.trim();
-            const outline = document.getElementById('outline').value.trim();
-            if (!title || !youtubeId || !date || !outline) {
-                e.preventDefault();
-                alert('Please fill in all required fields.');
-                return false;
-            }
         });
         // Custom Drawer Navigation JavaScript
         document.addEventListener('DOMContentLoaded', function() {
