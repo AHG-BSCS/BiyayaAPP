@@ -46,7 +46,7 @@ function getAllEvents($conn) {
                 'is_pinned' => $row['is_pinned'],
                 'created_by' => $row['created_by'],
                 'created_at' => $row['created_at'],
-                'image' => $row['image'] ?? ''
+                'image' => $row['event_image'] ?? ''
             ];
         }
     }
@@ -70,7 +70,7 @@ function getPinnedEvent($conn) {
             'is_pinned' => $row['is_pinned'],
             'created_by' => $row['created_by'],
             'created_at' => $row['created_at'],
-            'image' => $row['image'] ?? ''
+            'image' => $row['event_image'] ?? ''
         ];
     }
     return null;
@@ -88,31 +88,17 @@ $user_message = empty($events) ? "No upcoming events scheduled at this time." : 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
-// Group events by day of the week
-$weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-$events_by_day = [];
-foreach ($weekdays as $day) {
-    $events_by_day[$day] = [];
-}
-
-// Populate events by day from database
-foreach ($events as $event) {
-    $event_date = new DateTime($event['date']);
-    $day_name = $event_date->format('l'); // Gets day name (Monday, Tuesday, etc.)
-    $time = date('H:i', strtotime($event['time']));
+// Sort events: pinned first, then by date
+usort($events, function($a, $b) {
+    // Pinned events first
+    if ($a['is_pinned'] && !$b['is_pinned']) return -1;
+    if (!$a['is_pinned'] && $b['is_pinned']) return 1;
     
-    $events_by_day[$day_name][] = [
-        'day' => $day_name,
-        'time' => $time,
-        'title' => $event['title'],
-        'category' => $event['category'],
-        'description' => $event['description'],
-        'date' => $event['date'],
-        'is_pinned' => $event['is_pinned']
-    ];
-}
-
-// No static events - only database events will be shown
+    // Then by date
+    $dateA = strtotime($a['date'] . ' ' . $a['time']);
+    $dateB = strtotime($b['date'] . ' ' . $b['time']);
+    return $dateA - $dateB;
+});
 ?>
 
 <!DOCTYPE html>
@@ -305,151 +291,188 @@ foreach ($events as $event) {
             background-color: #e0e0e0;
         }
 
-        /* Schedule Template Styles */
-        .schedule-container {
+        /* Events Grid Styles */
+        .events-container {
             background: var(--white);
             border-radius: 15px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             overflow: hidden;
-        }
-
-        .schedule-header {
-            background: linear-gradient(135deg, var(--accent-color), #005a1f);
-            color: white;
             padding: 30px;
-            text-align: center;
         }
 
-        .schedule-header h1 {
+        .events-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .events-header h1 {
             font-size: 32px;
             font-weight: 700;
+            color: var(--primary-color);
             margin-bottom: 10px;
         }
 
-        .schedule-header p {
+        .events-header p {
             font-size: 16px;
-            opacity: 0.9;
+            color: #666;
         }
 
-        .schedule-grid {
+        .events-grid {
             display: grid;
-            grid-template-columns: 1fr; /* Changed to 1fr */
-            min-height: 600px;
-        }
-
-        .time-column {
-            background: #f8f9fa;
-            border-right: 1px solid var(--schedule-border);
-            padding: 20px 0;
-        }
-
-        .time-slot {
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--schedule-text);
-            border-bottom: 1px solid var(--schedule-border);
-        }
-
-        .time-slot:last-child {
-            border-bottom: none;
-        }
-
-        .schedule-content {
-            padding: 20px;
-        }
-
-        .day-columns {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 15px;
-            height: 100%;
-        }
-
-        .day-column {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .day-header {
-            background: var(--accent-color);
-            color: white;
-            padding: 15px 10px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 14px;
-            border-radius: 8px 8px 0 0;
-            margin-bottom: 10px;
-        }
-
-        .day-events {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
         }
 
         .event-card {
             background: white;
             border: 1px solid var(--schedule-border);
-            border-radius: 8px;
-            padding: 12px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
             transition: all 0.3s ease;
             cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            position: relative;
         }
 
         .event-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
             border-color: var(--accent-color);
         }
 
-        .event-time {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--accent-color);
-            margin-bottom: 3px;
+        .event-image-container {
+            width: 100%;
+            height: 220px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+            position: relative;
         }
 
-        .event-date {
+        .event-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .event-card:hover .event-image-container img {
+            transform: scale(1.05);
+        }
+
+        .event-image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent-color), #005a1f);
+            color: white;
+            font-size: 48px;
+        }
+
+        .pinned-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--accent-color);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .pinned-badge i {
             font-size: 11px;
-            color: #6c757d;
-            margin-bottom: 5px;
-            font-style: italic;
+        }
+
+        .event-card-content {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .event-category-badge {
+            display: inline-block;
+            background: rgba(0, 139, 30, 0.1);
+            color: var(--accent-color);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            width: fit-content;
         }
 
         .event-title {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 20px;
+            font-weight: 700;
             color: var(--primary-color);
-            margin-bottom: 3px;
+            margin-bottom: 10px;
             line-height: 1.3;
         }
 
-        .event-category {
-            font-size: 11px;
-            color: #6c757d;
-            font-style: italic;
+        .event-date-time {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .event-date-time i {
+            color: var(--accent-color);
+            font-size: 16px;
         }
 
         .event-description {
-            font-size: 11px;
-            color: #6c757d;
-            margin-top: 5px;
-            line-height: 1.3;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            margin-top: auto;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .pinned-event {
             border: 2px solid var(--accent-color);
-            background: linear-gradient(135deg, rgba(0, 139, 30, 0.05), rgba(0, 139, 30, 0.1));
+            box-shadow: 0 4px 15px rgba(0, 139, 30, 0.2);
         }
 
-        .pinned-event .event-title::before {
-            content: "📌 ";
+        .no-events-message {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .no-events-message i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+
+        .no-events-message h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .no-events-message p {
+            font-size: 16px;
+            color: #999;
         }
 
         .notification {
@@ -600,12 +623,6 @@ foreach ($events as $event) {
           }
         }
 
-        @media (max-width: 1200px) {
-            .day-columns {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -616,8 +633,9 @@ foreach ($events as $event) {
             .content-area {
                 margin-left: 70px;
             }
-            .day-columns {
-                grid-template-columns: repeat(3, 1fr);
+            .events-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
             }
         }
 
@@ -661,27 +679,24 @@ foreach ($events as $event) {
             .user-profile {
                 margin-top: 10px;
             }
-            .day-columns {
-                grid-template-columns: repeat(2, 1fr);
+            .events-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 15px;
             }
-            .schedule-grid {
-                grid-template-columns: 80px 1fr;
-            }
-            .time-slot {
-                font-size: 12px;
-                height: 50px;
+            .events-container {
+                padding: 20px;
             }
         }
 
         @media (max-width: 480px) {
-            .day-columns {
+            .events-grid {
                 grid-template-columns: 1fr;
             }
-            .schedule-grid {
-                grid-template-columns: 1fr;
+            .event-image-container {
+                height: 180px;
             }
-            .time-column {
-                display: none;
+            .events-header h1 {
+                font-size: 24px;
             }
         }
     </style>
@@ -1005,46 +1020,58 @@ foreach ($events as $event) {
                 </div>
             </div>
 
-            <!-- Schedule Template -->
-            <div class="schedule-container">
-                <div class="schedule-header">
-                    <h1>Church Events Schedule</h1>
+            <!-- Events Grid -->
+            <div class="events-container">
+                <div class="events-header">
+                    <h1>Church Events</h1>
                     <p>Join us for fellowship, worship, and spiritual growth</p>
                 </div>
                 
-                <div class="schedule-grid">
-                    <!-- Removed time-column -->
-                    
-                    <div class="schedule-content">
-                        <div class="day-columns">
-                            <?php foreach ($weekdays as $day): ?>
-                                <div class="day-column">
-                                    <div class="day-header"><?php echo $day; ?></div>
-                                    <div class="day-events">
-                                        <?php 
-                                        $day_events = $events_by_day[$day];
-                                        if (empty($day_events)): ?>
-                                            <div class="event-card" style="opacity: 0.5; text-align: center; font-style: italic; color: #6c757d;">
-                                                No events
-                                            </div>
-                                        <?php else: ?>
-                                            <?php foreach ($day_events as $event): ?>
-                                                <div class="event-card <?php echo ($pinned_event && $pinned_event['title'] === $event['title']) ? 'pinned-event' : ''; ?>">
-                                                    <?php if (!empty($event['image'])): ?>
-                                                        <img src="<?php echo htmlspecialchars($event['image']); ?>" alt="Event Image" style="width:100%;max-height:120px;object-fit:cover;border-radius:6px 6px 0 0;margin-bottom:8px;">
-                                                    <?php endif; ?>
-                                                    <div class="event-date"><?php echo date("M j, Y", strtotime($event['date'])); ?></div>
-                                                    <div class="event-title"><?php echo htmlspecialchars($event['title']); ?></div>
-                                                    <div class="event-category"><?php echo htmlspecialchars($event['category']); ?></div>
-                                                    <div class="event-description"><?php echo htmlspecialchars($event['description']); ?></div>
-                                                </div>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                <div class="events-grid">
+                    <?php if (empty($events)): ?>
+                        <div class="no-events-message" style="grid-column: 1 / -1;">
+                            <i class="fas fa-calendar-times"></i>
+                            <h3>No Upcoming Events</h3>
+                            <p>Check back soon for new events and activities!</p>
                         </div>
-                    </div>
+                    <?php else: ?>
+                        <?php foreach ($events as $event): ?>
+                            <div class="event-card <?php echo ($pinned_event && $pinned_event['id'] === $event['id']) ? 'pinned-event' : ''; ?>">
+                                <?php if ($pinned_event && $pinned_event['id'] === $event['id']): ?>
+                                    <div class="pinned-badge">
+                                        <i class="fas fa-thumbtack"></i>
+                                        <span>Pinned</span>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <div class="event-image-container">
+                                    <?php if (!empty($event['image'])): ?>
+                                        <img src="<?php echo htmlspecialchars($event['image']); ?>" alt="<?php echo htmlspecialchars($event['title']); ?>">
+                                    <?php else: ?>
+                                        <div class="event-image-placeholder">
+                                            <i class="fas fa-calendar-alt"></i>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="event-card-content">
+                                    <span class="event-category-badge"><?php echo htmlspecialchars($event['category']); ?></span>
+                                    <h3 class="event-title"><?php echo htmlspecialchars($event['title']); ?></h3>
+                                    <div class="event-date-time">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        <span><?php echo date("F j, Y", strtotime($event['date'])); ?></span>
+                                    </div>
+                                    <div class="event-date-time">
+                                        <i class="fas fa-clock"></i>
+                                        <span><?php echo date("h:i A", strtotime($event['time'])); ?></span>
+                                    </div>
+                                    <?php if (!empty($event['description'])): ?>
+                                        <p class="event-description"><?php echo htmlspecialchars($event['description']); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </main>
@@ -1058,18 +1085,45 @@ foreach ($events as $event) {
             
             searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase();
+                let visibleCount = 0;
                 
                 eventCards.forEach(card => {
                     const title = card.querySelector('.event-title')?.textContent.toLowerCase() || '';
-                    const category = card.querySelector('.event-category')?.textContent.toLowerCase() || '';
+                    const category = card.querySelector('.event-category-badge')?.textContent.toLowerCase() || '';
                     const description = card.querySelector('.event-description')?.textContent.toLowerCase() || '';
                     
                     if (title.includes(searchTerm) || category.includes(searchTerm) || description.includes(searchTerm)) {
-                        card.style.display = 'block';
+                        card.style.display = 'flex';
+                        visibleCount++;
                     } else {
                         card.style.display = 'none';
                     }
                 });
+                
+                // Show no results message if needed
+                const noEventsMsg = document.querySelector('.no-events-message');
+                const eventsGrid = document.querySelector('.events-grid');
+                if (visibleCount === 0 && searchTerm !== '' && eventCards.length > 0) {
+                    if (!noEventsMsg || !noEventsMsg.textContent.includes('No results')) {
+                        const noResults = document.createElement('div');
+                        noResults.className = 'no-events-message';
+                        noResults.style.gridColumn = '1 / -1';
+                        noResults.innerHTML = `
+                            <i class="fas fa-search"></i>
+                            <h3>No Events Found</h3>
+                            <p>Try adjusting your search terms</p>
+                        `;
+                        if (eventsGrid && !eventsGrid.querySelector('.no-results-message')) {
+                            noResults.classList.add('no-results-message');
+                            eventsGrid.appendChild(noResults);
+                        }
+                    }
+                } else {
+                    const noResults = document.querySelector('.no-results-message');
+                    if (noResults) {
+                        noResults.remove();
+                    }
+                }
             });
         });
     </script>

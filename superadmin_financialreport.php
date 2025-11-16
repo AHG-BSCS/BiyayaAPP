@@ -30,71 +30,229 @@ $specified_gifts = [
     'Depreciation'
 ];
 
-// Fetch bank gifts records from database
-$bank_gifts_records = [];
-$sql = "SELECT * FROM bank_gifts ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $bank_gifts_records[] = $row;
-    }
-}
-
-// Fetch specified gifts records from database
-$specified_gifts_records = [];
-$sql = "SELECT * FROM specified_gifts ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $specified_gifts_records[] = $row;
-    }
-}
-
-// Fetch tithes records from database
+// Load income breakdown entries for financial report tabs
+$breakdownIncomeEntries = [];
 $tithes_records = [];
-$sql = "SELECT * FROM tithes ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $tithes_records[] = $row;
-    }
-}
-
-// Fetch offerings records from database
 $offerings_records = [];
-$sql = "SELECT * FROM offerings ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $offerings_records[] = $row;
+$bank_gifts_records = [];
+$specified_gifts_records = [];
+
+$incomeBreakdownResult = $conn->query("
+    SELECT id, entry_date, tithes, offerings, gifts_bank, others, notes
+    FROM breakdown_income
+    ORDER BY entry_date DESC, id DESC
+");
+
+if ($incomeBreakdownResult) {
+    while ($row = $incomeBreakdownResult->fetch_assoc()) {
+        $entryDate = $row['entry_date'];
+        $notes = $row['notes'] ?? '';
+
+        $row['tithes'] = isset($row['tithes']) ? floatval($row['tithes']) : 0;
+        $row['offerings'] = isset($row['offerings']) ? floatval($row['offerings']) : 0;
+        $row['gifts_bank'] = isset($row['gifts_bank']) ? floatval($row['gifts_bank']) : 0;
+        $row['others'] = isset($row['others']) ? floatval($row['others']) : 0;
+
+        $breakdownIncomeEntries[] = $row;
+
+        if ($row['tithes'] > 0) {
+            $tithes_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => $row['tithes'],
+                'notes' => $notes
+            ];
+        }
+
+        if ($row['offerings'] > 0) {
+            $offerings_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => $row['offerings'],
+                'notes' => $notes
+            ];
+        }
+
+        if ($row['gifts_bank'] > 0) {
+            $bank_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => $row['gifts_bank'],
+                'notes' => $notes
+            ];
+        }
+
+        if ($row['others'] > 0) {
+            $specified_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'category' => 'Others',
+                'amount' => $row['others'],
+                'notes' => $notes
+            ];
+        }
     }
 }
 
-// Fetch monthly expenses records from database
+// Fallback to legacy tables if no breakdown data exists
+if (empty($breakdownIncomeEntries)) {
+    $sql = "SELECT * FROM tithes ORDER BY id ASC";
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $tithes_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $row['date'],
+                'amount' => floatval($row['amount']),
+                'notes' => $row['notes'] ?? ''
+            ];
+        }
+    }
+
+    $sql = "SELECT * FROM offerings ORDER BY id ASC";
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $offerings_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $row['date'],
+                'amount' => floatval($row['amount']),
+                'notes' => $row['notes'] ?? ''
+            ];
+        }
+    }
+
+    $sql = "SELECT * FROM bank_gifts ORDER BY id ASC";
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $bank_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $row['date'],
+                'amount' => floatval($row['amount']),
+                'notes' => $row['notes'] ?? ''
+            ];
+        }
+    }
+
+    $sql = "SELECT * FROM specified_gifts ORDER BY id ASC";
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $specified_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $row['date'],
+                'category' => $row['category'] ?? 'Others',
+                'amount' => floatval($row['amount']),
+                'notes' => $row['notes'] ?? ''
+            ];
+        }
+    }
+}
+
+// Fetch breakdown income and expense entries for Financial Breakdown tab and Monthly Expenses
+$breakdownExpenseEntries = [];
+$breakdownIncomeFullEntries = [];
+
+// Fetch full breakdown income entries (with all fields)
+$incomeFullResult = $conn->query("
+    SELECT id, entry_date, tithes, offerings, gifts_bank, bank_interest, others, building, notes, created_by, created_at, updated_at
+    FROM breakdown_income
+    ORDER BY entry_date DESC, id DESC
+");
+
+if ($incomeFullResult) {
+    while ($row = $incomeFullResult->fetch_assoc()) {
+        $row['tithes'] = floatval($row['tithes'] ?? 0);
+        $row['offerings'] = floatval($row['offerings'] ?? 0);
+        $row['gifts_bank'] = floatval($row['gifts_bank'] ?? 0);
+        $row['bank_interest'] = floatval($row['bank_interest'] ?? 0);
+        $row['others'] = floatval($row['others'] ?? 0);
+        $row['building'] = floatval($row['building'] ?? 0);
+        $row['total_amount'] = $row['tithes'] + $row['offerings'] + $row['gifts_bank'] + $row['bank_interest'] + $row['others'] + $row['building'];
+        $breakdownIncomeFullEntries[] = $row;
+    }
+}
+
+// Fetch breakdown expense entries
+$expenseFullResult = $conn->query("
+    SELECT id, entry_date, speaker, workers, food, housekeeping, office_supplies, transportation, photocopy, internet, 
+           government_concern, water_bill, electric_bill, special_events, needy_calamity, trainings,
+           kids_ministry, youth_ministry, music_ministry, single_professionals_ministry, young_couples_ministry,
+           wow_ministry, amen_ministry, couples_ministry, visitation_prayer_ministry, acquisitions, materials,
+           labor, mission_support, land_title, notes, created_by, created_at, updated_at, total_amount
+    FROM breakdown_expenses
+    ORDER BY entry_date DESC, id DESC
+");
+
+if ($expenseFullResult) {
+    while ($row = $expenseFullResult->fetch_assoc()) {
+        $row['total_amount'] = isset($row['total_amount']) ? floatval($row['total_amount']) : 0;
+        $breakdownExpenseEntries[] = $row;
+    }
+}
+
+// Pagination for breakdown entries: Show 6 entries (cards) at a time
+$breakdownPage = isset($_GET['breakdown_page']) ? max(0, intval($_GET['breakdown_page'])) : 0;
+$entriesPerPage = 6;
+
+// Entries are already sorted by date DESC, so we can paginate directly
+$totalIncomeEntries = count($breakdownIncomeFullEntries);
+$totalExpenseEntries = count($breakdownExpenseEntries);
+
+// Calculate pagination for income entries
+$incomeTotalPages = max(1, ceil($totalIncomeEntries / $entriesPerPage));
+$incomeStartIndex = $breakdownPage * $entriesPerPage;
+$incomeEndIndex = min($incomeStartIndex + $entriesPerPage, $totalIncomeEntries);
+$displayIncomeEntries = array_slice($breakdownIncomeFullEntries, $incomeStartIndex, $entriesPerPage);
+
+// Calculate pagination for expense entries
+$expenseTotalPages = max(1, ceil($totalExpenseEntries / $entriesPerPage));
+$expenseStartIndex = $breakdownPage * $entriesPerPage;
+$expenseEndIndex = min($expenseStartIndex + $entriesPerPage, $totalExpenseEntries);
+$displayExpenseEntries = array_slice($breakdownExpenseEntries, $expenseStartIndex, $entriesPerPage);
+
+// Use the maximum pages for navigation (so both tabs can navigate)
+$totalPages = max($incomeTotalPages, $expenseTotalPages);
+
+// Ensure page is within valid range
+if ($breakdownPage >= $totalPages) {
+    $breakdownPage = $totalPages - 1;
+}
+if ($breakdownPage < 0) {
+    $breakdownPage = 0;
+}
+
+// Store pagination info for use in HTML
+$breakdownPagination = [
+    'current_page' => $breakdownPage,
+    'total_pages' => $totalPages,
+    'total_income_entries' => $totalIncomeEntries,
+    'total_expense_entries' => $totalExpenseEntries,
+    'entries_per_page' => $entriesPerPage,
+    'has_previous' => $breakdownPage > 0,
+    'has_next' => $breakdownPage < $totalPages - 1
+];
+
+// Calculate monthly expenses from breakdown data (like admin_expenses.php)
+$monthlySummary = [];
+foreach ($breakdownIncomeFullEntries as $entry) {
+    $monthKey = date('Y-m', strtotime($entry['entry_date']));
+    if (!isset($monthlySummary[$monthKey])) {
+        $monthlySummary[$monthKey] = ['income' => 0, 'expenses' => 0];
+    }
+    $monthlySummary[$monthKey]['income'] += $entry['total_amount'];
+}
+
+foreach ($breakdownExpenseEntries as $entry) {
+    $monthKey = date('Y-m', strtotime($entry['entry_date']));
+    if (!isset($monthlySummary[$monthKey])) {
+        $monthlySummary[$monthKey] = ['income' => 0, 'expenses' => 0];
+    }
+    $monthlySummary[$monthKey]['expenses'] += $entry['total_amount'];
+}
+
 $monthly_expenses_records = [];
-$sql = "
-    SELECT 
-        me.id,
-        me.month,
-        me.income,
-        me.expenses,
-        (me.income - me.expenses) as difference,
-        me.notes,
-        me.created_at,
-        me.updated_at,
-        up.full_name as created_by_name
-    FROM monthly_expenses me
-    LEFT JOIN user_profiles up ON me.created_by = up.user_id
-    ORDER BY me.month ASC
-";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $monthly_expenses_records[] = $row;
-    }
-}
-
-// Calculate totals and averages for monthly expenses
 $expenses_totals = [
     'total_income' => 0,
     'total_expenses' => 0,
@@ -102,11 +260,25 @@ $expenses_totals = [
     'count' => 0
 ];
 
-foreach ($monthly_expenses_records as $row) {
-    $expenses_totals['total_income'] += $row['income'];
-    $expenses_totals['total_expenses'] += $row['expenses'];
-    $expenses_totals['total_difference'] += $row['difference'];
-    $expenses_totals['count']++;
+if (!empty($monthlySummary)) {
+    ksort($monthlySummary);
+    foreach ($monthlySummary as $monthKey => $values) {
+        $income = floatval($values['income'] ?? 0);
+        $expenses = floatval($values['expenses'] ?? 0);
+        $difference = $income - $expenses;
+        
+        $monthly_expenses_records[] = [
+            'month' => $monthKey,
+            'income' => $income,
+            'expenses' => $expenses,
+            'difference' => $difference
+        ];
+        
+        $expenses_totals['total_income'] += $income;
+        $expenses_totals['total_expenses'] += $expenses;
+        $expenses_totals['total_difference'] += $difference;
+        $expenses_totals['count']++;
+    }
 }
 
 // Calculate averages for monthly expenses
@@ -118,26 +290,84 @@ $expenses_averages = [
 
 // Fetch weekly summary for tithes and offerings
 $weekly_reports = [];
-$sql = "
-    SELECT 
-        week,
-        MIN(date) as start_date,
-        MAX(date) as end_date,
-        SUM(tithes_amount) as total_tithes,
-        SUM(offerings_amount) as total_offerings
-    FROM (
-        SELECT DATE_FORMAT(date, '%Y-W%u') as week, date, amount as tithes_amount, 0 as offerings_amount FROM tithes
-        UNION ALL
-        SELECT DATE_FORMAT(date, '%Y-W%u') as week, date, 0 as tithes_amount, amount as offerings_amount FROM offerings
-    ) as combined
-    GROUP BY week
-    ORDER BY week DESC
-";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $row['grand_total'] = $row['total_tithes'] + $row['total_offerings'];
-        $weekly_reports[] = $row;
+$weeklyReportsMap = [];
+
+if (!empty($breakdownIncomeEntries)) {
+    foreach ($breakdownIncomeEntries as $entry) {
+        $entryDate = $entry['entry_date'] ?? null;
+        if (!$entryDate) {
+            continue;
+        }
+
+        $tithesAmount = isset($entry['tithes']) ? floatval($entry['tithes']) : 0;
+        $offeringsAmount = isset($entry['offerings']) ? floatval($entry['offerings']) : 0;
+
+        if ($tithesAmount === 0 && $offeringsAmount === 0) {
+            continue;
+        }
+
+        $date = new DateTime($entryDate);
+        $isoYear = (int) $date->format('o');
+        $isoWeek = (int) $date->format('W');
+
+        $weekKey = sprintf('%d-W%02d', $isoYear, $isoWeek);
+        $weekSortKey = sprintf('%04d%02d', $isoYear, $isoWeek);
+
+        $weekStart = new DateTime();
+        $weekStart->setISODate($isoYear, $isoWeek);
+        $weekEnd = clone $weekStart;
+        $weekEnd->modify('+6 days');
+
+        if (!isset($weeklyReportsMap[$weekKey])) {
+            $weeklyReportsMap[$weekKey] = [
+                'week' => $weekKey,
+                'week_sort' => $weekSortKey,
+                'start_date' => $weekStart->format('Y-m-d'),
+                'end_date' => $weekEnd->format('Y-m-d'),
+                'total_tithes' => 0,
+                'total_offerings' => 0,
+                'grand_total' => 0
+            ];
+        }
+
+        $weeklyReportsMap[$weekKey]['total_tithes'] += $tithesAmount;
+        $weeklyReportsMap[$weekKey]['total_offerings'] += $offeringsAmount;
+    }
+
+    if (!empty($weeklyReportsMap)) {
+        $weekly_reports = array_values($weeklyReportsMap);
+        usort($weekly_reports, function ($a, $b) {
+            return strcmp($b['week_sort'], $a['week_sort']);
+        });
+        array_walk($weekly_reports, function (&$week) {
+            $week['grand_total'] = $week['total_tithes'] + $week['total_offerings'];
+            unset($week['week_sort']);
+        });
+    }
+}
+
+if (empty($weekly_reports)) {
+    $sql = "
+        SELECT 
+            week,
+            MIN(date) as start_date,
+            MAX(date) as end_date,
+            SUM(tithes_amount) as total_tithes,
+            SUM(offerings_amount) as total_offerings
+        FROM (
+            SELECT DATE_FORMAT(date, '%Y-W%u') as week, date, amount as tithes_amount, 0 as offerings_amount FROM tithes
+            UNION ALL
+            SELECT DATE_FORMAT(date, '%Y-W%u') as week, date, 0 as tithes_amount, amount as offerings_amount FROM offerings
+        ) as combined
+        GROUP BY week
+        ORDER BY week DESC
+    ";
+    $result = $conn->query($sql);
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $row['grand_total'] = $row['total_tithes'] + $row['total_offerings'];
+            $weekly_reports[] = $row;
+        }
     }
 }
 
@@ -147,18 +377,18 @@ if ($result) {
 $sql = "
     WITH weekly_totals AS (
         SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
+            DATE_FORMAT(entry_date, '%Y-%U') as week,
             'tithes' as type,
-            SUM(amount) as total
-        FROM tithes 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
+            SUM(tithes) as total
+        FROM breakdown_income 
+        GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
         UNION ALL
         SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
+            DATE_FORMAT(entry_date, '%Y-%U') as week,
             'offerings' as type,
-            SUM(amount) as total
-        FROM offerings 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
+            SUM(offerings) as total
+        FROM breakdown_income 
+        GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
     )
     SELECT 
         type,
@@ -181,27 +411,11 @@ $avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
 
 // Get historical data for trend analysis (tithes + offerings only)
 $sql = "
-    WITH all_dates AS (
-        SELECT date FROM tithes
-        UNION ALL
-        SELECT date FROM offerings
-    ),
-    date_range AS (
-        SELECT 
-            MIN(date) as start_date,
-            MAX(date) as end_date
-        FROM all_dates
-    )
     SELECT 
-        DATE_FORMAT(date, '%Y-%m') as month,
-        SUM(amount) as total
-    FROM (
-        SELECT date, amount FROM tithes
-        UNION ALL
-        SELECT date, amount FROM offerings
-    ) combined
-    WHERE date >= (SELECT start_date FROM date_range)
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
+        DATE_FORMAT(entry_date, '%Y-%m') as month,
+        SUM(tithes + offerings) as total
+    FROM breakdown_income
+    GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
     ORDER BY month ASC";
 $result = $conn->query($sql);
 $historical_data = [];
@@ -218,16 +432,13 @@ if (empty($historical_data)) {
 }
 // Prophet prediction logic (tithes + offerings only)
 function getProphetPrediction($conn) {
+    $minimumRequiredMonths = 6;
     $sql = "
         SELECT 
-            DATE_FORMAT(date, '%Y-%m') as month,
-            SUM(amount) as total
-        FROM (
-            SELECT date, amount FROM tithes
-            UNION ALL
-            SELECT date, amount FROM offerings
-        ) combined
-        GROUP BY DATE_FORMAT(date, '%Y-%m')
+            DATE_FORMAT(entry_date, '%Y-%m') as month,
+            SUM(tithes + offerings) as total
+        FROM breakdown_income
+        GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
         ORDER BY month";
     $result = $conn->query($sql);
     $prophet_data = [];
@@ -239,7 +450,8 @@ function getProphetPrediction($conn) {
             ];
         }
     }
-    if (count($prophet_data) < 3) {
+    
+    if (count($prophet_data) < $minimumRequiredMonths) {
         return null;
     }
     $ch = curl_init('http://localhost:5000/predict');
@@ -301,14 +513,10 @@ function getProphetPrediction($conn) {
 $prophet_predictions = getProphetPrediction($conn);
 $actuals_2025 = [];
 $sql_actuals_2025 = "
-    SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(amount) as total
-    FROM (
-        SELECT date, amount FROM tithes
-        UNION ALL
-        SELECT date, amount FROM offerings
-    ) combined
-    WHERE YEAR(date) = 2025
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
+    SELECT DATE_FORMAT(entry_date, '%Y-%m') as month, SUM(tithes + offerings) as total
+    FROM breakdown_income
+    WHERE YEAR(entry_date) = 2025
+    GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
     ORDER BY month ASC
 ";
 $result_actuals_2025 = $conn->query($sql_actuals_2025);
@@ -443,12 +651,13 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         .tab-navigation a { flex: 1; text-align: center; padding: 15px; color: var(--primary-color); text-decoration: none; transition: background-color 0.3s; font-weight: 500; }
         .tab-navigation a.active { background-color: var(--accent-color); color: var(--white); }
         .tab-navigation a:hover:not(.active) { background-color: #f0f0f0; }
+        .tab-navigation a[data-tab="financial-breakdown"] { font-size: 15px; }
         .tab-content { background-color: var(--white); border-radius: 5px; padding: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
         .tab-pane { display: none; }
         .tab-pane.active { display: block; }
-        .table-responsive { background-color: var(--white); border-radius: 5px; padding: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eeeeee; }
+        .table-responsive { background-color: var(--white); border-radius: 5px; padding: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eeeeee; white-space: nowrap; }
         th { background-color: #f5f5f5; font-weight: 600; }
         tbody tr:hover { background-color: #f9f9f9; }
         .summary-content { padding: 20px; }
@@ -457,15 +666,279 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         .summary-card h3 { margin-bottom: 15px; color: var(--primary-color); font-size: 18px; }
         .summary-card.full-width { grid-column: 1 / -1; }
         .prediction-chart, .trend-chart { height: 300px; margin-bottom: 20px; }
-        .prediction-details { margin-top: 10px; }
-        .prediction-metric { margin-bottom: 8px; }
-        .prediction-metric .label { font-size: 14px; color: #666; margin-right: 8px; }
-        .prediction-metric .value { font-size: 16px; font-weight: bold; color: var(--accent-color); }
-        .prediction-metric .value.positive { color: var(--success-color); }
-        .prediction-metric .value.negative { color: var(--danger-color); }
+        .prediction-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .prediction-metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .prediction-metric:last-child {
+            margin-bottom: 0;
+        }
+        .prediction-metric .label {
+            color: #666;
+        }
+        .prediction-metric .value {
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        .prediction-metric .value.positive {
+            color: #28a745;
+        }
+        .prediction-metric .value.negative {
+            color: #dc3545;
+        }
         @media (max-width: 768px) {
-            .tab-navigation { flex-direction: column; }
-            .summary-grid { grid-template-columns: 1fr; }
+            .content-area {
+                padding: 15px;
+                padding-top: 70px;
+            }
+            
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 15px;
+            }
+            
+            .top-bar h2 {
+                font-size: 20px;
+            }
+            
+            .tab-navigation {
+                flex-direction: row;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                scrollbar-color: var(--accent-color) transparent;
+                display: flex;
+                flex-wrap: nowrap;
+                margin-bottom: 15px;
+            }
+            
+            .tab-navigation::-webkit-scrollbar {
+                height: 4px;
+            }
+            
+            .tab-navigation::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            
+            .tab-navigation::-webkit-scrollbar-thumb {
+                background: var(--accent-color);
+                border-radius: 2px;
+            }
+            
+            .tab-navigation a {
+                padding: 12px 16px;
+                flex: 0 0 auto;
+                min-width: max-content;
+                white-space: nowrap;
+                font-size: 14px;
+            }
+            
+            .tab-content {
+                padding: 15px;
+            }
+            
+            .summary-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .summary-card {
+                padding: 15px;
+            }
+            
+            .table-responsive {
+                padding: 15px;
+                margin-bottom: 15px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                scrollbar-color: var(--accent-color) transparent;
+            }
+            
+            .table-responsive::-webkit-scrollbar {
+                height: 6px;
+            }
+            
+            .table-responsive::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 3px;
+            }
+            
+            .table-responsive::-webkit-scrollbar-thumb {
+                background: var(--accent-color);
+                border-radius: 3px;
+            }
+            
+            table {
+                min-width: 600px;
+            }
+            
+            /* Monthly expenses table specific */
+            #monthly-expenses-table {
+                min-width: 800px;
+            }
+            
+            th, td {
+                padding: 10px 12px;
+                font-size: 14px;
+            }
+            
+            /* DataTables mobile styles */
+            .dataTables_wrapper .dataTables_filter {
+                margin-bottom: 10px;
+            }
+            
+            .dataTables_wrapper .dataTables_filter input {
+                width: 100%;
+                max-width: 300px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            
+            .dataTables_wrapper .dataTables_length {
+                margin-bottom: 10px;
+            }
+            
+            .dataTables_wrapper .dataTables_length select {
+                padding: 6px;
+                font-size: 14px;
+            }
+            
+            .dataTables_wrapper .dataTables_paginate {
+                margin-top: 10px;
+            }
+            
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 6px 10px;
+                font-size: 13px;
+                margin: 0 2px;
+            }
+            
+            .prediction-chart,
+            .trend-chart {
+                height: 250px;
+            }
+            
+            .insights-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .insight-card {
+                padding: 15px;
+            }
+            .tab-navigation {
+                flex-wrap: wrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab-navigation a {
+                padding: 12px 10px;
+                font-size: 13px;
+                min-width: auto;
+                flex: 1 1 auto;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .content-area {
+                padding: 12px;
+                padding-top: 70px;
+            }
+            
+            .top-bar {
+                padding: 12px;
+            }
+            
+            .top-bar h2 {
+                font-size: 18px;
+            }
+            
+            .tab-navigation {
+                flex-direction: column;
+                margin-bottom: 12px;
+            }
+            
+            .tab-navigation a {
+                width: 100%;
+                padding: 12px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .tab-navigation a:last-child {
+                border-bottom: none;
+            }
+            
+            .tab-content {
+                padding: 12px;
+            }
+            
+            .summary-card {
+                padding: 12px;
+            }
+            
+            .table-responsive {
+                padding: 12px;
+            }
+            
+            table {
+                min-width: 500px;
+            }
+            
+            /* Monthly expenses table specific */
+            #monthly-expenses-table {
+                min-width: 700px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            
+            /* DataTables mobile styles */
+            .dataTables_wrapper .dataTables_filter input {
+                max-width: 100%;
+                font-size: 13px;
+            }
+            
+            .dataTables_wrapper .dataTables_length select {
+                font-size: 13px;
+            }
+            
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+            
+            .dataTables_wrapper .dataTables_info {
+                font-size: 12px;
+                padding: 8px 0;
+            }
+            
+            .prediction-chart,
+            .trend-chart {
+                height: 200px;
+            }
+            
+            .prediction-metric {
+                font-size: 13px;
+            }
+            
+            .prediction-metric .label {
+                font-size: 12px;
+            }
+            
+            .prediction-metric .value {
+                font-size: 14px;
+            }
         }
 
         /* Monthly Expenses Tab Styles (copied from admin_expenses.php) */
@@ -658,6 +1131,179 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
             color: var(--primary-color);
             font-size: 24px;
         }
+
+        /* Financial Breakdown Tab Styles */
+        .breakdown-tab-navigation {
+            display: flex;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            padding: 5px;
+        }
+
+        .breakdown-tab-navigation a {
+            flex: 1;
+            text-align: center;
+            padding: 12px 20px;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: background-color 0.3s;
+            font-weight: 500;
+            border-radius: 5px;
+        }
+
+        .breakdown-tab-navigation a.active {
+            background-color: var(--accent-color);
+            color: var(--white);
+        }
+
+        .breakdown-tab-navigation a:hover:not(.active) {
+            background-color: #e9ecef;
+        }
+
+        .breakdown-tab-content {
+            margin-top: 20px;
+        }
+
+        .breakdown-pane {
+            display: none;
+        }
+
+        .breakdown-pane.active {
+            display: block;
+        }
+
+        .expense-card-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .expense-card {
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .expense-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        .expense-card .card-header {
+            background: linear-gradient(135deg, var(--accent-color) 0%, rgb(0, 112, 9) 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .expense-card .card-header .date {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .expense-card .card-body {
+            padding: 20px;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+
+        .expense-item .label {
+            color: #666;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .expense-item .value {
+            color: var(--primary-color);
+            font-weight: 600;
+            font-size: 14px;
+            text-align: right;
+        }
+
+        .expense-card .card-footer {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .expense-card .card-footer .note {
+            color: #666;
+            font-size: 13px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .expense-card .card-footer .total {
+            color: var(--accent-color);
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        /* Breakdown Pagination Styles */
+        .breakdown-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .breakdown-pagination .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--accent-color);
+            color: var(--white);
+            border: none;
+            cursor: pointer;
+        }
+
+        .breakdown-pagination .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .breakdown-pagination .btn:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            background-color: rgb(0, 112, 9);
+        }
+
+        .breakdown-pagination .pagination-info {
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -674,9 +1320,55 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
             $('#' + tabId).addClass('active');
         });
 
+        // Breakdown tab functionality (Income/Expenses within Financial Breakdown)
+        $('.breakdown-tab-navigation a').on('click', function(e) {
+            e.preventDefault();
+            $('.breakdown-tab-navigation a').removeClass('active');
+            $('.breakdown-pane').removeClass('active');
+            $(this).addClass('active');
+            var breakdownTabId = $(this).data('breakdown-tab');
+            $('#breakdown-' + breakdownTabId).addClass('active');
+        });
+
+        // Restore breakdown tab from URL parameter on page load
+        $(document).ready(function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const breakdownTabParam = urlParams.get('breakdown_tab');
+            if (breakdownTabParam === 'expenses' || breakdownTabParam === 'income') {
+                $('.breakdown-tab-navigation a').removeClass('active');
+                $('.breakdown-pane').removeClass('active');
+                
+                const targetTab = $('.breakdown-tab-navigation a[data-breakdown-tab="' + breakdownTabParam + '"]');
+                const targetPane = $('#breakdown-' + breakdownTabParam);
+                
+                if (targetTab.length && targetPane.length) {
+                    targetTab.addClass('active');
+                    targetPane.addClass('active');
+                }
+            }
+        });
+
+        // Breakdown pagination navigation
+        window.navigateBreakdownPage = function(page) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('breakdown_page', page);
+            
+            // Detect which breakdown tab is currently active (income or expenses)
+            const activeBreakdownTab = document.querySelector('.breakdown-tab-navigation a.active');
+            const breakdownTab = activeBreakdownTab ? activeBreakdownTab.getAttribute('data-breakdown-tab') : 'income';
+            
+            // Preserve the breakdown tab in URL parameter
+            url.searchParams.set('breakdown_tab', breakdownTab);
+            
+            // Preserve the hash (main tab) if it exists
+            const hash = window.location.hash || '#financial-breakdown';
+            window.location.href = url.toString() + hash;
+        };
+
         // DataTables initialization for all tables
         $('#weekly-reports-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -695,6 +1387,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         });
         $('#tithes-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -713,6 +1406,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         });
         $('#offerings-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -731,6 +1425,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         });
         $('#bank-gifts-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -749,6 +1444,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         });
         $('#specified-gifts-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -767,6 +1463,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         });
         $('#monthly-expenses-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -905,7 +1602,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
             </div>
             <div class="profile-info">
                 <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                <div class="role">Super Admin</div>
+                <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Super Admin'); ?></div>
             </div>
             <form action="logout.php" method="post" style="margin:0;">
                 <button type="submit" class="logout-btn">Logout</button>
@@ -937,6 +1634,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                 <a href="#offerings" data-tab="offerings">Offerings</a>
                 <a href="#bank-gifts" data-tab="bank-gifts">Bank Gifts</a>
                 <a href="#specified-gifts" data-tab="specified-gifts">Specified Gifts</a>
+                <a href="#financial-breakdown" data-tab="financial-breakdown">Financial Breakdown</a>
                 <a href="#monthly-expenses" data-tab="monthly-expenses">Monthly Expenses</a>
                 <a href="#summary" data-tab="summary">Insights</a>
             </div>
@@ -981,14 +1679,16 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                                     <th>ID</th>
                                     <th>Date</th>
                                     <th>Amount</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody id="tithes-tbody">
                                 <?php foreach ($tithes_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><?php echo htmlspecialchars((string) $record['id']); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1005,14 +1705,16 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                                     <th>ID</th>
                                     <th>Date</th>
                                     <th>Amount</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody id="offerings-tbody">
                                 <?php foreach ($offerings_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><?php echo htmlspecialchars((string) $record['id']); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1028,19 +1730,17 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                                 <tr>
                                     <th>ID</th>
                                     <th>Date</th>
-                                    <th>Date Deposited</th>
-                                    <th>Date Updated</th>
                                     <th>Amount</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody id="bank-gifts-tbody">
                                 <?php foreach ($bank_gifts_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_deposited'])); ?></strong></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_updated'])); ?></strong></td>
+                                        <td><?php echo htmlspecialchars((string) $record['id']); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1058,19 +1758,169 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                                     <th>Date</th>
                                     <th>Category</th>
                                     <th>Amount</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
                             <tbody id="specified-gifts-tbody">
                                 <?php foreach ($specified_gifts_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><?php echo htmlspecialchars((string) $record['id']); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td><?php echo htmlspecialchars($record['category']); ?></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Financial Breakdown Tab -->
+                <div class="tab-pane" id="financial-breakdown">
+                    <div class="card">
+                        <div class="breakdown-tab-navigation">
+                            <a href="#breakdown-income" class="active" data-breakdown-tab="income">Income</a>
+                            <a href="#breakdown-expenses" data-breakdown-tab="expenses">Expenses</a>
+                        </div>
+
+                        <div class="breakdown-tab-content">
+                            <div class="breakdown-pane active" id="breakdown-income">
+                                <?php if (!empty($displayIncomeEntries)): ?>
+                                    <div class="expense-card-list">
+                                        <?php foreach ($displayIncomeEntries as $incomeEntry): ?>
+                                            <?php
+                                                $incomeFields = [
+                                                    'Tithes' => $incomeEntry['tithes'],
+                                                    'Offerings' => $incomeEntry['offerings'],
+                                                    'Gifts Received through Bank' => $incomeEntry['gifts_bank'],
+                                                    'Bank Interest' => $incomeEntry['bank_interest'],
+                                                    'Others' => $incomeEntry['others'],
+                                                    'Building' => $incomeEntry['building']
+                                                ];
+                                            ?>
+                                            <div class="expense-card">
+                                                <div class="card-header">
+                                                    <div class="date"><?php echo htmlspecialchars(date('F d, Y', strtotime($incomeEntry['entry_date']))); ?></div>
+                                                </div>
+                                                <div class="card-body">
+                                                    <?php foreach ($incomeFields as $label => $value): ?>
+                                                        <div class="expense-item">
+                                                            <span class="label"><?php echo $label; ?></span>
+                                                            <span class="value">₱<?php echo number_format((float) $value, 2); ?></span>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                                <div class="card-footer">
+                                                    <div class="note">
+                                                        <?php echo $incomeEntry['notes'] !== '' ? nl2br(htmlspecialchars($incomeEntry['notes'])) : 'No notes provided.'; ?>
+                                                    </div>
+                                                    <div class="total">Total: ₱<?php echo number_format($incomeEntry['total_amount'], 2); ?></div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php if (isset($breakdownPagination) && $breakdownPagination !== null && $breakdownPagination['total_pages'] > 1): ?>
+                                        <div class="breakdown-pagination">
+                                            <button type="button" class="btn" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] - 1; ?>)" <?php echo !$breakdownPagination['has_previous'] ? 'disabled' : ''; ?>>
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </button>
+                                            <span class="pagination-info">
+                                                Showing <?php echo count($displayIncomeEntries); ?> of <?php echo $breakdownPagination['total_income_entries']; ?> income entries 
+                                                (Page <?php echo ($breakdownPagination['current_page'] + 1); ?> of <?php echo $breakdownPagination['total_pages']; ?>)
+                                            </span>
+                                            <button type="button" class="btn" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] + 1; ?>)" <?php echo !$breakdownPagination['has_next'] ? 'disabled' : ''; ?>>
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <div style="text-align:center; color:#666; padding:25px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+                                        No income breakdown entries found.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="breakdown-pane" id="breakdown-expenses">
+                                <?php if (!empty($displayExpenseEntries)): ?>
+                                    <div class="expense-card-list">
+                                        <?php foreach ($displayExpenseEntries as $expenseEntry): ?>
+                                            <?php
+                                                $expenseFields = [
+                                                    'Speaker' => $expenseEntry['speaker'] ?? 0,
+                                                    'Workers' => $expenseEntry['workers'] ?? 0,
+                                                    'Food' => $expenseEntry['food'] ?? 0,
+                                                    'House Keeping' => $expenseEntry['housekeeping'] ?? 0,
+                                                    'Office Supplies' => $expenseEntry['office_supplies'] ?? 0,
+                                                    'Transportation' => $expenseEntry['transportation'] ?? 0,
+                                                    'Photocopy' => $expenseEntry['photocopy'] ?? 0,
+                                                    'Internet' => $expenseEntry['internet'] ?? 0,
+                                                    'Government Concern' => $expenseEntry['government_concern'] ?? 0,
+                                                    'Water Bill' => $expenseEntry['water_bill'] ?? 0,
+                                                    'Electric Bill' => $expenseEntry['electric_bill'] ?? 0,
+                                                    'Special Events' => $expenseEntry['special_events'] ?? 0,
+                                                    'Needy / Calamity / Emergency' => $expenseEntry['needy_calamity'] ?? 0,
+                                                    'Trainings' => $expenseEntry['trainings'] ?? 0,
+                                                    'Kids Ministry' => $expenseEntry['kids_ministry'] ?? 0,
+                                                    'Youth Ministry' => $expenseEntry['youth_ministry'] ?? 0,
+                                                    'Music Ministry' => $expenseEntry['music_ministry'] ?? 0,
+                                                    'Single Professionals Ministry' => $expenseEntry['single_professionals_ministry'] ?? 0,
+                                                    'Young Couples Ministry' => $expenseEntry['young_couples_ministry'] ?? 0,
+                                                    'WOW Ministry' => $expenseEntry['wow_ministry'] ?? 0,
+                                                    'AMEN Ministry' => $expenseEntry['amen_ministry'] ?? 0,
+                                                    'Couples Ministry' => $expenseEntry['couples_ministry'] ?? 0,
+                                                    'Visitation / Prayer Ministry' => $expenseEntry['visitation_prayer_ministry'] ?? 0,
+                                                    'Acquisitions' => $expenseEntry['acquisitions'] ?? 0,
+                                                    'Materials' => $expenseEntry['materials'] ?? 0,
+                                                    'Labor' => $expenseEntry['labor'] ?? 0,
+                                                    'Mission Support' => $expenseEntry['mission_support'] ?? 0,
+                                                    'Land Title' => $expenseEntry['land_title'] ?? 0
+                                                ];
+                                            ?>
+                                            <div class="expense-card">
+                                                <div class="card-header">
+                                                    <div class="date"><?php echo htmlspecialchars(date('F d, Y', strtotime($expenseEntry['entry_date']))); ?></div>
+                                                </div>
+                                                <div class="card-body">
+                                                    <?php foreach ($expenseFields as $label => $value): ?>
+                                                        <?php if (floatval($value) > 0): ?>
+                                                            <div class="expense-item">
+                                                                <span class="label"><?php echo $label; ?></span>
+                                                                <span class="value">₱<?php echo number_format((float) $value, 2); ?></span>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                                <div class="card-footer">
+                                                    <div class="note">
+                                                        <?php echo $expenseEntry['notes'] !== '' ? nl2br(htmlspecialchars($expenseEntry['notes'])) : 'No notes provided.'; ?>
+                                                    </div>
+                                                    <div class="total">Total: ₱<?php echo number_format($expenseEntry['total_amount'], 2); ?></div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php if (isset($breakdownPagination) && $breakdownPagination !== null && $breakdownPagination['total_pages'] > 1): ?>
+                                        <div class="breakdown-pagination">
+                                            <button type="button" class="btn" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] - 1; ?>)" <?php echo !$breakdownPagination['has_previous'] ? 'disabled' : ''; ?>>
+                                                <i class="fas fa-chevron-left"></i> Previous
+                                            </button>
+                                            <span class="pagination-info">
+                                                Showing <?php echo count($displayExpenseEntries); ?> of <?php echo $breakdownPagination['total_expense_entries']; ?> expense entries 
+                                                (Page <?php echo ($breakdownPagination['current_page'] + 1); ?> of <?php echo $breakdownPagination['total_pages']; ?>)
+                                            </span>
+                                            <button type="button" class="btn" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] + 1; ?>)" <?php echo !$breakdownPagination['has_next'] ? 'disabled' : ''; ?>>
+                                                Next <i class="fas fa-chevron-right"></i>
+                                            </button>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <div style="text-align:center; color:#666; padding:25px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+                                        No expense breakdown entries found.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1089,22 +1939,30 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($monthly_expenses_records as $row): ?>
-                                    <tr>
-                                        <td class="month-column" data-order="<?php echo strtotime($row['month'] . '-01'); ?>">
-                                            <strong><?php echo date('F Y', strtotime($row['month'] . '-01')); ?></strong>
-                                        </td>
-                                        <td class="<?php echo $row['income'] > $row['expenses'] ? 'positive-income' : ''; ?>">
-                                            ₱<?php echo number_format($row['income'], 2); ?>
-                                        </td>
-                                        <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ''; ?>">
-                                            ₱<?php echo number_format($row['expenses'], 2); ?>
-                                        </td>
-                                        <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ($row['difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
-                                            ₱<?php echo number_format($row['difference'], 2); ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
+                                    <?php if (!empty($monthly_expenses_records)): ?>
+                                        <?php foreach ($monthly_expenses_records as $row): ?>
+                                        <tr>
+                                            <td class="month-column" data-order="<?php echo strtotime($row['month'] . '-01'); ?>">
+                                                <strong><?php echo date('F Y', strtotime($row['month'] . '-01')); ?></strong>
+                                            </td>
+                                            <td class="<?php echo $row['income'] > $row['expenses'] ? 'positive-income' : ''; ?>">
+                                                ₱<?php echo number_format($row['income'], 2); ?>
+                                            </td>
+                                            <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ''; ?>">
+                                                ₱<?php echo number_format($row['expenses'], 2); ?>
+                                            </td>
+                                            <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ($row['difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
+                                                ₱<?php echo number_format($row['difference'], 2); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr>
+                                            <td colspan="4" style="text-align:center; color:#666; padding:20px;">
+                                                No monthly expenses data available. Please add breakdown entries.
+                                            </td>
+                                        </tr>
+                                    <?php endif; ?>
                                 </tbody>
                                 <tfoot>
                                     <tr class="summary-row">

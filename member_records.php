@@ -1485,11 +1485,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
 
         .table-responsive {
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+        }
+
+        .dataTables_wrapper {
+            width: 100%;
+        }
+
+        .dataTables_wrapper .dataTables_filter input {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-left: 6px;
         }
 
         table th, table td {
@@ -1848,15 +1860,57 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             .action-bar {
                 flex-direction: column;
                 gap: 10px;
+                align-items: stretch;
             }
+            
+            .action-bar .btn {
+                width: 100%;
+                text-align: center;
+                padding: 12px 20px;
+                font-size: 14px;
+                justify-content: center;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .action-bar .btn i {
+                margin-right: 0;
+            }
+            
             .search-box {
                 width: 100%;
             }
             .tab-navigation {
-                flex-direction: column;
+                flex-direction: row;
+                overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                scrollbar-color: var(--accent-color) transparent;
+                display: flex;
+                flex-wrap: nowrap;
             }
+            
+            .tab-navigation::-webkit-scrollbar {
+                height: 4px;
+            }
+            
+            .tab-navigation::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            
+            .tab-navigation::-webkit-scrollbar-thumb {
+                background: var(--accent-color);
+                border-radius: 2px;
+            }
+            
             .tab-navigation a {
-                padding: 10px;
+                padding: 12px 16px;
+                flex: 0 0 auto;
+                min-width: max-content;
+                white-space: nowrap;
+                font-size: 14px;
             }
             .radio-group {
                 flex-direction: column;
@@ -1952,6 +2006,91 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             
             .form-section {
                 padding: 15px;
+            }
+            
+            .tab-content {
+                padding: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .tab-navigation {
+                margin-bottom: 15px;
+            }
+            
+            .tab-navigation a {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+            
+            .tab-content {
+                padding: 12px;
+            }
+            
+            .content-area {
+                padding: 12px;
+            }
+            
+            .action-bar .btn {
+                padding: 10px 15px;
+                font-size: 13px;
+            }
+
+            .table-responsive {
+                margin-bottom: 15px;
+            }
+
+            table.dataTable tbody td,
+            table.dataTable thead th {
+                white-space: nowrap;
+                font-size: 13px;
+                padding: 10px 12px;
+            }
+
+            .dataTables_wrapper .dataTables_length,
+            .dataTables_wrapper .dataTables_filter {
+                float: none;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                margin-bottom: 10px;
+            }
+
+            .dataTables_wrapper .dataTables_filter label {
+                width: 100%;
+            }
+
+            .dataTables_wrapper .dataTables_filter input {
+                width: 100% !important;
+                margin-left: 0;
+                margin-top: 6px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate {
+                float: none;
+                display: flex;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 12px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 6px 10px;
+                margin: 0;
+            }
+        }
+
+        @media (max-width: 360px) {
+            table.dataTable tbody td,
+            table.dataTable thead th {
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+
+            .dataTables_wrapper .dataTables_length select {
+                width: 100%;
+                margin-top: 6px;
             }
         }
 
@@ -2287,12 +2426,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role">Super Admin</div>
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Super Admin'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>

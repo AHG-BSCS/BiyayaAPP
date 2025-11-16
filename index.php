@@ -49,29 +49,6 @@ function getUpcomingEventsCount($conn) {
 $upcoming_events = getUpcomingEvents($conn);
 $total_upcoming_events = getUpcomingEventsCount($conn);
 
-// Debug: Check if events are being fetched
-if (empty($upcoming_events)) {
-    // Check if there are any events in the database
-    $debug_sql = "SELECT COUNT(*) as total FROM events";
-    $debug_result = $conn->query($debug_sql);
-    if ($debug_result && $debug_result->num_rows > 0) {
-        $debug_row = $debug_result->fetch_assoc();
-        error_log("Total events in database: " . $debug_row['total']);
-    }
-    
-    // Show all events in database for debugging
-    $debug_sql3 = "SELECT id, title, event_date, event_time FROM events ORDER BY event_date ASC";
-    $debug_result3 = $conn->query($debug_sql3);
-    if ($debug_result3 && $debug_result3->num_rows > 0) {
-        while ($debug_row3 = $debug_result3->fetch_assoc()) {
-            error_log("Event: ID=" . $debug_row3['id'] . ", Title=" . $debug_row3['title'] . ", Date=" . $debug_row3['event_date'] . ", Time=" . $debug_row3['event_time']);
-        }
-    }
-    
-    // Check current date
-    error_log("Current date: " . date('Y-m-d'));
-}
-
 // Function to log login attempts
 function logLoginAttempt($conn, $username, $status, $failure_reason = null) {
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -102,7 +79,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($result->num_rows === 1) {
         // User exists, now verify password
         $user = $result->fetch_assoc();
-        if (password_verify($password, $user['password'])) {
+        
+        // Try MD5 first (new passwords)
+        $password_valid = false;
+        if (md5($password) === $user['password']) {
+            $password_valid = true;
+        } 
+        // Fall back to password_verify for old bcrypt passwords
+        else if (password_verify($password, $user['password'])) {
+            $password_valid = true;
+            // Migrate old password to MD5
+            $new_md5_password = md5($password);
+            $update_sql = "UPDATE user_profiles SET password = ? WHERE user_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("ss", $new_md5_password, $user['user_id']);
+            $update_stmt->execute();
+        }
+        
+        if ($password_valid) {
             // Password is correct, log successful login
             logLoginAttempt($conn, $username, 'Success');
             
@@ -201,6 +195,7 @@ function getEventImage($event_title, $custom_image = null) {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 15px;
+            box-sizing: border-box;
         }
 
         header {
@@ -755,30 +750,69 @@ function getEventImage($event_title, $custom_image = null) {
         }
 
         @media (max-width: 768px) {
+            header {
+                padding: 0;
+            }
+
             .header-content {
-                flex-direction: column;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 15px;
+            }
+
+            .logo {
+                flex: 0 0 auto;
+                margin-bottom: 0;
+                display: flex;
+                align-items: center;
+            }
+
+            .logo img {
+                height: 45px !important;
+                margin-right: 12px !important;
+            }
+
+            .logo h1 {
+                font-size: 18px;
+                margin-left: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 200px;
+            }
+
+            nav {
+                flex: 1 1 auto;
+                width: auto;
             }
 
             nav ul {
-                margin-top: 15px;
+                margin-top: 0;
                 flex-wrap: wrap;
-                justify-content: center;
+                justify-content: flex-end;
+                width: auto;
             }
 
             nav ul li {
-                margin: 5px 10px;
+                margin: 3px 5px;
+            }
+
+            nav ul li a {
+                font-size: 13px;
+                padding: 6px 10px;
             }
 
             .hero {
-                margin-top: 120px;
+                margin-top: 100px;
             }
 
             .hero-content h2 {
-                font-size: 36px;
+                font-size: 28px;
             }
 
             .hero-content p {
-                font-size: 18px;
+                font-size: 16px;
             }
 
             .section {
@@ -800,6 +834,67 @@ function getEventImage($event_title, $custom_image = null) {
 
             .login-form-container .church-logo img {
                 height: 70px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 0 10px;
+            }
+
+            .header-content {
+                padding: 10px;
+                flex-wrap: wrap;
+            }
+
+            .logo {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+
+            .logo img {
+                height: 40px !important;
+                margin-right: 8px !important;
+            }
+
+            .logo h1 {
+                font-size: 16px;
+                max-width: 150px;
+            }
+
+            nav {
+                flex: 1 1 100%;
+                order: 3;
+                width: 100%;
+                margin-top: 10px;
+                border-top: 1px solid rgba(0, 0, 0, 0.1);
+                padding-top: 10px;
+            }
+
+            nav ul {
+                justify-content: space-around;
+                width: 100%;
+            }
+
+            nav ul li {
+                margin: 2px;
+            }
+
+            nav ul li a {
+                font-size: 12px;
+                padding: 6px 8px;
+            }
+
+            .hero {
+                margin-top: 120px;
+            }
+
+            .hero-content h2 {
+                font-size: 24px;
+            }
+
+            .hero-content p {
+                font-size: 14px;
             }
         }
     </style>

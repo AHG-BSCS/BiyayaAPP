@@ -121,7 +121,13 @@ $contributions_query = "
     JOIN user_profiles up ON c.user_id = up.user_id
     ORDER BY c.contribution_date DESC
 ";
-$all_contributions = $conn->query($contributions_query);
+$all_contributions_result = $conn->query($contributions_query);
+$all_contributions = [];
+if ($all_contributions_result) {
+    while ($row = $all_contributions_result->fetch_assoc()) {
+        $all_contributions[] = $row;
+    }
+}
 
 // Update the admin contribution submission code
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribution'])) {
@@ -157,6 +163,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_submit_contribu
     } else {
         $_SESSION['error_message'] = "User not found in the user profiles.";
     }
+}
+
+// Handle edit contribution
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_contribution'])) {
+    $contribution_id = intval($_POST['contribution_id']);
+    $amount = floatval($_POST['amount']);
+    $contribution_type = $_POST['contribution_type'];
+    $payment_method = $_POST['payment_method'];
+    $reference_number = $_POST['reference_number'];
+    $contribution_date = $_POST['contribution_date'];
+    
+    $stmt = $conn->prepare("
+        UPDATE contributions 
+        SET amount = ?, contribution_type = ?, payment_method = ?, 
+            reference_number = ?, contribution_date = ?
+        WHERE id = ?
+    ");
+    $stmt->bind_param("dssssi", $amount, $contribution_type, $payment_method, $reference_number, $contribution_date, $contribution_id);
+    
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Contribution updated successfully!";
+        header("Location: member_contributions.php");
+        exit();
+    } else {
+        $_SESSION['error_message'] = "Error updating contribution: " . $stmt->error;
+    }
+}
+
+// Handle delete contribution
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_contribution'])) {
+    $contribution_id = intval($_POST['contribution_id']);
+    
+    $stmt = $conn->prepare("DELETE FROM contributions WHERE id = ?");
+    $stmt->bind_param("i", $contribution_id);
+    
+    if ($stmt->execute()) {
+        $_SESSION['success_message'] = "Contribution deleted successfully!";
+        header("Location: member_contributions.php");
+        exit();
+    } else {
+        $_SESSION['error_message'] = "Error deleting contribution: " . $stmt->error;
+    }
+}
+
+// Get contribution data for editing
+$edit_contribution = null;
+if (isset($_GET['edit_id'])) {
+    $edit_id = intval($_GET['edit_id']);
+    $stmt = $conn->prepare("
+        SELECT c.*, up.full_name as member_name 
+        FROM contributions c
+        JOIN user_profiles up ON c.user_id = up.user_id
+        WHERE c.id = ?
+    ");
+    $stmt->bind_param("i", $edit_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $edit_contribution = $result->fetch_assoc();
 }
 
 // Get all users for admin dropdown
@@ -843,6 +907,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background-color: #95a5a6;
             color: white;
         }
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: white;
+        }
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
+        }
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
+        }
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
+        }
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
+        }
+        .action-btn i {
+            font-size: 14px;
+        }
         /* --- Drawer Navigation Styles (EXACT from superadmin_dashboard.php) --- */
         .nav-toggle-container {
             position: fixed;
@@ -1195,10 +1292,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <th>Amount</th>
                                     <th>Payment Method</th>
                                     <th>Reference Number</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php while ($row = $all_contributions->fetch_assoc()): ?>
+                                <?php foreach ($all_contributions as $row): ?>
                                 <tr>
                                     <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
                                     <td><?php echo htmlspecialchars($row['member_name']); ?></td>
@@ -1211,14 +1309,91 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <td>₱<?php echo number_format($row['amount'], 2); ?></td>
                                     <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
                                     <td><?php echo htmlspecialchars($row['reference_number']); ?></td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            <button type="button" class="action-btn edit-btn" onclick="openEditModal(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['member_name'], ENT_QUOTES); ?>', '<?php echo $row['contribution_date']; ?>', <?php echo $row['amount']; ?>, '<?php echo $row['contribution_type']; ?>', '<?php echo $row['payment_method']; ?>', '<?php echo htmlspecialchars($row['reference_number'], ENT_QUOTES); ?>')">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="action-btn delete-btn" onclick="confirmDelete(<?php echo $row['id']; ?>)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
                                 </tr>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Edit Contribution Modal -->
+    <div id="editContributionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Contribution</h3>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <form method="POST" action="" class="contribution-form" id="editContributionForm">
+                <input type="hidden" name="contribution_id" id="edit_contribution_id">
+                <div class="form-group">
+                    <label>Member Name</label>
+                    <input type="text" id="edit_member_name" readonly style="background-color: #f5f5f5; cursor: not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label for="edit_contribution_date">Date</label>
+                    <input type="date" id="edit_contribution_date" name="contribution_date" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_amount">Amount (₱)</label>
+                    <input type="number" id="edit_amount" name="amount" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_contribution_type">Contribution Type</label>
+                    <select id="edit_contribution_type" name="contribution_type" required>
+                        <option value="tithe">Tithe</option>
+                        <option value="offering">Offering</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit_payment_method">Payment Method</label>
+                    <select id="edit_payment_method" name="payment_method" required>
+                        <option value="cash">Cash</option>
+                        <option value="gcash">GCash</option>
+                        <option value="maya">Maya</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit_reference_number">Reference Number</label>
+                    <input type="text" id="edit_reference_number" name="reference_number">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="edit_contribution" class="btn btn-primary">Update Contribution</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+                <span class="close" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <form method="POST" action="" id="deleteContributionForm">
+                <input type="hidden" name="contribution_id" id="delete_contribution_id">
+                <p style="margin: 20px 0; font-size: 16px;">Are you sure you want to delete this contribution? This action cannot be undone.</p>
+                <div class="form-actions">
+                    <button type="submit" name="delete_contribution" class="btn btn-primary" style="background-color: #f44336;">Yes, Delete</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- Admin Contribution Modal -->
@@ -1283,13 +1458,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $(document).ready(function() {
             $('#contributionsTable').DataTable({
                 columnDefs: [
-                    { width: '15%', targets: 0 }, // Date
-                    { width: '20%', targets: 1 }, // Member Name
-                    { width: '10%', targets: 2 }, // Role
-                    { width: '10%', targets: 3 }, // Type
-                    { width: '15%', targets: 4 }, // Amount
-                    { width: '15%', targets: 5 }, // Payment Method
-                    { width: '25%', targets: 6 }  // Reference Number
+                    { width: '12%', targets: 0 }, // Date
+                    { width: '15%', targets: 1 }, // Member Name
+                    { width: '8%', targets: 2 }, // Role
+                    { width: '8%', targets: 3 }, // Type
+                    { width: '12%', targets: 4 }, // Amount
+                    { width: '12%', targets: 5 }, // Payment Method
+                    { width: '15%', targets: 6 }, // Reference Number
+                    { width: '18%', targets: 7, orderable: false }  // Actions
                 ],
                 autoWidth: false,
                 responsive: true
@@ -1307,11 +1483,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             document.getElementById('adminContributionModal').style.display = 'none';
         }
 
+        // Edit Modal Functions
+        function openEditModal(id, memberName, date, amount, type, paymentMethod, referenceNumber) {
+            document.getElementById('edit_contribution_id').value = id;
+            document.getElementById('edit_member_name').value = memberName;
+            document.getElementById('edit_contribution_date').value = date;
+            document.getElementById('edit_amount').value = amount;
+            document.getElementById('edit_contribution_type').value = type;
+            document.getElementById('edit_payment_method').value = paymentMethod;
+            document.getElementById('edit_reference_number').value = referenceNumber || '';
+            document.getElementById('editContributionModal').style.display = 'block';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editContributionModal').style.display = 'none';
+        }
+
+        // Delete Modal Functions
+        function confirmDelete(id) {
+            document.getElementById('delete_contribution_id').value = id;
+            document.getElementById('deleteConfirmModal').style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteConfirmModal').style.display = 'none';
+        }
+
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('adminContributionModal');
-            if (event.target == modal) {
-                modal.style.display = 'none';
+            const adminModal = document.getElementById('adminContributionModal');
+            const editModal = document.getElementById('editContributionModal');
+            const deleteModal = document.getElementById('deleteConfirmModal');
+            
+            if (event.target == adminModal) {
+                adminModal.style.display = 'none';
+            }
+            if (event.target == editModal) {
+                editModal.style.display = 'none';
+            }
+            if (event.target == deleteModal) {
+                deleteModal.style.display = 'none';
             }
         }
 
@@ -1359,4 +1570,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         });
     </script>
 </body>
+</html> 
 </html> 

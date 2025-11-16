@@ -73,6 +73,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
 
+        // Handle password change
+        if (!empty($_POST['new_password'])) {
+            // Check if current password is provided
+            if (empty($_POST['current_password'])) {
+                $message = "Current password is required to change password.";
+                $messageType = "danger";
+            } else {
+                // Verify current password
+                $current_password = $_POST['current_password'];
+                if (md5($current_password) !== $user_profile['password']) {
+                    $message = "Current password is incorrect.";
+                    $messageType = "danger";
+                } else {
+                    // Check if new password and confirm password match
+                    if ($_POST['new_password'] !== $_POST['confirm_new_password']) {
+                        $message = "New password and confirm password do not match.";
+                        $messageType = "danger";
+                    } else {
+                        // Hash the new password
+                        $profile_data['password'] = md5($_POST['new_password']);
+                    }
+                }
+            }
+        }
+
         if (empty($message)) {
             // Check if username or email already exists for other users
             $check_sql = "SELECT * FROM user_profiles WHERE (username = ? OR email = ?) AND user_id != ?";
@@ -344,12 +369,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -388,39 +419,86 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin-left: 0;
             transition: margin-left 0.3s;
         }
-        /* Responsive Drawer Navigation (EXACT from superadmin_dashboard.php) */
-        @media (max-width: 900px) {
+        /* Responsive Drawer Navigation */
+        @media (max-width: 768px) {
             .custom-drawer {
-                left: -300px;
-                width: 80vw;
-                min-width: 200px;
-                max-width: 320px;
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
             }
             .custom-drawer.open {
                 left: 0;
             }
-            .content-area {
-                margin-left: 0;
+            .drawer-header {
+                padding: 15px;
+                min-height: auto;
+            }
+            .drawer-logo {
+                height: 40px;
+            }
+            .drawer-title {
+                font-size: 14px;
+            }
+            .drawer-close {
+                font-size: 18px;
+            }
+            .drawer-content {
+                padding: 10px 0;
+            }
+            .drawer-menu {
+                display: block;
+            }
+            .drawer-menu li {
+                margin-bottom: 0;
+            }
+            .drawer-link {
+                padding: 12px 18px;
+                justify-content: flex-start;
+                font-size: 14px;
+            }
+            .drawer-link i {
+                font-size: 16px;
+                min-width: 20px;
+            }
+            .drawer-profile {
+                padding: 15px;
+                flex-direction: row;
+                align-items: center;
+                text-align: left;
+            }
+            .drawer-profile .avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .drawer-profile .name {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .role {
+                font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
             }
             .nav-toggle-container {
                 display: block;
             }
-        }
-        @media (max-width: 700px) {
-            .custom-drawer {
-                width: 90vw;
-                min-width: 180px;
-                max-width: 98vw;
+            .content-area {
+                margin-left: 0;
+                padding-top: 70px;
             }
-            .drawer-link {
-                padding: 12px 10px;
-                font-size: 14px;
-            }
-            .drawer-header {
-                padding: 14px 10px 8px 10px;
-            }
-            .drawer-profile {
-                padding: 16px 10px 10px 10px;
+            .top-bar {
+                margin-top: 0;
             }
         }
         /* --- Settings Content Styles (match member_settings.php) --- */
@@ -625,12 +703,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? $_SESSION['user_role'] ?? 'Administrator'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
@@ -742,6 +820,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <label for="profile_picture">Upload New Profile Picture</label>
                                         <input type="file" id="profile_picture" name="profile_picture" class="form-control" accept="image/*">
                                         <small class="form-text text-muted">Recommended size: 200x200 pixels. Maximum file size: 5MB. Allowed formats: JPG, JPEG, PNG, GIF</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="current_password">Current Password</label>
+                                        <input type="password" id="current_password" name="current_password" class="form-control">
+                                        <small class="form-text text-muted">Required to change password</small>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="new_password">New Password</label>
+                                        <input type="password" id="new_password" name="new_password" class="form-control">
+                                        <small class="form-text text-muted">Leave blank to keep current password</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="confirm_new_password">Confirm New Password</label>
+                                        <input type="password" id="confirm_new_password" name="confirm_new_password" class="form-control">
                                     </div>
                                 </div>
                             </div>

@@ -12,8 +12,115 @@ $conn = new mysqli($servername, $username, $password);
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
+
 // Select the database
 $conn->select_db($dbname);
+$incomeExpensesConn = $conn;
+
+// Ensure income and expense breakdown tables exist inside churchdb
+$incomeExpensesTables = [
+    "CREATE TABLE IF NOT EXISTS breakdown_income (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entry_date DATE NOT NULL,
+        tithes DECIMAL(12,2) DEFAULT 0,
+        offerings DECIMAL(12,2) DEFAULT 0,
+        gifts_bank DECIMAL(12,2) DEFAULT 0,
+        bank_interest DECIMAL(12,2) DEFAULT 0,
+        others DECIMAL(12,2) DEFAULT 0,
+        building DECIMAL(12,2) DEFAULT 0,
+        total_amount DECIMAL(12,2) GENERATED ALWAYS AS (
+            tithes + offerings + gifts_bank + bank_interest + others + building
+        ) STORED,
+        notes TEXT,
+        created_by VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_entry_date (entry_date),
+        INDEX idx_created_by (created_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    "CREATE TABLE IF NOT EXISTS breakdown_expenses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entry_date DATE NOT NULL,
+        speaker DECIMAL(12,2) DEFAULT 0,
+        workers DECIMAL(12,2) DEFAULT 0,
+        food DECIMAL(12,2) DEFAULT 0,
+        housekeeping DECIMAL(12,2) DEFAULT 0,
+        office_supplies DECIMAL(12,2) DEFAULT 0,
+        transportation DECIMAL(12,2) DEFAULT 0,
+        photocopy DECIMAL(12,2) DEFAULT 0,
+        internet DECIMAL(12,2) DEFAULT 0,
+        government_concern DECIMAL(12,2) DEFAULT 0,
+        water_bill DECIMAL(12,2) DEFAULT 0,
+        electric_bill DECIMAL(12,2) DEFAULT 0,
+        special_events DECIMAL(12,2) DEFAULT 0,
+        needy_calamity DECIMAL(12,2) DEFAULT 0,
+        trainings DECIMAL(12,2) DEFAULT 0,
+        kids_ministry DECIMAL(12,2) DEFAULT 0,
+        youth_ministry DECIMAL(12,2) DEFAULT 0,
+        music_ministry DECIMAL(12,2) DEFAULT 0,
+        single_professionals_ministry DECIMAL(12,2) DEFAULT 0,
+        young_couples_ministry DECIMAL(12,2) DEFAULT 0,
+        wow_ministry DECIMAL(12,2) DEFAULT 0,
+        amen_ministry DECIMAL(12,2) DEFAULT 0,
+        couples_ministry DECIMAL(12,2) DEFAULT 0,
+        visitation_prayer_ministry DECIMAL(12,2) DEFAULT 0,
+        acquisitions DECIMAL(12,2) DEFAULT 0,
+        materials DECIMAL(12,2) DEFAULT 0,
+        labor DECIMAL(12,2) DEFAULT 0,
+        mission_support DECIMAL(12,2) DEFAULT 0,
+        land_title DECIMAL(12,2) DEFAULT 0,
+        total_amount DECIMAL(12,2) GENERATED ALWAYS AS (
+            speaker + workers + food + housekeeping + office_supplies + transportation + photocopy +
+            internet + government_concern + water_bill + electric_bill + special_events + needy_calamity + trainings +
+            kids_ministry + youth_ministry + music_ministry + single_professionals_ministry + young_couples_ministry +
+            wow_ministry + amen_ministry + couples_ministry + visitation_prayer_ministry + acquisitions + materials +
+            labor + mission_support + land_title
+        ) STORED,
+        notes TEXT,
+        created_by VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_entry_date (entry_date),
+        INDEX idx_created_by (created_by)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+];
+
+foreach ($incomeExpensesTables as $sql) {
+    if ($conn->query($sql) === FALSE) {
+        error_log("Failed to create income/expenses breakdown table: " . $conn->error);
+    }
+}
+
+$expenseColumnDefinitions = [
+    'speaker' => "ALTER TABLE breakdown_expenses ADD COLUMN speaker DECIMAL(12,2) DEFAULT 0 AFTER entry_date",
+    'workers' => "ALTER TABLE breakdown_expenses ADD COLUMN workers DECIMAL(12,2) DEFAULT 0 AFTER speaker",
+    'food' => "ALTER TABLE breakdown_expenses ADD COLUMN food DECIMAL(12,2) DEFAULT 0 AFTER workers",
+    'housekeeping' => "ALTER TABLE breakdown_expenses ADD COLUMN housekeeping DECIMAL(12,2) DEFAULT 0 AFTER food",
+    'office_supplies' => "ALTER TABLE breakdown_expenses ADD COLUMN office_supplies DECIMAL(12,2) DEFAULT 0 AFTER housekeeping",
+    'transportation' => "ALTER TABLE breakdown_expenses ADD COLUMN transportation DECIMAL(12,2) DEFAULT 0 AFTER office_supplies",
+    'photocopy' => "ALTER TABLE breakdown_expenses ADD COLUMN photocopy DECIMAL(12,2) DEFAULT 0 AFTER transportation",
+    'internet' => "ALTER TABLE breakdown_expenses ADD COLUMN internet DECIMAL(12,2) DEFAULT 0 AFTER photocopy",
+    'government_concern' => "ALTER TABLE breakdown_expenses ADD COLUMN government_concern DECIMAL(12,2) DEFAULT 0 AFTER internet",
+    'water_bill' => "ALTER TABLE breakdown_expenses ADD COLUMN water_bill DECIMAL(12,2) DEFAULT 0 AFTER government_concern",
+    'electric_bill' => "ALTER TABLE breakdown_expenses ADD COLUMN electric_bill DECIMAL(12,2) DEFAULT 0 AFTER water_bill",
+    'special_events' => "ALTER TABLE breakdown_expenses ADD COLUMN special_events DECIMAL(12,2) DEFAULT 0 AFTER electric_bill",
+    'needy_calamity' => "ALTER TABLE breakdown_expenses ADD COLUMN needy_calamity DECIMAL(12,2) DEFAULT 0 AFTER special_events",
+    'trainings' => "ALTER TABLE breakdown_expenses ADD COLUMN trainings DECIMAL(12,2) DEFAULT 0 AFTER needy_calamity",
+    'total_amount' => "ALTER TABLE breakdown_expenses ADD COLUMN total_amount DECIMAL(12,2) GENERATED ALWAYS AS (
+        speaker + workers + food + housekeeping + office_supplies + transportation + photocopy +
+        internet + government_concern + water_bill + electric_bill + special_events + needy_calamity + trainings
+    ) STORED AFTER trainings",
+    'notes' => "ALTER TABLE breakdown_expenses ADD COLUMN notes TEXT AFTER total_amount"
+];
+
+foreach ($expenseColumnDefinitions as $column => $statement) {
+    $result = $conn->query("SHOW COLUMNS FROM breakdown_expenses LIKE '{$column}'");
+    if ($result && $result->num_rows === 0) {
+        if ($conn->query($statement) === FALSE) {
+            error_log("Failed to add {$column} column to breakdown_expenses: " . $conn->error);
+        }
+    }
+}
 
 // Create site_settings table if it doesn't exist
 $sql = "CREATE TABLE IF NOT EXISTS site_settings (
@@ -73,40 +180,56 @@ $sql = "CREATE TABLE IF NOT EXISTS user_profiles (
 )";
 
 if ($conn->query($sql) === TRUE) {
-    // Check if admin profile exists
-    $result = $conn->query("SELECT COUNT(*) as count FROM user_profiles WHERE user_id = 'admin'");
-    $row = $result->fetch_assoc();
-    
-    if ($row['count'] == 0) {
-        // Insert default admin profile with hashed password
-        $admin_password = password_hash('admin1910@', PASSWORD_DEFAULT);
-        $sql = "INSERT INTO user_profiles (user_id, username, full_name, email, password, role) 
-                VALUES ('admin', 'admin', 'Administrator', 'cocd1910@gmail.com', ?, 'Administrator')";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $admin_password);
-        $stmt->execute();
-    }
-    
-    // Check if super admin profile exists
-    $result = $conn->query("SELECT COUNT(*) as count FROM user_profiles WHERE user_id = 'superadmin'");
-    $row = $result->fetch_assoc();
-    
-    if ($row['count'] == 0) {
-        // Insert super admin profile with hashed password
-        $superadmin_password = password_hash('cocd1910@', PASSWORD_DEFAULT);
-        $sql = "INSERT INTO user_profiles (user_id, username, full_name, email, password, role) 
-                VALUES ('superadmin', 'superadmin', 'Super Administrator', 'cocd1910@gmail.com', ?, 'Super Admin')";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $superadmin_password);
-        $stmt->execute();
-    }
+    // Table created successfully
 }
 
-// Add new columns if they don't exist
 $result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'full_name'");
 if ($result->num_rows == 0) {
     $sql = "ALTER TABLE user_profiles ADD COLUMN full_name VARCHAR(255) AFTER username";
     $conn->query($sql);
+
+    $newExpenseColumns = [
+        'kids_ministry',
+        'youth_ministry',
+        'music_ministry',
+        'single_professionals_ministry',
+        'young_couples_ministry',
+        'wow_ministry',
+        'amen_ministry',
+        'couples_ministry',
+        'visitation_prayer_ministry',
+        'acquisitions',
+        'materials',
+        'labor',
+        'mission_support',
+        'land_title'
+    ];
+
+    $expenseConnections = [$conn];
+    if (isset($incomeExpensesConn) && $incomeExpensesConn instanceof mysqli && !$incomeExpensesConn->connect_error) {
+        $expenseConnections[] = $incomeExpensesConn;
+    }
+
+    foreach ($expenseConnections as $connection) {
+        if (!$connection instanceof mysqli || $connection->connect_error) {
+            continue;
+        }
+
+        foreach ($newExpenseColumns as $columnName) {
+            $connection->query("ALTER TABLE breakdown_expenses ADD COLUMN IF NOT EXISTS {$columnName} DECIMAL(12,2) DEFAULT 0");
+        }
+
+        $connection->query("
+            ALTER TABLE breakdown_expenses
+            MODIFY COLUMN total_amount DECIMAL(12,2) GENERATED ALWAYS AS (
+                speaker + workers + food + housekeeping + office_supplies + transportation + photocopy +
+                internet + government_concern + water_bill + electric_bill + special_events + needy_calamity + trainings +
+                kids_ministry + youth_ministry + music_ministry + single_professionals_ministry + young_couples_ministry +
+                wow_ministry + amen_ministry + couples_ministry + visitation_prayer_ministry + acquisitions + materials +
+                labor + mission_support + land_title
+            ) STORED
+        ");
+    }
 }
 
 $result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'contact_number'");
@@ -126,17 +249,6 @@ $result = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'password'");
 if ($result->num_rows == 0) {
     $sql = "ALTER TABLE user_profiles ADD COLUMN password VARCHAR(255) NOT NULL AFTER address";
     $conn->query($sql);
-    
-    // Update admin password if it's not set
-    $result = $conn->query("SELECT password FROM user_profiles WHERE user_id = 'admin'");
-    $row = $result->fetch_assoc();
-    if (empty($row['password'])) {
-        $admin_password = password_hash('admin1910@', PASSWORD_DEFAULT);
-        $sql = "UPDATE user_profiles SET password = ? WHERE user_id = 'admin'";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $admin_password);
-        $stmt->execute();
-    }
 }
 
 // Create membership_records table if it doesn't exist

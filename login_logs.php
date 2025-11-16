@@ -223,7 +223,7 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
             </div>
             <div class="profile-info">
                 <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                <div class="role">Super Admin</div>
+                <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Super Admin'); ?></div>
             </div>
             <form action="logout.php" method="post" style="margin:0;">
                 <button type="submit" class="logout-btn">Logout</button>
@@ -276,10 +276,8 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                             <th>ID</th>
                             <th>Username</th>
                             <th>Login Time</th>
-                            <th>IP Address</th>
                             <th>Status</th>
                             <th>Failure Reason</th>
-                            <th>User Agent</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -288,14 +286,12 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                                 <td><?php echo $log['id']; ?></td>
                                 <td><?php echo htmlspecialchars($log['username']); ?></td>
                                 <td><?php echo htmlspecialchars($log['login_time']); ?></td>
-                                <td><?php echo htmlspecialchars($log['ip_address']); ?></td>
                                 <td>
                                     <span class="status-badge <?php echo strtolower($log['status']); ?>">
                                         <?php echo htmlspecialchars($log['status']); ?>
                                     </span>
                                 </td>
                                 <td><?php echo $log['failure_reason'] ? htmlspecialchars($log['failure_reason']) : '-'; ?></td>
-                                <td><?php echo htmlspecialchars($log['user_agent']); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -335,13 +331,11 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
     $(document).ready(function() {
         $('#login-logs-table').DataTable({
             columnDefs: [
-                { width: '5%', targets: 0 },
-                { width: '12%', targets: 1 },
-                { width: '15%', targets: 2 },
-                { width: '12%', targets: 3 },
-                { width: '8%', targets: 4 },
-                { width: '15%', targets: 5 },
-                { width: '20%', targets: 6 }
+                { width: '10%', targets: 0 },
+                { width: '20%', targets: 1 },
+                { width: '25%', targets: 2 },
+                { width: '15%', targets: 3 },
+                { width: '30%', targets: 4 }
             ],
             autoWidth: false,
             responsive: true
@@ -349,4 +343,4 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
     });
 </script>
 </body>
-</html> 
+</html>

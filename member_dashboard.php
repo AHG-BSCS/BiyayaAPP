@@ -47,10 +47,7 @@ if ($user_data) {
     $user_id = $username; // Fallback to session value
 }
 
-// Debug: Check what user_id we're using
-error_log("Member Dashboard - Username: {$username}, User ID: {$user_id}");
-
-// Get user's contributions from database - Fixed query to use proper user_id
+// Get user's contributions from database
 $stmt = $conn->prepare("
     SELECT 
         c.id,
@@ -67,10 +64,6 @@ $stmt = $conn->prepare("
 $stmt->bind_param("s", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
-
-// Debug: Check if we got any results
-$num_rows = $result->num_rows;
-error_log("Member Dashboard - Found {$num_rows} contributions for user {$user_id}");
 
 while ($row = $result->fetch_assoc()) {
     $donations[] = [
@@ -116,32 +109,6 @@ $total_events = $row['total'];
 $result = $conn->query("SELECT COUNT(*) as total FROM prayer_requests");
 $row = $result->fetch_assoc();
 $total_prayers = $row['total'];
-// Get user_id
-$stmt = $conn->prepare("SELECT user_id FROM user_profiles WHERE username = ?");
-$stmt->bind_param("s", $_SESSION["user"]);
-$stmt->execute();
-$user_result = $stmt->get_result();
-$user_data = $user_result->fetch_assoc();
-$user_id = $user_data ? $user_data['user_id'] : null;
-// Get monthly contributions for the last 12 months
-$monthly_contributions = array_fill(1, 12, 0);
-$month_labels = [];
-for ($i = 11; $i >= 0; $i--) {
-    $month = date('Y-m', strtotime("-{$i} months"));
-    $month_labels[] = date('M Y', strtotime($month.'-01'));
-    $monthly_contributions[(int)date('n', strtotime($month.'-01'))] = 0;
-}
-if ($user_id) {
-    $stmt = $conn->prepare("SELECT DATE_FORMAT(contribution_date, '%Y-%m') as month, SUM(amount) as total FROM contributions WHERE user_id = ? AND contribution_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY month");
-    $stmt->bind_param("s", $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $month_num = (int)date('n', strtotime($row['month'].'-01'));
-        $monthly_contributions[$month_num] = (float)$row['total'];
-    }
-}
-
 // Add random Bible verse for the day
 $bible_verses = [
     [
@@ -171,6 +138,42 @@ $bible_verses = [
 ];
 $verse_index = intval(date('z')) % count($bible_verses);
 $verse_of_the_day = $bible_verses[$verse_index];
+
+// Fetch tithes and offerings data for line graph (last 12 months)
+$tithes_offerings_data = [];
+$sql = "
+    SELECT 
+        DATE_FORMAT(entry_date, '%Y-%m') as month,
+        DATE_FORMAT(entry_date, '%Y-%m-01') as month_start,
+        SUM(tithes) as total_tithes,
+        SUM(offerings) as total_offerings
+    FROM breakdown_income
+    WHERE (tithes > 0 OR offerings > 0)
+        AND entry_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+    ORDER BY month ASC
+";
+$result = $conn->query($sql);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $tithes_offerings_data[] = [
+            'month' => $row['month'],
+            'month_start' => $row['month_start'],
+            'tithes' => floatval($row['total_tithes']),
+            'offerings' => floatval($row['total_offerings'])
+        ];
+    }
+}
+
+// Prepare data for chart
+$chart_dates = [];
+$chart_tithes = [];
+$chart_offerings = [];
+foreach ($tithes_offerings_data as $data) {
+    $chart_dates[] = date('F Y', strtotime($data['month_start']));
+    $chart_tithes[] = $data['tithes'];
+    $chart_offerings[] = $data['offerings'];
+}
 
 $live_message = getLiveMessage($conn);
 
@@ -400,12 +403,18 @@ try {
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -444,9 +453,12 @@ try {
         }
         @media (max-width: 768px) {
             .custom-drawer {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
+            }
+            .custom-drawer.open {
                 left: 0;
             }
             .drawer-header {
@@ -457,7 +469,7 @@ try {
                 height: 40px;
             }
             .drawer-title {
-                font-size: 16px;
+                font-size: 14px;
             }
             .drawer-close {
                 font-size: 18px;
@@ -466,28 +478,25 @@ try {
                 padding: 10px 0;
             }
             .drawer-menu {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
+                display: block;
             }
             .drawer-menu li {
                 margin-bottom: 0;
-                flex: 1;
             }
             .drawer-link {
-                padding: 12px 8px;
-                justify-content: center;
+                padding: 12px 18px;
+                justify-content: flex-start;
                 font-size: 14px;
             }
             .drawer-link i {
-                font-size: 18px;
+                font-size: 16px;
                 min-width: 20px;
             }
             .drawer-profile {
                 padding: 15px;
-                flex-direction: column;
+                flex-direction: row;
                 align-items: center;
-                text-align: center;
+                text-align: left;
             }
             .drawer-profile .avatar {
                 width: 40px;
@@ -497,23 +506,30 @@ try {
             .drawer-profile .name {
                 font-size: 14px;
                 margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
             }
             .drawer-profile .role {
                 font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
             }
             .nav-toggle-container {
                 display: block;
             }
             .content-area {
                 margin-left: 0;
-                padding-top: 20px;
+                padding-top: 70px;
             }
             .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
+                margin-top: 0;
             }
         }
         .dashboard-content {
@@ -862,6 +878,18 @@ try {
                     </div>
                     <div class="card-decoration"></div>
                 </div>
+                <div class="summary-card full-width">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="card-content" style="width: 100%;">
+                        <h3>Tithes and Offerings Trend (Last 12 Months)</h3>
+                        <div style="position: relative; height: 300px; margin-top: 20px;">
+                            <canvas id="tithesOfferingsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-decoration"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -961,57 +989,113 @@ try {
     <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        $(document).ready(function() {
-            // Removed contributions table initialization
-        });
-
-        const monthLabels = <?php echo json_encode($month_labels); ?>;
-        const monthlyContributions = <?php echo json_encode(array_values($monthly_contributions)); ?>;
-        const ctx = document.getElementById('memberContributionsLineChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: monthLabels,
-                datasets: [{
-                    label: 'My Contributions',
-                    data: monthlyContributions,
-                    fill: false,
-                    borderColor: 'rgba(0, 139, 30, 1)',
-                    backgroundColor: 'rgba(0, 139, 30, 0.2)',
-                    tension: 0.3,
-                    pointRadius: 5,
-                    pointHoverRadius: 7
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Amount (₱)'
+        // Tithes and Offerings Line Chart
+        const tithesOfferingsCtx = document.getElementById('tithesOfferingsChart');
+        if (tithesOfferingsCtx) {
+            const chartDates = <?php echo json_encode($chart_dates); ?>;
+            const chartTithes = <?php echo json_encode($chart_tithes); ?>;
+            const chartOfferings = <?php echo json_encode($chart_offerings); ?>;
+            
+            new Chart(tithesOfferingsCtx, {
+                type: 'line',
+                data: {
+                    labels: chartDates,
+                    datasets: [
+                        {
+                            label: 'Tithes',
+                            data: chartTithes,
+                            borderColor: 'rgba(0, 139, 30, 1)',
+                            backgroundColor: 'rgba(0, 139, 30, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(0, 139, 30, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Offerings',
+                            data: chartOfferings,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
                         }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Month'
-                        }
-                    }
+                    ]
                 },
-                plugins: {
-                    legend: {
-                        display: true
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12,
+                                    weight: '500'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ₱' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                }
+                            }
+                        }
                     },
-                    title: {
-                        display: true,
-                        text: 'My Monthly Contributions (Last 12 Months)'
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₱' + value.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                },
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
                     }
                 }
-            }
-        });
+            });
+        }
+
     </script>
     <script>
     // Drawer navigation toggle functionality

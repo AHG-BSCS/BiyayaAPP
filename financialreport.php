@@ -44,690 +44,119 @@ if (!isset($_SESSION['financial_data'])) {
     ];
 }
 
-// Fetch bank gifts records from database
+// Load income breakdown entries for financial report tabs
+$breakdownIncomeEntries = [];
+$tithes_records = [];
+$offerings_records = [];
 $bank_gifts_records = [];
-$sql = "SELECT * FROM bank_gifts ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $bank_gifts_records[] = $row;
+$specified_gifts_records = [];
+
+$incomeBreakdownResult = $conn->query("
+    SELECT id, entry_date, tithes, offerings, gifts_bank, others, notes
+    FROM breakdown_income
+    ORDER BY entry_date DESC, id DESC
+");
+
+if ($incomeBreakdownResult) {
+    while ($row = $incomeBreakdownResult->fetch_assoc()) {
+        $breakdownIncomeEntries[] = $row;
+        $entryDate = $row['entry_date'];
+        $notes = $row['notes'] ?? '';
+
+        if (floatval($row['tithes']) > 0) {
+            $tithes_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => (float) $row['tithes'],
+                'notes' => $notes
+            ];
+        }
+
+        if (floatval($row['offerings']) > 0) {
+            $offerings_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => (float) $row['offerings'],
+                'notes' => $notes
+            ];
+        }
+
+        if (floatval($row['gifts_bank']) > 0) {
+            $bank_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'amount' => (float) $row['gifts_bank'],
+                'notes' => $notes
+            ];
+        }
+
+        if (floatval($row['others']) > 0) {
+            $specified_gifts_records[] = [
+                'id' => (int) $row['id'],
+                'entry_date' => $entryDate,
+                'category' => 'Others',
+                'amount' => (float) $row['others'],
+                'notes' => $notes
+            ];
+        }
     }
 }
 
-// Fetch specified gifts records from database
-$specified_gifts_records = [];
-$sql = "SELECT * FROM specified_gifts ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $specified_gifts_records[] = $row;
-    }
-}
+$sortByDateDesc = function ($a, $b) {
+    return strtotime($b['entry_date']) <=> strtotime($a['entry_date']);
+};
+
+usort($tithes_records, $sortByDateDesc);
+usort($offerings_records, $sortByDateDesc);
+usort($bank_gifts_records, $sortByDateDesc);
+usort($specified_gifts_records, $sortByDateDesc);
 
 // Handle form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $message = "";
-    $messageType = "success";
-
-    if (isset($_POST["add_tithes"])) {
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Get the next available ID
-        $result = $conn->query("SELECT MAX(id) as max_id FROM tithes");
-        $row = $result->fetch_assoc();
-        $next_id = ($row['max_id'] ?? 0) + 1;
-
-        // Check if a record with the same date already exists
-        $check_sql = "SELECT id FROM tithes WHERE date = ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("s", $date);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "A tithes record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Insert into database
-            $sql = "INSERT INTO tithes (id, date, amount) VALUES (?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("isd", $next_id, $date, $amount);
-            
-            if ($stmt->execute()) {
-                $message = "Tithes record added successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=tithes");
-                exit();
-            } else {
-                $message = "Error adding tithes record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    }
-
-    // Handle edit tithes
-    if (isset($_POST["edit_tithes"])) {
-        $id = intval($_POST["record_id"]);
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Check if another record with the same date exists
-        $check_sql = "SELECT id FROM tithes WHERE date = ? AND id != ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("si", $date, $id);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "A tithes record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Update the record
-            $sql = "UPDATE tithes SET date = ?, amount = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sdi", $date, $amount, $id);
-
-            if ($stmt->execute()) {
-                $message = "Tithes record updated successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=tithes");
-                exit();
-            } else {
-                $message = "Error updating tithes record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    }
-    
-    // Handle edit offerings
-    if (isset($_POST["edit_offering"])) {
-        $id = intval($_POST["record_id"]);
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Check if another record with the same date exists
-        $check_sql = "SELECT id FROM offerings WHERE date = ? AND id != ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("si", $date, $id);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "An offering record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Update the record
-            $sql = "UPDATE offerings SET date = ?, amount = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sdi", $date, $amount, $id);
-
-            if ($stmt->execute()) {
-                $message = "Offering record updated successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=offering");
-                exit();
-            } else {
-                $message = "Error updating offering record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    }
-
-    if (isset($_POST["add_offering"])) {
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Get the next available ID
-        $result = $conn->query("SELECT MAX(id) as max_id FROM offerings");
-        $row = $result->fetch_assoc();
-        $next_id = ($row['max_id'] ?? 0) + 1;
-
-        // Check if a record with the same date already exists
-        $check_sql = "SELECT id FROM offerings WHERE date = ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("s", $date);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "An offering record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Insert into database
-            $sql = "INSERT INTO offerings (id, date, amount) VALUES (?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("isd", $next_id, $date, $amount);
-            
-            if ($stmt->execute()) {
-                $message = "Offering record added successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=offering");
-                exit();
-            } else {
-                $message = "Error adding offering record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    } elseif (isset($_POST["add_bank_gift"])) {
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $date_deposited = htmlspecialchars(trim($_POST["date_deposited"]));
-        $date_updated = htmlspecialchars(trim($_POST["date_updated"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Get the next available ID
-        $result = $conn->query("SELECT MAX(id) as max_id FROM bank_gifts");
-        $row = $result->fetch_assoc();
-        $next_id = ($row['max_id'] ?? 0) + 1;
-
-        // Check if a record with the same date already exists
-        $check_sql = "SELECT id FROM bank_gifts WHERE date = ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("s", $date);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "A bank gift record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Insert into database
-            $sql = "INSERT INTO bank_gifts (id, date, date_deposited, date_updated, amount) VALUES (?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("isssd", $next_id, $date, $date_deposited, $date_updated, $amount);
-            
-            if ($stmt->execute()) {
-                $message = "Bank gift record added successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=bank_gift");
-                exit();
-            } else {
-                $message = "Error adding bank gift record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    } elseif (isset($_POST["edit_bank_gift"])) {
-        $id = intval($_POST["record_id"]);
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $date_deposited = htmlspecialchars(trim($_POST["date_deposited"]));
-        $date_updated = htmlspecialchars(trim($_POST["date_updated"]));
-        $amount = floatval($_POST["amount"]);
-    
-        // Check if another record with the same date exists
-        $check_sql = "SELECT id FROM bank_gifts WHERE date = ? AND id != ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("si", $date, $id);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-    
-        if ($check_result->num_rows > 0) {
-            $message = "A bank gift record for this date already exists!";
-            $messageType = "error";
-        } else {
-            // Update the record
-            $sql = "UPDATE bank_gifts SET date = ?, date_deposited = ?, date_updated = ?, amount = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssdi", $date, $date_deposited, $date_updated, $amount, $id);
-    
-            if ($stmt->execute()) {
-                $message = "Bank gift record updated successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=bank_gift");
-                exit();
-            } else {
-                $message = "Error updating bank gift record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    } elseif (isset($_POST["add_specified_gift"])) {
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $category = htmlspecialchars(trim($_POST["category"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Get the next available ID
-        $result = $conn->query("SELECT MAX(id) as max_id FROM specified_gifts");
-        $row = $result->fetch_assoc();
-        $next_id = ($row['max_id'] ?? 0) + 1;
-
-        // Check if a record with the same date and category already exists
-        $check_sql = "SELECT id FROM specified_gifts WHERE date = ? AND category = ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("ss", $date, $category);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "A specified gift record for this date and category already exists!";
-            $messageType = "error";
-        } else {
-            // Insert into database
-            $sql = "INSERT INTO specified_gifts (id, date, category, amount) VALUES (?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("issd", $next_id, $date, $category, $amount);
-            
-            if ($stmt->execute()) {
-                $message = "Specified gift record added successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=specified_gift");
-                exit();
-            } else {
-                $message = "Error adding specified gift record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    } elseif (isset($_POST["edit_specified_gift"])) {
-        $id = intval($_POST["record_id"]);
-        $date = htmlspecialchars(trim($_POST["date"]));
-        $category = htmlspecialchars(trim($_POST["category"]));
-        $amount = floatval($_POST["amount"]);
-
-        // Check if another record with the same date and category exists
-        $check_sql = "SELECT id FROM specified_gifts WHERE date = ? AND category = ? AND id != ?";
-        $check_stmt = $conn->prepare($check_sql);
-        $check_stmt->bind_param("ssi", $date, $category, $id);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-
-        if ($check_result->num_rows > 0) {
-            $message = "A specified gift record for this date and category already exists!";
-            $messageType = "error";
-        } else {
-            // Update the record
-            $sql = "UPDATE specified_gifts SET date = ?, category = ?, amount = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssdi", $date, $category, $amount, $id);
-
-            if ($stmt->execute()) {
-                $message = "Specified gift record updated successfully!";
-                header("Location: " . $_SERVER['PHP_SELF'] . "?success=specified_gift");
-                exit();
-            } else {
-                $message = "Error updating specified gift record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-        $check_stmt->close();
-    }
-
-    // Handle delete operations
-    if (isset($_POST["delete_record"])) {
-        $id = intval($_POST["record_id"]);
-        $type = $_POST["record_type"];
-        
-        switch ($type) {
-            case 'tithes':
-                $sql = "DELETE FROM tithes WHERE id = ?";
-                $table = "tithes";
-                break;
-            case 'offerings':
-                $sql = "DELETE FROM offerings WHERE id = ?";
-                $table = "offerings";
-                break;
-            case 'bank-gifts':
-                $sql = "DELETE FROM bank_gifts WHERE id = ?";
-                $table = "bank_gifts";
-                break;
-            case 'specified-gifts':
-                $sql = "DELETE FROM specified_gifts WHERE id = ?";
-                $table = "specified_gifts";
-                break;
-            default:
-                $message = "Invalid record type";
-                $messageType = "error";
-                break;
-        }
-
-        if (isset($sql)) {
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("i", $id);
-            
-            if ($stmt->execute()) {
-                $conn->query("SET @count = 0");
-                $conn->query("UPDATE $table SET id = @count:= @count + 1");
-                $conn->query("ALTER TABLE $table AUTO_INCREMENT = 1");
-                
-                $message = ucfirst($type) . " record deleted successfully!";
-            } else {
-                $message = "Error deleting record: " . $conn->error;
-                $messageType = "error";
-            }
-            $stmt->close();
-        }
-    }
-}
-
-// Fetch tithes records from database
-$tithes_records = [];
-$sql = "SELECT * FROM tithes ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $tithes_records[] = $row;
-    }
-}
-
-// Fetch offerings records from database
-$offerings_records = [];
-$sql = "SELECT * FROM offerings ORDER BY id ASC";
-$result = $conn->query($sql);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $offerings_records[] = $row;
-    }
+    // Manual entry disabled: financial data now syncs from breakdown incomes.
 }
 
 // Calculate average weekly amounts for tithes and offerings only (using ALL data)
-$sql = "
-    WITH weekly_totals AS (
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'tithes' as type,
-            SUM(amount) as total
-        FROM tithes 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-        UNION ALL
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'offerings' as type,
-            SUM(amount) as total
-        FROM offerings 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-    )
-    SELECT 
-        type,
-        AVG(total) as avg_weekly
-    FROM weekly_totals
-    GROUP BY type";
-
-$result = $conn->query($sql);
-$weekly_averages = [
-    'tithes' => 0,
-    'offerings' => 0
-];
-
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $weekly_averages[$row['type']] = $row['avg_weekly'];
-    }
-}
-
-$avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
-$avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
-// Calculate average weekly amounts using Prophet for offerings
-function calculateWeeklyOfferingsProphet($conn) {
-    // Fetch ALL weekly offerings data (no date restriction)
-    $sql = "
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            SUM(amount) as total
-        FROM offerings
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-        ORDER BY week ASC";
-    $result = $conn->query($sql);
-    $weekly_data = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            // Convert week to a date (start of the week)
-            $year_week = explode('-', $row['week']);
-            $year = $year_week[0];
-            $week = ltrim($year_week[1], '0') ?: 0;
-            $date = date('Y-m-d', strtotime("$year-01-01 +$week weeks"));
-            $weekly_data[] = [
-                'ds' => $date,
-                'y' => floatval($row['total'])
-            ];
-        }
-    }
-
-    // Make API call to Prophet endpoint
-    $ch = curl_init('http://localhost:5000/predict');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $weekly_data]));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200) {
-        $predictions = json_decode($response, true);
-        if (is_array($predictions) && !empty($predictions)) {
-            // Get predictions for the last 4 weeks
-            $last_4_weeks = array_slice($predictions, -4);
-            $total = 0;
-            $count = 0;
-            foreach ($last_4_weeks as $pred) {
-                if (isset($pred['yhat']) && $pred['yhat'] >= 0) {
-                    $total += $pred['yhat'];
-                    $count++;
-                }
-            }
-            return $count > 0 ? $total / $count : 0;
-        }
-    }
-
-    // Fallback: Calculate simple average if Prophet fails (using ALL data)
-    $sql = "
-        SELECT 
-            AVG(total) as avg_weekly
-        FROM (
-            SELECT 
-                DATE_FORMAT(date, '%Y-%U') as week,
-                SUM(amount) as total
-            FROM offerings
-            GROUP BY DATE_FORMAT(date, '%Y-%U')
-        ) weekly";
-    $result = $conn->query($sql);
-    $row = $result->fetch_assoc();
-    return $row['avg_weekly'] ?? 0;
-}
-
-// Calculate average weekly amounts for other sources (using ALL data)
-$sql = "
-    WITH weekly_totals AS (
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'tithes' as type,
-            SUM(amount) as total
-        FROM tithes 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-        UNION ALL
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'offerings' as type,
-            SUM(amount) as total
-        FROM offerings 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-        UNION ALL
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'bank_gifts' as type,
-            SUM(amount) as total
-        FROM bank_gifts 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-        UNION ALL
-        SELECT 
-            DATE_FORMAT(date, '%Y-%U') as week,
-            'specified_gifts' as type,
-            SUM(amount) as total
-        FROM specified_gifts 
-        GROUP BY DATE_FORMAT(date, '%Y-%U')
-    )
-    SELECT 
-        type,
-        AVG(total) as avg_weekly
-    FROM weekly_totals
-    GROUP BY type";
-
-$result = $conn->query($sql);
-$weekly_averages = [
-    'tithes' => 0,
-    'offerings' => 0,
-    'bank_gifts' => 0,
-    'specified_gifts' => 0
-];
-
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $weekly_averages[$row['type']] = $row['avg_weekly'];
-    }
-}
-
-$avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
-$avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
-$avg_weekly_bank_gifts = $weekly_averages['bank_gifts'] ?? 0;
-$avg_weekly_specified_gifts = $weekly_averages['specified_gifts'] ?? 0;
-
-// Add debugging
-error_log("Weekly Averages: " . print_r($weekly_averages, true));
-
-// Get historical data for trend analysis
-$sql = "
-    WITH all_dates AS (
-        SELECT date FROM tithes
-        UNION ALL
-        SELECT date FROM offerings
-    ),
-    date_range AS (
-        SELECT 
-            MIN(date) as start_date,
-            MAX(date) as end_date
-        FROM all_dates
-    )
-    SELECT 
-        DATE_FORMAT(date, '%Y-%m') as month,
-        SUM(amount) as total
-    FROM (
-        SELECT date, amount FROM tithes
-        UNION ALL
-        SELECT date, amount FROM offerings
-    ) combined
-    WHERE date >= (SELECT start_date FROM date_range)
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
-    ORDER BY month ASC";
-
-// Add debugging
-error_log("SQL Query for historical data: " . $sql);
-
-$result = $conn->query($sql);
-$historical_data = [];
-
-if ($result === false) {
-    error_log("SQL Error: " . $conn->error);
-} else {
-    if ($result->num_rows === 0) {
-        error_log("No historical data found");
-    }
-    while ($row = $result->fetch_assoc()) {
-        $historical_data[$row['month']] = $row['total'];
-        error_log("Month: " . $row['month'] . ", Total: " . $row['total']);
-    }
-}
-
-// If no data found, initialize with zeros for the last 6 months
-if (empty($historical_data)) {
-    for ($i = 5; $i >= 0; $i--) {
-        $month = date('Y-m', strtotime("-$i months"));
-        $historical_data[$month] = 0;
-    }                           
-}
-
-error_log("Final Historical Data: " . print_r($historical_data, true));
-
-// Calculate predicted next month income using Prophet
-function getProphetPrediction($conn) {
-    // Fetch ALL monthly data from tithes and offerings (no date restriction)
-    $sql = "
-        SELECT 
-            DATE_FORMAT(date, '%Y-%m') as month,
-            SUM(amount) as total
-        FROM (
-            SELECT date, amount FROM tithes
-            UNION ALL
-            SELECT date, amount FROM offerings
-        ) combined
-        GROUP BY DATE_FORMAT(date, '%Y-%m')
-        ORDER BY month";
-    
-    $result = $conn->query($sql);
-    $prophet_data = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $prophet_data[] = [
-                'ds' => $row['month'] . '-01',
-                'y' => floatval($row['total'])
-            ];
-        }
-    }
-    
-    // Debug: Log the data being sent to Prophet
-    error_log("Prophet data points: " . count($prophet_data));
-    error_log("Prophet data sample: " . json_encode(array_slice($prophet_data, 0, 5)));
-    if (count($prophet_data) > 0) {
-        error_log("Data range: " . $prophet_data[0]['ds'] . " to " . end($prophet_data)['ds']);
-        error_log("Value range: " . min(array_column($prophet_data, 'y')) . " to " . max(array_column($prophet_data, 'y')));
-    }
-
-    // Check if we have enough data points
-    if (count($prophet_data) < 3) {
-        error_log("Not enough data points for Prophet prediction");
+if (!function_exists('getProphetPredictionFromArray')) {
+    function getProphetPredictionFromArray(array $prophet_data) {
+        $minimumRequiredMonths = 6;
+        if (count($prophet_data) < $minimumRequiredMonths) {
         return null;
     }
 
-    // Make API call to FastAPI Prophet endpoint
     $ch = curl_init('http://localhost:5000/predict');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // Add timeout
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curl_error = curl_error($ch);
     curl_close($ch);
 
     if ($http_code === 200 && !empty($response)) {
         $predictions = json_decode($response, true);
         if (is_array($predictions) && !empty($predictions)) {
-            error_log("Prophet predictions received successfully");
-            
-            // Filter predictions for 2025
             $predictions_2025 = [];
             foreach ($predictions as $pred) {
                 $date = new DateTime($pred['ds']);
                 if ($date->format('Y') === '2025') {
                     $predictions_2025[] = [
                         'month' => $date->format('Y-m'),
-                        'date_formatted' => $date->format('F 01, Y'), // Add formatted date
+                            'date_formatted' => $date->format('F 01, Y'),
                         'yhat' => $pred['yhat'],
                         'yhat_lower' => $pred['yhat_lower'],
                         'yhat_upper' => $pred['yhat_upper']
                     ];
                 }
             }
-
-            // Verify we have predictions for all months
             if (count($predictions_2025) === 12) {
                 return $predictions_2025;
             }
         }
     }
 
-    error_log("Prophet prediction failed. HTTP code: " . $http_code);
-    error_log("Curl error: " . $curl_error);
-    error_log("Response: " . $response);
-    
-    // Calculate monthly averages for the past year
     $monthly_averages = [];
     foreach ($prophet_data as $data) {
         $month = date('m', strtotime($data['ds']));
@@ -738,20 +167,17 @@ function getProphetPrediction($conn) {
         $monthly_averages[$month]['count']++;
     }
 
-    // Generate predictions using monthly patterns
     $predictions_2025 = [];
     for ($month = 1; $month <= 12; $month++) {
         $month_key = str_pad($month, 2, '0', STR_PAD_LEFT);
         $avg = isset($monthly_averages[$month_key]) 
             ? $monthly_averages[$month_key]['total'] / $monthly_averages[$month_key]['count']
-            : array_sum(array_column($prophet_data, 'y')) / count($prophet_data);
+                : (count($prophet_data) > 0 ? array_sum(array_column($prophet_data, 'y')) / count($prophet_data) : 0);
         
-        // Create date for formatting
         $date = DateTime::createFromFormat('Y-m', "2025-" . $month_key);
-        
         $predictions_2025[] = [
             'month' => "2025-" . $month_key,
-            'date_formatted' => $date->format('F 01, Y'), // Add formatted date
+                'date_formatted' => $date->format('F 01, Y'),
             'yhat' => $avg,
             'yhat_lower' => $avg * 0.9,
             'yhat_upper' => $avg * 1.1
@@ -759,9 +185,80 @@ function getProphetPrediction($conn) {
     }
 
     return $predictions_2025;
+    }
 }
 
-$prophet_predictions = getProphetPrediction($conn);
+if (!empty($breakdownIncomeEntries)) {
+    $weeklyTotals = [];
+    $monthlyTotals = [];
+    foreach ($breakdownIncomeEntries as $entry) {
+        $entryDate = $entry['entry_date'] ?? null;
+        if (!$entryDate) {
+            continue;
+        }
+
+        $tithesAmount = floatval($entry['tithes'] ?? 0);
+        $offeringsAmount = floatval($entry['offerings'] ?? 0);
+        $bankGiftsAmount = floatval($entry['gifts_bank'] ?? 0);
+        $specifiedGiftsAmount = floatval($entry['others'] ?? 0);
+
+        $weekDate = new DateTime($entryDate);
+        $isoYear = $weekDate->format('o');
+        $isoWeek = $weekDate->format('W');
+        $weekKey = sprintf('%s-W%s', $isoYear, $isoWeek);
+
+        if (!isset($weeklyTotals[$weekKey])) {
+            $weeklyTotals[$weekKey] = [
+                'tithes' => 0,
+                'offerings' => 0,
+                'bank_gifts' => 0,
+                'specified_gifts' => 0
+            ];
+        }
+
+        $weeklyTotals[$weekKey]['tithes'] += $tithesAmount;
+        $weeklyTotals[$weekKey]['offerings'] += $offeringsAmount;
+        $weeklyTotals[$weekKey]['bank_gifts'] += $bankGiftsAmount;
+        $weeklyTotals[$weekKey]['specified_gifts'] += $specifiedGiftsAmount;
+
+        $monthKey = date('Y-m', strtotime($entryDate));
+        if (!isset($monthlyTotals[$monthKey])) {
+            $monthlyTotals[$monthKey] = 0;
+        }
+        $monthlyTotals[$monthKey] += $tithesAmount + $offeringsAmount;
+    }
+
+    $weekCount = count($weeklyTotals);
+    if ($weekCount > 0) {
+        $avg_weekly_tithes = array_sum(array_column($weeklyTotals, 'tithes')) / $weekCount;
+        $avg_weekly_offerings = array_sum(array_column($weeklyTotals, 'offerings')) / $weekCount;
+        $avg_weekly_bank_gifts = array_sum(array_column($weeklyTotals, 'bank_gifts')) / $weekCount;
+        $avg_weekly_specified_gifts = array_sum(array_column($weeklyTotals, 'specified_gifts')) / $weekCount;
+    } else {
+        $avg_weekly_tithes = 0;
+        $avg_weekly_offerings = 0;
+        $avg_weekly_bank_gifts = 0;
+        $avg_weekly_specified_gifts = 0;
+    }
+
+    ksort($monthlyTotals);
+    $historical_data = $monthlyTotals;
+    if (empty($historical_data)) {
+        for ($i = 5; $i >= 0; $i--) {
+            $month = date('Y-m', strtotime("-$i months"));
+            $historical_data[$month] = 0;
+        }
+    }
+
+    $prophet_data = [];
+    foreach ($historical_data as $month => $total) {
+        $prophet_data[] = [
+            'ds' => $month . '-01',
+            'y' => floatval($total)
+        ];
+    }
+
+    $prophet_predictions = getProphetPredictionFromArray($prophet_data);
 if ($prophet_predictions) {
     $predicted_monthly = $prophet_predictions[0]['yhat'];
     $prediction_lower = $prophet_predictions[0]['yhat_lower'] ?? ($predicted_monthly * 0.9);
@@ -772,28 +269,14 @@ if ($prophet_predictions) {
     $prediction_upper = $predicted_monthly * 1.1;
 }
 
-error_log("Predicted Monthly: " . $predicted_monthly);
-error_log("Prediction Lower: " . $prediction_lower);
-error_log("Prediction Upper: " . $prediction_upper);
-error_log("Avg Weekly Tithes: " . $avg_weekly_tithes);
-error_log("Avg Weekly Offerings: " . $avg_weekly_offerings);
-error_log("Avg Weekly Bank Gifts: " . $avg_weekly_bank_gifts);
-error_log("Avg Weekly Specified Gifts: " . $avg_weekly_specified_gifts);
-
-// Calculate prediction summary from prophet predictions
 if ($prophet_predictions && count($prophet_predictions) > 0) {
     $predicted_values = array_column($prophet_predictions, 'yhat');
     $total_predicted = array_sum($predicted_values);
     $avg_monthly = $total_predicted / count($predicted_values);
-    
-    // Find best and worst months
     $best_month = $prophet_predictions[array_search(max($predicted_values), $predicted_values)];
     $worst_month = $prophet_predictions[array_search(min($predicted_values), $predicted_values)];
-    
-    // Calculate growth rate by comparing with historical average
-    $historical_avg = array_sum(array_values($historical_data)) / count($historical_data);
+        $historical_avg = array_sum(array_values($historical_data)) / max(count($historical_data), 1);
     $growth_rate = $historical_avg > 0 ? (($avg_monthly - $historical_avg) / $historical_avg * 100) : 0;
-    
     $prediction_summary = [
         'total_predicted_income' => $total_predicted,
         'average_monthly_income' => $avg_monthly,
@@ -811,7 +294,6 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         'total_months' => count($prophet_predictions)
     ];
 } else {
-    // Fallback initialization if no predictions
     $prediction_summary = [
         'total_predicted_income' => 0,
         'average_monthly_income' => 0,
@@ -820,25 +302,382 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
         'worst_month' => ['date_formatted' => '', 'month' => '', 'yhat' => 0],
         'total_months' => 0
     ];
+    }
+
+    $actuals_2025 = [];
+    foreach ($breakdownIncomeEntries as $entry) {
+        $entryDate = $entry['entry_date'] ?? null;
+        if (!$entryDate) {
+            continue;
+        }
+        $year = date('Y', strtotime($entryDate));
+        if ($year !== '2025') {
+            continue;
+        }
+        $monthKey = date('Y-m', strtotime($entryDate));
+        if (!isset($actuals_2025[$monthKey])) {
+            $actuals_2025[$monthKey] = 0;
+        }
+        $actuals_2025[$monthKey] += floatval($entry['tithes'] ?? 0) + floatval($entry['offerings'] ?? 0);
+    }
+    ksort($actuals_2025);
+
+    $months_2025 = $prophet_predictions ? array_map(function ($p) {
+        return $p['month'];
+    }, $prophet_predictions) : [];
+
+    $actual_data_2025 = [];
+    $predicted_data_2025 = [];
+    foreach ($months_2025 as $idx => $month) {
+        $actual_data_2025[] = isset($actuals_2025[$month]) ? $actuals_2025[$month] : 0;
+        $predicted_data_2025[] = isset($prophet_predictions[$idx]['yhat']) ? $prophet_predictions[$idx]['yhat'] : 0;
+    }
+} else {
+    $sql = "
+        WITH weekly_totals AS (
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'tithes' as type,
+                SUM(tithes) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            UNION ALL
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'offerings' as type,
+                SUM(offerings) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+        )
+        SELECT 
+            type,
+            AVG(total) as avg_weekly
+        FROM weekly_totals
+        GROUP BY type";
+
+    $result = $conn->query($sql);
+    $weekly_averages = [
+        'tithes' => 0,
+        'offerings' => 0
+    ];
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $weekly_averages[$row['type']] = $row['avg_weekly'];
+        }
+    }
+
+    $avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
+    $avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
+
+    function calculateWeeklyOfferingsProphet($conn) {
+        $sql = "
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                SUM(offerings) as total
+            FROM breakdown_income
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            ORDER BY week ASC";
+        $result = $conn->query($sql);
+        $weekly_data = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $year_week = explode('-', $row['week']);
+                $year = $year_week[0];
+                $week = ltrim($year_week[1], '0') ?: 0;
+                $date = date('Y-m-d', strtotime("$year-01-01 +$week weeks"));
+                $weekly_data[] = [
+                    'ds' => $date,
+                    'y' => floatval($row['total'])
+                ];
+            }
+        }
+
+        $ch = curl_init('http://localhost:5000/predict');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $weekly_data]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http_code === 200) {
+            $predictions = json_decode($response, true);
+            if (is_array($predictions) && !empty($predictions)) {
+                $last_4_weeks = array_slice($predictions, -4);
+                $total = 0;
+                $count = 0;
+                foreach ($last_4_weeks as $pred) {
+                    if (isset($pred['yhat']) && $pred['yhat'] >= 0) {
+                        $total += $pred['yhat'];
+                        $count++;
+                    }
+                }
+                return $count > 0 ? $total / $count : 0;
+            }
+        }
+
+        $sql = "
+            SELECT 
+                AVG(total) as avg_weekly
+            FROM (
+                SELECT 
+                    DATE_FORMAT(entry_date, '%Y-%U') as week,
+                    SUM(offerings) as total
+                FROM breakdown_income
+                GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            ) weekly";
+        $result = $conn->query($sql);
+        $row = $result->fetch_assoc();
+        return $row['avg_weekly'] ?? 0;
+    }
+
+    $sql = "
+        WITH weekly_totals AS (
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'tithes' as type,
+                SUM(tithes) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            UNION ALL
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'offerings' as type,
+                SUM(offerings) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            UNION ALL
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'bank_gifts' as type,
+                SUM(gifts_bank) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+            UNION ALL
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%U') as week,
+                'specified_gifts' as type,
+                SUM(others) as total
+            FROM breakdown_income 
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%U')
+        )
+        SELECT 
+            type,
+            AVG(total) as avg_weekly
+        FROM weekly_totals
+        GROUP BY type";
+
+    $result = $conn->query($sql);
+    $weekly_averages = [
+        'tithes' => 0,
+        'offerings' => 0,
+        'bank_gifts' => 0,
+        'specified_gifts' => 0
+    ];
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $weekly_averages[$row['type']] = $row['avg_weekly'];
+        }
+    }
+
+    $avg_weekly_tithes = $weekly_averages['tithes'] ?? 0;
+    $avg_weekly_offerings = $weekly_averages['offerings'] ?? 0;
+    $avg_weekly_bank_gifts = $weekly_averages['bank_gifts'] ?? 0;
+    $avg_weekly_specified_gifts = $weekly_averages['specified_gifts'] ?? 0;
+
+    $sql = "
+        SELECT 
+            DATE_FORMAT(entry_date, '%Y-%m') as month,
+            SUM(tithes + offerings) as total
+        FROM breakdown_income
+        GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+        ORDER BY month ASC";
+
+    $result = $conn->query($sql);
+    $historical_data = [];
+
+    if ($result === false) {
+        error_log("SQL Error: " . $conn->error);
+    } else {
+        if ($result->num_rows === 0) {
+            error_log("No historical data found");
+        }
+        while ($row = $result->fetch_assoc()) {
+            $historical_data[$row['month']] = $row['total'];
+            error_log("Month: " . $row['month'] . ", Total: " . $row['total']);
+        }
+    }
+
+    if (empty($historical_data)) {
+        for ($i = 5; $i >= 0; $i--) {
+            $month = date('Y-m', strtotime("-$i months"));
+            $historical_data[$month] = 0;
+        }
+    }
+
+    error_log("Final Historical Data: " . print_r($historical_data, true));
+
+    function getProphetPrediction($conn) {
+        $minimumRequiredMonths = 6;
+        $sql = "
+            SELECT 
+                DATE_FORMAT(entry_date, '%Y-%m') as month,
+                SUM(tithes + offerings) as total
+            FROM breakdown_income
+            GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+            ORDER BY month";
+        
+        $result = $conn->query($sql);
+        $prophet_data = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $prophet_data[] = [
+                    'ds' => $row['month'] . '-01',
+                    'y' => floatval($row['total'])
+                ];
+            }
+        }
+        
+        if (count($prophet_data) < $minimumRequiredMonths) {
+            return null;
+        }
+
+        $ch = curl_init('http://localhost:5000/predict');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+
+        if ($http_code === 200 && !empty($response)) {
+            $predictions = json_decode($response, true);
+            if (is_array($predictions) && !empty($predictions)) {
+                $predictions_2025 = [];
+                foreach ($predictions as $pred) {
+                    $date = new DateTime($pred['ds']);
+                    if ($date->format('Y') === '2025') {
+                        $predictions_2025[] = [
+                            'month' => $date->format('Y-m'),
+                            'date_formatted' => $date->format('F 01, Y'),
+                            'yhat' => $pred['yhat'],
+                            'yhat_lower' => $pred['yhat_lower'],
+                            'yhat_upper' => $pred['yhat_upper']
+                        ];
+                    }
+                }
+
+                if (count($predictions_2025) === 12) {
+                    return $predictions_2025;
+                }
+            }
+        }
+
+        error_log("Prophet prediction failed. HTTP code: " . $http_code);
+        error_log("Curl error: " . $curl_error);
+        error_log("Response: " . $response);
+
+        $monthly_averages = [];
+        foreach ($prophet_data as $data) {
+            $month = date('m', strtotime($data['ds']));
+            if (!isset($monthly_averages[$month])) {
+                $monthly_averages[$month] = ['total' => 0, 'count' => 0];
+            }
+            $monthly_averages[$month]['total'] += $data['y'];
+            $monthly_averages[$month]['count']++;
+        }
+
+        $predictions_2025 = [];
+        for ($month = 1; $month <= 12; $month++) {
+            $month_key = str_pad($month, 2, '0', STR_PAD_LEFT);
+            $avg = isset($monthly_averages[$month_key]) 
+                ? $monthly_averages[$month_key]['total'] / $monthly_averages[$month_key]['count']
+                : array_sum(array_column($prophet_data, 'y')) / count($prophet_data);
+            
+            $date = DateTime::createFromFormat('Y-m', "2025-" . $month_key);
+            
+            $predictions_2025[] = [
+                'month' => "2025-" . $month_key,
+                'date_formatted' => $date->format('F 01, Y'),
+                'yhat' => $avg,
+                'yhat_lower' => $avg * 0.9,
+                'yhat_upper' => $avg * 1.1
+            ];
+        }
+
+        return $predictions_2025;
+    }
+
+    $prophet_predictions = getProphetPrediction($conn);
+    if ($prophet_predictions) {
+        $predicted_monthly = $prophet_predictions[0]['yhat'];
+        $prediction_lower = $prophet_predictions[0]['yhat_lower'] ?? ($predicted_monthly * 0.9);
+        $prediction_upper = $prophet_predictions[0]['yhat_upper'] ?? ($predicted_monthly * 1.1);
+    } else {
+        $predicted_monthly = ($avg_weekly_tithes + $avg_weekly_offerings + $avg_weekly_bank_gifts + $avg_weekly_specified_gifts) * 4;
+        $prediction_lower = $predicted_monthly * 0.9;
+        $prediction_upper = $predicted_monthly * 1.1;
+    }
+
+    if ($prophet_predictions && count($prophet_predictions) > 0) {
+        $predicted_values = array_column($prophet_predictions, 'yhat');
+        $total_predicted = array_sum($predicted_values);
+        $avg_monthly = $total_predicted / count($predicted_values);
+        $best_month = $prophet_predictions[array_search(max($predicted_values), $predicted_values)];
+        $worst_month = $prophet_predictions[array_search(min($predicted_values), $predicted_values)];
+        $historical_avg = array_sum(array_values($historical_data)) / count($historical_data);
+        $growth_rate = $historical_avg > 0 ? (($avg_monthly - $historical_avg) / $historical_avg * 100) : 0;
+        $prediction_summary = [
+            'total_predicted_income' => $total_predicted,
+            'average_monthly_income' => $avg_monthly,
+            'predicted_growth_rate' => $growth_rate,
+            'best_month' => [
+                'date_formatted' => $best_month['date_formatted'] ?? $best_month['month'],
+                'month' => $best_month['month'],
+                'yhat' => $best_month['yhat']
+            ],
+            'worst_month' => [
+                'date_formatted' => $worst_month['date_formatted'] ?? $worst_month['month'],
+                'month' => $worst_month['month'],
+                'yhat' => $worst_month['yhat']
+            ],
+            'total_months' => count($prophet_predictions)
+        ];
+    } else {
+        $prediction_summary = [
+            'total_predicted_income' => 0,
+            'average_monthly_income' => 0,
+            'predicted_growth_rate' => 0,
+            'best_month' => ['date_formatted' => '', 'month' => '', 'yhat' => 0],
+            'worst_month' => ['date_formatted' => '', 'month' => '', 'yhat' => 0],
+            'total_months' => 0
+        ];
+    }
 }
 
 // Fetch actual totals for each month in 2025
-$actuals_2025 = [];
-$sql_actuals_2025 = "
-    SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(amount) as total
-    FROM (
-        SELECT date, amount FROM tithes
-        UNION ALL
-        SELECT date, amount FROM offerings
-    ) combined
-    WHERE YEAR(date) = 2025
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
-    ORDER BY month ASC
-";
-$result_actuals_2025 = $conn->query($sql_actuals_2025);
-if ($result_actuals_2025) {
-    while ($row = $result_actuals_2025->fetch_assoc()) {
-        $actuals_2025[$row['month']] = floatval($row['total']);
+if (empty($breakdownIncomeEntries)) {
+    $actuals_2025 = [];
+    $sql_actuals_2025 = "
+        SELECT DATE_FORMAT(entry_date, '%Y-%m') as month, SUM(tithes + offerings) as total
+        FROM breakdown_income
+        WHERE YEAR(entry_date) = 2025
+        GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+        ORDER BY month ASC
+    ";
+    $result_actuals_2025 = $conn->query($sql_actuals_2025);
+    if ($result_actuals_2025) {
+        while ($row = $result_actuals_2025->fetch_assoc()) {
+            $actuals_2025[$row['month']] = floatval($row['total']);
+        }
     }
 }
 // Align actuals and predictions for 2025
@@ -868,10 +707,10 @@ echo "<script>
     const hasHistoricalData = historicalData && Object.keys(historicalData).length > 0;
 
     // 1. Fetch actual totals for each month in 2025
-    const actuals2025 = " . json_encode($prophet_predictions) . ";
-    const months2025 = " . json_encode($months_2025) . ";
-    const actualData2025 = " . json_encode($actual_data_2025) . ";
-    const predictedData2025 = " . json_encode($predicted_data_2025) . ";
+const actuals2025 = " . json_encode($prophet_predictions ?? []) . ";
+const months2025 = " . json_encode($months_2025 ?? []) . ";
+const actualData2025 = " . json_encode($actual_data_2025 ?? []) . ";
+const predictedData2025 = " . json_encode($predicted_data_2025 ?? []) . ";
 </script>";
 
 
@@ -894,9 +733,66 @@ if (isset($_GET['success'])) {
     }
 }
 
-// Fetch weekly summary for tithes and offerings
+// Weekly summary for tithes and offerings (prioritize breakdown data, fallback to legacy tables)
 $weekly_reports = [];
-$sql = "
+$weeklyReportsMap = [];
+
+if (!empty($breakdownIncomeEntries)) {
+    foreach ($breakdownIncomeEntries as $entry) {
+        $entryDate = $entry['entry_date'] ?? null;
+        if (!$entryDate) {
+            continue;
+        }
+
+        $tithesAmount = isset($entry['tithes']) ? floatval($entry['tithes']) : 0;
+        $offeringsAmount = isset($entry['offerings']) ? floatval($entry['offerings']) : 0;
+
+        if ($tithesAmount === 0 && $offeringsAmount === 0) {
+            continue;
+        }
+
+        $date = new DateTime($entryDate);
+        $isoYear = (int) $date->format('o');
+        $isoWeek = (int) $date->format('W');
+
+        $weekKey = sprintf('%d-W%02d', $isoYear, $isoWeek);
+        $weekSortKey = sprintf('%04d%02d', $isoYear, $isoWeek);
+
+        $weekStart = new DateTime();
+        $weekStart->setISODate($isoYear, $isoWeek);
+        $weekEnd = clone $weekStart;
+        $weekEnd->modify('+6 days');
+
+        if (!isset($weeklyReportsMap[$weekKey])) {
+            $weeklyReportsMap[$weekKey] = [
+                'week' => $weekKey,
+                'week_sort' => $weekSortKey,
+                'start_date' => $weekStart->format('Y-m-d'),
+                'end_date' => $weekEnd->format('Y-m-d'),
+                'total_tithes' => 0,
+                'total_offerings' => 0,
+                'grand_total' => 0
+            ];
+        }
+
+        $weeklyReportsMap[$weekKey]['total_tithes'] += $tithesAmount;
+        $weeklyReportsMap[$weekKey]['total_offerings'] += $offeringsAmount;
+    }
+
+    if (!empty($weeklyReportsMap)) {
+        $weekly_reports = array_values($weeklyReportsMap);
+        usort($weekly_reports, function ($a, $b) {
+            return strcmp($b['week_sort'], $a['week_sort']);
+        });
+        array_walk($weekly_reports, function (&$week) {
+            $week['grand_total'] = $week['total_tithes'] + $week['total_offerings'];
+            unset($week['week_sort']);
+        });
+    }
+}
+
+if (empty($weekly_reports)) {
+    $legacySql = "
     SELECT 
         week,
         MIN(date) as start_date,
@@ -911,11 +807,12 @@ $sql = "
     GROUP BY week
     ORDER BY week DESC
 ";
-$result = $conn->query($sql);
+    $result = $conn->query($legacySql);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         $row['grand_total'] = $row['total_tithes'] + $row['total_offerings'];
         $weekly_reports[] = $row;
+        }
     }
 }
 ?>
@@ -1186,17 +1083,21 @@ if ($result) {
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 600px;
         }
 
         th, td {
             padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid #eeeeee;
+            white-space: nowrap;
         }
 
         th {
@@ -1760,12 +1661,18 @@ if ($result) {
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -1800,9 +1707,12 @@ if ($result) {
         }
         @media (max-width: 768px) {
             .custom-drawer {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
+            }
+            .custom-drawer.open {
                 left: 0;
             }
             .drawer-header {
@@ -1813,7 +1723,7 @@ if ($result) {
                 height: 40px;
             }
             .drawer-title {
-                font-size: 16px;
+                font-size: 14px;
             }
             .drawer-close {
                 font-size: 18px;
@@ -1822,28 +1732,25 @@ if ($result) {
                 padding: 10px 0;
             }
             .drawer-menu {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
+                display: block;
             }
             .drawer-menu li {
                 margin-bottom: 0;
-                flex: 1;
             }
             .drawer-link {
-                padding: 12px 8px;
-                justify-content: center;
+                padding: 12px 18px;
+                justify-content: flex-start;
                 font-size: 14px;
             }
             .drawer-link i {
-                font-size: 18px;
+                font-size: 16px;
                 min-width: 20px;
             }
             .drawer-profile {
                 padding: 15px;
-                flex-direction: column;
+                flex-direction: row;
                 align-items: center;
-                text-align: center;
+                text-align: left;
             }
             .drawer-profile .avatar {
                 width: 40px;
@@ -1853,12 +1760,87 @@ if ($result) {
             .drawer-profile .name {
                 font-size: 14px;
                 margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
             }
             .drawer-profile .role {
                 font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
             }
             .nav-toggle-container {
                 display: block;
+            }
+            .content-area {
+                margin-left: 0;
+                padding-top: 70px;
+            }
+            .tab-navigation {
+                flex-wrap: wrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab-navigation a {
+                padding: 12px 10px;
+                font-size: 13px;
+                min-width: auto;
+                flex: 1 1 auto;
+            }
+            .tab-content {
+                padding: 15px 10px;
+            }
+            .table-responsive {
+                padding: 10px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table {
+                font-size: 14px;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            .top-bar {
+                padding: 12px 15px;
+            }
+            .top-bar h2 {
+                font-size: 20px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .tab-navigation {
+                flex-direction: column;
+            }
+            .tab-navigation a {
+                width: 100%;
+                padding: 12px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            .tab-navigation a:last-child {
+                border-bottom: none;
+            }
+            .table-responsive {
+                padding: 5px;
+            }
+            table {
+                font-size: 12px;
+                min-width: 500px;
+            }
+            th, td {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            .top-bar h2 {
+                font-size: 18px;
             }
         }
     </style>
@@ -1938,12 +1920,12 @@ if ($result) {
                 <?php if (!empty($user_profile['profile_picture'])): ?>
                     <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                 <?php else: ?>
-                    <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                    <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                 <?php endif; ?>
             </div>
             <div class="profile-info">
-                <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
-                <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Administrator'); ?></div>
             </div>
             <form action="logout.php" method="post" style="margin:0;">
                 <button type="submit" class="logout-btn">Logout</button>
@@ -1996,6 +1978,7 @@ if ($result) {
                                 </tr>
                             </thead>
                             <tbody>
+                                <?php if (!empty($weekly_reports)): ?>
                                 <?php foreach ($weekly_reports as $week): ?>
                                     <tr>
                                         <td><strong><?php echo htmlspecialchars($week['week']); ?></strong></td>
@@ -2006,6 +1989,13 @@ if ($result) {
                                         <td><strong>₱<?php echo number_format($week['grand_total'], 2); ?></strong></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td colspan="6" style="text-align:center; color:#666; padding:20px;">
+                                            No weekly records found in the financial breakdown.
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -2013,44 +2003,31 @@ if ($result) {
 
                 <!-- Tithes Tab -->
                 <div class="tab-pane" id="tithes">
-                    <div class="action-bar">
-                        <button class="btn" id="add-tithes-btn">
-                            <i class="fas fa-plus"></i> Add New Tithes
-                        </button>
-                    </div>
-
                     <div class="table-responsive">
-                        <table>
+                        <table id="tithes-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
                                     <th>Date</th>
-                                    <th>Amount</th>
-                                    <th>Actions</th>
+                                    <th>Amount (₱)</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
-                            <tbody id="tithes-tbody">
+                            <tbody>
+                                <?php if (!empty($tithes_records)): ?>
                                 <?php foreach ($tithes_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="action-btn edit-btn" 
-                                                        data-id="<?php echo $record['id']; ?>" 
-                                                        data-type="tithes"
-                                                        data-date="<?php echo $record['date']; ?>"
-                                                        data-amount="<?php echo $record['amount']; ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="tithes">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">No tithes records found in the financial breakdown.</td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -2058,44 +2035,31 @@ if ($result) {
 
                 <!-- Offerings Tab -->
                 <div class="tab-pane" id="offerings">
-                    <div class="action-bar">
-                        <button class="btn" id="add-offering-btn">
-                            <i class="fas fa-plus"></i> Add New Offering
-                        </button>
-                    </div>
-
                     <div class="table-responsive">
-                        <table>
+                        <table id="offerings-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
                                     <th>Date</th>
-                                    <th>Amount</th>
-                                    <th>Actions</th>
+                                    <th>Amount (₱)</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
-                            <tbody id="offerings-tbody">
+                            <tbody>
+                                <?php if (!empty($offerings_records)): ?>
                                 <?php foreach ($offerings_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="action-btn edit-btn" 
-                                                        data-id="<?php echo $record['id']; ?>" 
-                                                        data-type="offerings"
-                                                        data-date="<?php echo $record['date']; ?>"
-                                                        data-amount="<?php echo $record['amount']; ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="offerings">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">No offerings records found in the financial breakdown.</td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -2103,50 +2067,34 @@ if ($result) {
 
                 <!-- Bank Gifts Tab -->
                 <div class="tab-pane" id="bank-gifts">
-                    <div class="action-bar">
-                        <button class="btn" id="add-bank-gift-btn">
-                            <i class="fas fa-plus"></i> Add New Bank Gift
-                        </button>
-                    </div>
-
                     <div class="table-responsive">
-                        <table>
+                        <table id="bank-gifts-table">
                             <thead>
                                 <tr>
                                     <th>ID</th>
                                     <th>Date</th>
-                                    <th>Date Deposited</th>
-                                    <th>Date Updated</th>
-                                    <th>Amount</th>
-                                    <th>Actions</th>
+                                    <th>Amount (₱)</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
-                            <tbody id="bank-gifts-tbody">
+                            <tbody>
+                                <?php if (!empty($bank_gifts_records)): ?>
                                 <?php foreach ($bank_gifts_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_deposited'])); ?></strong></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date_updated'])); ?></strong></td>
+                                        <td><?php echo htmlspecialchars($record['id']); ?></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="action-btn edit-btn" 
-                                                        data-id="<?php echo $record['id']; ?>" 
-                                                        data-type="bank-gifts"
-                                                        data-date="<?php echo $record['date']; ?>"
-                                                        data-date-deposited="<?php echo $record['date_deposited']; ?>"
-                                                        data-date-updated="<?php echo $record['date_updated']; ?>"
-                                                        data-amount="<?php echo $record['amount']; ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="bank-gifts">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">No bank gifts records found in the financial breakdown.</td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -2154,47 +2102,34 @@ if ($result) {
 
                 <!-- Specified Gifts Tab -->
                 <div class="tab-pane" id="specified-gifts">
-                    <div class="action-bar">
-                        <button class="btn" id="add-specified-gift-btn">
-                            <i class="fas fa-plus"></i> Add New Specified Gift
-                        </button>
-                    </div>
-
                     <div class="table-responsive">
-                        <table>
+                        <table id="specified-gifts-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
                                     <th>Date</th>
                                     <th>Category</th>
-                                    <th>Amount</th>
-                                    <th>Actions</th>
+                                    <th>Amount (₱)</th>
+                                    <th>Notes</th>
                                 </tr>
                             </thead>
-                            <tbody id="specified-gifts-tbody">
+                            <tbody>
+                                <?php if (!empty($specified_gifts_records)): ?>
                                 <?php foreach ($specified_gifts_records as $record): ?>
                                     <tr>
-                                        <td><?php echo $record['id']; ?></td>
-                                        <td><strong><?php echo date('F d, Y', strtotime($record['date'])); ?></strong></td>
+                                        <td><strong><?php echo date('F d, Y', strtotime($record['entry_date'])); ?></strong></td>
                                         <td><?php echo htmlspecialchars($record['category']); ?></td>
                                         <td>₱<?php echo number_format($record['amount'], 2); ?></td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                <button class="action-btn edit-btn" 
-                                                        data-id="<?php echo $record['id']; ?>" 
-                                                        data-type="specified-gifts"
-                                                        data-date="<?php echo $record['date']; ?>"
-                                                        data-category="<?php echo htmlspecialchars($record['category']); ?>"
-                                                        data-amount="<?php echo $record['amount']; ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="action-btn delete-btn" data-id="<?php echo $record['id']; ?>" data-type="specified-gifts">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
+                                        <td><?php echo $record['notes'] !== '' ? nl2br(htmlspecialchars($record['notes'])) : 'No notes provided.'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">-</td>
+                                        <td style="text-align:center; color:#666; padding:20px;">No specified gifts (Others) records found in the financial breakdown.</td>
+                                    </tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -2274,140 +2209,7 @@ if ($result) {
                 </div>
             </div>
 
-            <!-- Tithes Form Modal -->
-            <div id="tithes-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="tithes-modal-title">Add New Tithes</h3>
-                        <span class="close">×</span>
-                    </div>
-                    <form id="tithes-form" method="post" action="">
-                        <input type="hidden" name="record_id" id="tithes-record-id">
-                        <div class="form-group">
-                            <label for="tithes-date">Date</label>
-                            <input type="date" class="form-control" id="tithes-date" name="date" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="tithes-amount">Amount (₱)</label>
-                            <input type="number" step="0.01" class="form-control" id="tithes-amount" name="amount" required>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancel-tithes">Cancel</button>
-                            <button type="submit" class="btn btn-primary" name="add_tithes" id="tithes-submit-btn">Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Offerings Form Modal -->
-            <div id="offering-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="offering-modal-title">Add New Offering</h3>
-                        <span class="close">×</span>
-                    </div>
-                    <form id="offering-form" method="post" action="">
-                        <input type="hidden" name="record_id" id="offering-record-id">
-                        <div class="form-group">
-                            <label for="offering-date">Date</label>
-                            <input type="date" class="form-control" id="offering-date" name="date" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="offering-amount">Amount (₱)</label>
-                            <input type="number" step="0.01" class="form-control" id="offering-amount" name="amount" required>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancel-offering">Cancel</button>
-                            <button type="submit" class="btn btn-primary" name="add_offering" id="offering-submit-btn">Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Bank Gifts Form Modal -->
-            <div id="bank-gift-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="bank-gift-modal-title">Add New Bank Gift</h3>
-                        <span class="close">×</span>
-                    </div>
-                    <form id="bank-gift-form" method="post" action="">
-                        <input type="hidden" name="record_id" id="bank-gift-record-id">
-                        <div class="form-group">
-                            <label for="bank-gift-date">Date</label>
-                            <input type="date" class="form-control" id="bank-gift-date" name="date" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bank-gift-date-deposited">Date Deposited</label>
-                            <input type="date" class="form-control" id="bank-gift-date-deposited" name="date_deposited" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bank-gift-date-updated">Date Updated</label>
-                            <input type="date" class="form-control" id="bank-gift-date-updated" name="date_updated" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="bank-gift-amount">Amount (₱)</label>
-                            <input type="number" step="0.01" class="form-control" id="bank-gift-amount" name="amount" required>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancel-bank-gift">Cancel</button>
-                            <button type="submit" class="btn btn-primary" name="add_bank_gift" id="bank-gift-submit-btn">Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Specified Gifts Form Modal -->
-            <div id="specified-gift-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 id="specified-gift-modal-title">Add New Specified Gift</h3>
-                        <span class="close">×</span>
-                    </div>
-                    <form id="specified-gift-form" method="post" action="">
-                        <input type="hidden" name="record_id" id="specified-gift-record-id">
-                        <div class="form-group">
-                            <label for="specified-gift-date">Date</label>
-                            <input type="date" class="form-control" id="specified-gift-date" name="date" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="specified-gift-category">Category</label>
-                            <select class="form-control" id="specified-gift-category" name="category" required>
-                                <?php foreach ($specified_gifts as $category): ?>
-                                    <option value="<?php echo htmlspecialchars($category); ?>"><?php echo htmlspecialchars($category); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="specified-gift-amount">Amount (₱)</label>
-                            <input type="number" step="0.01" class="form-control" id="specified-gift-amount" name="amount" required>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancel-specified-gift">Cancel</button>
-                            <button type="submit" class="btn btn-primary" name="add_specified_gift" id="specified-gift-submit-btn">Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Delete Confirmation Modal -->
-            <div id="delete-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>Confirm Deletion</h3>
-                        <span class="close">×</span>
-                    </div>
-                    <form id="delete-form" method="post" action="">
-                        <input type="hidden" name="record_id" id="delete-record-id">
-                        <input type="hidden" name="record_type" id="delete-record-type">
-                        <p>Are you sure you want to delete this record?</p>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" id="cancel-delete">Cancel</button>
-                            <button type="submit" class="btn btn-primary" name="delete_record">Delete</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+            <!-- Modals removed: breakdown data is read-only -->
         </div>
     </main>
 </div>
@@ -2429,156 +2231,8 @@ if ($result) {
         });
     });
 
-    // Modal Handling
-    const modals = document.querySelectorAll('.modal');
-    const closeButtons = document.querySelectorAll('.close');
-    
-    closeButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            modals.forEach(modal => modal.style.display = 'none');
-        });
-    });
-
-    window.addEventListener('click', (e) => {
-        modals.forEach(modal => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
-    });
-
-    // Tithes Form Handling
-    document.getElementById('add-tithes-btn').addEventListener('click', () => {
-        const modal = document.getElementById('tithes-modal');
-        document.getElementById('tithes-modal-title').textContent = 'Add New Tithes';
-        document.getElementById('tithes-record-id').value = '';
-        document.getElementById('tithes-date').value = '';
-        document.getElementById('tithes-amount').value = '';
-        document.getElementById('tithes-submit-btn').setAttribute('name', 'add_tithes');
-        modal.style.display = 'block';
-    });
-
-    document.getElementById('cancel-tithes').addEventListener('click', () => {
-        document.getElementById('tithes-modal').style.display = 'none';
-    });
-
-    document.querySelectorAll('.edit-btn[data-type="tithes"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = document.getElementById('tithes-modal');
-            document.getElementById('tithes-modal-title').textContent = 'Edit Tithes';
-            document.getElementById('tithes-record-id').value = btn.dataset.id;
-            document.getElementById('tithes-date').value = btn.dataset.date;
-            document.getElementById('tithes-amount').value = btn.dataset.amount;
-            document.getElementById('tithes-submit-btn').setAttribute('name', 'edit_tithes');
-            modal.style.display = 'block';
-        });
-    });
-
-    // Offerings Form Handling
-    document.getElementById('add-offering-btn').addEventListener('click', () => {
-        const modal = document.getElementById('offering-modal');
-        document.getElementById('offering-modal-title').textContent = 'Add New Offering';
-        document.getElementById('offering-record-id').value = '';
-        document.getElementById('offering-date').value = '';
-        document.getElementById('offering-amount').value = '';
-        document.getElementById('offering-submit-btn').setAttribute('name', 'add_offering');
-        modal.style.display = 'block';
-    });
-
-    document.getElementById('cancel-offering').addEventListener('click', () => {
-        document.getElementById('offering-modal').style.display = 'none';
-    });
-
-    document.querySelectorAll('.edit-btn[data-type="offerings"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = document.getElementById('offering-modal');
-            document.getElementById('offering-modal-title').textContent = 'Edit Offering';
-            document.getElementById('offering-record-id').value = btn.dataset.id;
-            document.getElementById('offering-date').value = btn.dataset.date;
-            document.getElementById('offering-amount').value = btn.dataset.amount;
-            document.getElementById('offering-submit-btn').setAttribute('name', 'edit_offering');
-            modal.style.display = 'block';
-        });
-    });
-
-    // Bank Gifts Form Handling
-    document.getElementById('add-bank-gift-btn').addEventListener('click', () => {
-        const modal = document.getElementById('bank-gift-modal');
-        document.getElementById('bank-gift-modal-title').textContent = 'Add New Bank Gift';
-        document.getElementById('bank-gift-record-id').value = '';
-        document.getElementById('bank-gift-date').value = '';
-        document.getElementById('bank-gift-date-deposited').value = '';
-        document.getElementById('bank-gift-date-updated').value = '';
-        document.getElementById('bank-gift-amount').value = '';
-        document.getElementById('bank-gift-submit-btn').setAttribute('name', 'add_bank_gift');
-        modal.style.display = 'block';
-    });
-
-    document.getElementById('cancel-bank-gift').addEventListener('click', () => {
-        document.getElementById('bank-gift-modal').style.display = 'none';
-    });
-
-    document.querySelectorAll('.edit-btn[data-type="bank-gifts"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = document.getElementById('bank-gift-modal');
-            document.getElementById('bank-gift-modal-title').textContent = 'Edit Bank Gift';
-            document.getElementById('bank-gift-record-id').value = btn.dataset.id;
-            document.getElementById('bank-gift-date').value = btn.dataset.date;
-            document.getElementById('bank-gift-date-deposited').value = btn.dataset.dateDeposited;
-            document.getElementById('bank-gift-date-updated').value = btn.dataset.dateUpdated;
-            document.getElementById('bank-gift-amount').value = btn.dataset.amount;
-            document.getElementById('bank-gift-submit-btn').setAttribute('name', 'edit_bank_gift');
-            modal.style.display = 'block';
-        });
-    });
-
-    // Specified Gifts Form Handling
-    document.getElementById('add-specified-gift-btn').addEventListener('click', () => {
-        const modal = document.getElementById('specified-gift-modal');
-        document.getElementById('specified-gift-modal-title').textContent = 'Add New Specified Gift';
-        document.getElementById('specified-gift-record-id').value = '';
-        document.getElementById('specified-gift-date').value = '';
-        document.getElementById('specified-gift-category').value = '';
-        document.getElementById('specified-gift-amount').value = '';
-        document.getElementById('specified-gift-submit-btn').setAttribute('name', 'add_specified_gift');
-        modal.style.display = 'block';
-    });
-
-    document.getElementById('cancel-specified-gift').addEventListener('click', () => {
-        document.getElementById('specified-gift-modal').style.display = 'none';
-    });
-
-    document.querySelectorAll('.edit-btn[data-type="specified-gifts"]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = document.getElementById('specified-gift-modal');
-            document.getElementById('specified-gift-modal-title').textContent = 'Edit Specified Gift';
-            document.getElementById('specified-gift-record-id').value = btn.dataset.id;
-            document.getElementById('specified-gift-date').value = btn.dataset.date;
-            document.getElementById('specified-gift-category').value = btn.dataset.category;
-            document.getElementById('specified-gift-amount').value = btn.dataset.amount;
-            document.getElementById('specified-gift-submit-btn').setAttribute('name', 'edit_specified_gift');
-            modal.style.display = 'block';
-        });
-    });
-
-    // Delete Confirmation Handling
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = document.getElementById('delete-modal');
-            document.getElementById('delete-record-id').value = btn.dataset.id;
-            document.getElementById('delete-record-type').value = btn.dataset.type;
-            modal.style.display = 'block';
-        });
-    });
-
-    document.getElementById('cancel-delete').addEventListener('click', () => {
-        document.getElementById('delete-modal').style.display = 'none';
-    });
-
-
-
     // Trend Chart
-    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    const trendCtx = document.getElementById('trendChart') ? document.getElementById('trendChart').getContext('2d') : null;
     
     // Check if we have historical data
     if (historicalData && Object.keys(historicalData).length > 0) {
@@ -2781,13 +2435,12 @@ if ($result) {
 
     // DataTables Initialization (jQuery version)
     $(document).ready(function() {
-        ['tithes-tbody', 'offerings-tbody', 'bank-gifts-tbody', 'specified-gifts-tbody'].forEach(function(tbodyId) {
-            var $tbody = $('#' + tbodyId);
-            if ($tbody.length) {
-                var $table = $tbody.closest('table');
+        ['#tithes-table', '#offerings-table', '#bank-gifts-table', '#specified-gifts-table'].forEach(function(selector) {
+            var $table = $(selector);
                 if ($table.length) {
                     $table.DataTable({
                         responsive: true,
+                        scrollX: true,
                         paging: true,
                         pageLength: 10,
                         lengthMenu: [5, 10, 25, 50, 100],
@@ -2798,13 +2451,13 @@ if ($result) {
                             search: 'Search:',
                             lengthMenu: 'Show _MENU_ entries',
                             info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                        emptyTable: 'No records found in the financial breakdown.',
                             paginate: {
                                 previous: 'Prev',
                                 next: 'Next'
                             }
                         }
                     });
-                }
             }
         });
     });
@@ -2813,6 +2466,7 @@ if ($result) {
     $(document).ready(function() {
         $('#weekly-reports-table').DataTable({
             responsive: true,
+            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
@@ -2823,6 +2477,7 @@ if ($result) {
                 search: 'Search:',
                 lengthMenu: 'Show _MENU_ entries',
                 info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                emptyTable: 'No weekly records found in the financial breakdown.',
                 paginate: {
                     previous: 'Prev',
                     next: 'Next'

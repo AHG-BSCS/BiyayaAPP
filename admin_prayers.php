@@ -1065,7 +1065,7 @@ $live_message = getLiveMessage($conn);
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown Admin'); ?></div>
-                    <div class="role">Admin</div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Administrator'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>

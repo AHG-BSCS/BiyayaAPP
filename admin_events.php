@@ -493,12 +493,18 @@ $pinned_event = getPinnedEvent($conn);
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -616,9 +622,12 @@ $pinned_event = getPinnedEvent($conn);
                 flex-direction: column;
             }
             .custom-drawer {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
+            }
+            .custom-drawer.open {
                 left: 0;
             }
             .drawer-header {
@@ -629,7 +638,7 @@ $pinned_event = getPinnedEvent($conn);
                 height: 40px;
             }
             .drawer-title {
-                font-size: 16px;
+                font-size: 14px;
             }
             .drawer-close {
                 font-size: 18px;
@@ -638,28 +647,25 @@ $pinned_event = getPinnedEvent($conn);
                 padding: 10px 0;
             }
             .drawer-menu {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
+                display: block;
             }
             .drawer-menu li {
                 margin-bottom: 0;
-                flex: 1;
             }
             .drawer-link {
-                padding: 12px 8px;
-                justify-content: center;
+                padding: 12px 18px;
+                justify-content: flex-start;
                 font-size: 14px;
             }
             .drawer-link i {
-                font-size: 18px;
+                font-size: 16px;
                 min-width: 20px;
             }
             .drawer-profile {
                 padding: 15px;
-                flex-direction: column;
+                flex-direction: row;
                 align-items: center;
-                text-align: center;
+                text-align: left;
             }
             .drawer-profile .avatar {
                 width: 40px;
@@ -669,16 +675,27 @@ $pinned_event = getPinnedEvent($conn);
             .drawer-profile .name {
                 font-size: 14px;
                 margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
             }
             .drawer-profile .role {
                 font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
             }
             .nav-toggle-container {
                 display: block;
             }
             .content-area {
                 margin-left: 0;
-                padding-top: 20px;
+                padding-top: 70px;
             }
             .top-bar {
                 flex-direction: column;
@@ -1009,12 +1026,12 @@ $pinned_event = getPinnedEvent($conn);
                 <?php if (!empty($user_profile['profile_picture'])): ?>
                     <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                 <?php else: ?>
-                    <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                    <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                 <?php endif; ?>
             </div>
             <div class="profile-info">
-                <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
-                <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Administrator'); ?></div>
             </div>
             <form action="logout.php" method="post" style="margin:0;">
                 <button type="submit" class="logout-btn">Logout</button>

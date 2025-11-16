@@ -101,7 +101,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $email = trim($_POST["new_email"]);
         $contact_number = trim($_POST["new_contact_number"]);
         $address = trim($_POST["new_address"]);
-        $password = password_hash($_POST["new_password"], PASSWORD_DEFAULT);
+        $password = md5($_POST["new_password"]);
         $role = $_POST["new_role"];
         $user_id = strtolower(str_replace(' ', '', $username)) . rand(100, 999); // Generate a unique user_id
 
@@ -199,39 +199,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } elseif (isset($_POST["delete_user"])) {
         $user_id = $_POST["delete_user_id"];
         
-        // Don't allow deleting the admin account
-        if ($user_id === 'admin') {
-            $message = "Cannot delete the admin account!";
-            $messageType = "danger";
-        } else {
-            $delete_sql = "DELETE FROM user_profiles WHERE user_id = ?";
-            $stmt = $conn->prepare($delete_sql);
-            $stmt->bind_param("s", $user_id);
+        $delete_sql = "DELETE FROM user_profiles WHERE user_id = ?";
+        $stmt = $conn->prepare($delete_sql);
+        $stmt->bind_param("s", $user_id);
+        
+        if ($stmt->execute()) {
+            $message = "User deleted successfully!";
+            $messageType = "success";
             
-            if ($stmt->execute()) {
-                $message = "User deleted successfully!";
-                $messageType = "success";
-                
-                // Refresh the users array to reflect the deletion
-                $users = [];
-                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
-                $result = $conn->query($sql);
-                while ($row = $result->fetch_assoc()) {
-                    $users[] = [
-                        'id' => $row['user_id'],
-                        'username' => $row['username'],
-                        'full_name' => $row['full_name'],
-                        'email' => $row['email'],
-                        'contact_number' => $row['contact_number'],
-                        'address' => $row['address'],
-                        'role' => $row['role'],
-                        'created_at' => $row['created_at']
-                    ];
-                }
-            } else {
-                $message = "Error deleting user: " . $conn->error;
-                $messageType = "danger";
+            // Refresh the users array to reflect the deletion
+            $users = [];
+            $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+            $result = $conn->query($sql);
+            while ($row = $result->fetch_assoc()) {
+                $users[] = [
+                    'id' => $row['user_id'],
+                    'username' => $row['username'],
+                    'full_name' => $row['full_name'],
+                    'email' => $row['email'],
+                    'contact_number' => $row['contact_number'],
+                    'address' => $row['address'],
+                    'role' => $row['role'],
+                    'created_at' => $row['created_at']
+                ];
             }
+        } else {
+            $message = "Error deleting user: " . $conn->error;
+            $messageType = "danger";
         }
     } elseif (isset($_POST["update_profile"])) {
         $profile_data = [
@@ -252,7 +246,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             } else {
                 // Verify current password
                 $current_password = $_POST['current_password'];
-                if (!password_verify($current_password, $user_profile['password'])) {
+                if (md5($current_password) !== $user_profile['password']) {
                     $message = "Current password is incorrect.";
                     $messageType = "danger";
                 } else {
@@ -262,7 +256,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         $messageType = "danger";
                     } else {
                         // Hash the new password
-                        $profile_data['password'] = password_hash($_POST['new_password'], PASSWORD_DEFAULT);
+                        $profile_data['password'] = md5($_POST['new_password']);
                     }
                 }
             }
@@ -980,96 +974,183 @@ $church_logo = getChurchLogo($conn);
                 width: 70px;
                 overflow: visible;
             }
-            
 
-            
             .sidebar-header h3, .sidebar-menu span {
                 display: none;
             }
-            
+
             .content-area {
                 margin-left: 70px;
             }
-            
+
             .form-row {
                 flex-direction: column;
                 gap: 0;
             }
-        }
-        
+
+            table {
+                min-width: 900px;
+            }
+         }
+ 
         @media (max-width: 768px) {
             .dashboard-container {
                 flex-direction: column;
             }
-            
+
             .sidebar {
                 width: 100%;
                 height: auto;
                 position: relative;
             }
-            
 
-            
             .sidebar-menu {
                 display: flex;
                 padding: 0;
                 overflow-x: auto;
             }
-            
+
             .sidebar-menu ul {
                 display: flex;
                 width: 100%;
             }
-            
+
             .sidebar-menu li {
                 margin-bottom: 0;
                 flex: 1;
             }
-            
+
             .sidebar-menu a {
                 padding: 10px;
                 justify-content: center;
             }
-            
+
             .sidebar-menu i {
                 margin-right: 0;
             }
-            
+
             .content-area {
                 margin-left: 0;
+                padding: 20px 16px;
             }
-            
+
             .top-bar {
                 flex-direction: column;
                 align-items: flex-start;
+                gap: 8px;
             }
-            
+
             .user-profile {
                 margin-top: 10px;
             }
-            
+
             .action-bar {
                 flex-direction: column;
                 gap: 10px;
             }
-            
+
             .search-box {
                 width: 100%;
             }
-            
+
             .tab-navigation {
                 flex-direction: column;
             }
-            
+
             .tab-navigation a {
                 padding: 10px;
+                width: 100%;
+                flex: none;
             }
-            
+
             .icon-selector {
                 justify-content: center;
             }
+
+            .table-responsive {
+                margin-top: 16px;
+            }
+
+            table {
+                min-width: 640px;
+            }
+
+            .dataTables_wrapper {
+                width: 100%;
+            }
+
+            .dataTables_wrapper .dataTables_filter,
+            .dataTables_wrapper .dataTables_length {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .dataTables_wrapper .dataTables_filter input {
+                flex: 1 1 220px;
+                width: 100%;
+                padding: 8px 10px;
+                font-size: 14px;
+            }
+
+            .dataTables_wrapper .dataTables_length select {
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate {
+                margin-top: 12px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 13px;
+                padding: 6px 0;
+            }
         }
-        
+
+        @media (max-width: 480px) {
+            .content-area {
+                padding: 16px 12px;
+            }
+
+            .top-bar {
+                padding: 12px;
+                gap: 6px;
+            }
+
+            .tab-navigation a {
+                padding: 12px;
+            }
+
+            table {
+                min-width: 520px;
+            }
+
+            .dataTables_wrapper .dataTables_filter input,
+            .dataTables_wrapper .dataTables_length select {
+                font-size: 13px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 12px;
+            }
+        }
+
         .info-box {
             background-color: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -1550,20 +1631,14 @@ $church_logo = getChurchLogo($conn);
                                                 </span>
                                             </td>
                                             <td><?php echo isset($user['created_at']) ? date('M d, Y', strtotime($user['created_at'])) : ''; ?></td>
-                                            <?php
-    $username = strtolower(trim($user['username'] ?? ''));
-    $is_protected = ($username === 'admin' || $username === 'superadmin');
-?>
 <td>
     <div class="action-buttons">
-        <?php if (!$is_protected): ?>
-            <button type="button" class="action-btn edit-btn" onclick="<?php if (!$is_protected): ?>editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['full_name']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['contact_number']); ?>', '<?php echo htmlspecialchars($user['address']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')<?php endif; ?>" <?php if ($is_protected): ?>disabled style="opacity:0.5;cursor:not-allowed;"<?php endif; ?>>
-                <i class="fas fa-edit"></i>
-            </button>
-            <button type="button" class="action-btn delete-btn" onclick="<?php if (!$is_protected): ?>deleteUser('<?php echo htmlspecialchars($user['id']); ?>')<?php endif; ?>" <?php if ($is_protected): ?>disabled style="opacity:0.5;cursor:not-allowed;"<?php endif; ?>>
-                <i class="fas fa-trash"></i>
-            </button>
-        <?php endif; ?>
+        <button type="button" class="action-btn edit-btn" onclick="editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['full_name']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['contact_number']); ?>', '<?php echo htmlspecialchars($user['address']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')">
+            <i class="fas fa-edit"></i>
+        </button>
+        <button type="button" class="action-btn delete-btn" onclick="deleteUser('<?php echo htmlspecialchars($user['id']); ?>')">
+            <i class="fas fa-trash"></i>
+        </button>
     </div>
 </td>
                                         </tr>

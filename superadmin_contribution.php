@@ -121,6 +121,10 @@ $totals = $stmt->get_result()->fetch_assoc();
         .drawer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
         .drawer-overlay.open { opacity: 1; visibility: visible; }
         .content-area { flex: 1; margin-left: 0; padding: 20px; min-height: 100vh; background-color: #f5f5f5; padding-top: 80px; }
+        .content {
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
         .top-bar {
             display: flex;
             justify-content: space-between;
@@ -143,8 +147,31 @@ $totals = $stmt->get_result()->fetch_assoc();
         .card-info h3 { font-size: 16px; margin-bottom: 5px; color: var(--primary-color); }
         .card-info p { font-size: 24px; font-weight: bold; color: var(--accent-color); }
         /* Table Styles */
-        .table-responsive { overflow-x: auto; margin-top: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; min-width: 1000px; table-layout: fixed; }
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) transparent;
+        }
+
+        .table-responsive::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: var(--accent-color);
+            border-radius: 3px;
+        }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; table-layout: fixed; }
         table th, table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
         table th { background-color: #f8f9fa; font-weight: 600; color: #333; position: sticky; top: 0; z-index: 10; }
         table tr:hover { background-color: #f5f5f5; }
@@ -157,6 +184,178 @@ $totals = $stmt->get_result()->fetch_assoc();
         .role-badge.administrator { background-color: #4a90e2; color: white; }
         .role-badge.pastor { background-color: #2ecc71; color: white; }
         .role-badge.member { background-color: #95a5a6; color: white; }
+
+        @media (max-width: 992px) {
+            .top-bar {
+                padding: 18px;
+                gap: 12px;
+            }
+
+            .top-bar h2 {
+                font-size: 22px;
+            }
+
+            .top-bar p {
+                font-size: 15px;
+            }
+
+            table {
+                min-width: 780px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .content-area {
+                padding: 15px;
+                padding-top: 70px;
+            }
+
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 15px;
+                gap: 8px;
+            }
+
+            .top-bar h2 {
+                font-size: 20px;
+            }
+
+            .top-bar p {
+                font-size: 14px;
+            }
+
+            .summary-cards {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .card {
+                padding: 15px;
+            }
+
+            .card-info p {
+                font-size: 20px;
+            }
+
+            .table-responsive {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+
+            table {
+                min-width: 640px;
+            }
+
+            table th,
+            table td {
+                padding: 10px 12px;
+                font-size: 14px;
+            }
+
+            .dataTables_wrapper .dataTables_filter,
+            .dataTables_wrapper .dataTables_length {
+                width: 100%;
+                margin-bottom: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .dataTables_wrapper .dataTables_filter input {
+                flex: 1 1 260px;
+                padding: 8px;
+                font-size: 14px;
+            }
+
+            .dataTables_wrapper .dataTables_length select {
+                padding: 6px;
+                font-size: 14px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate {
+                margin-top: 12px;
+                display: flex;
+                flex-wrap: wrap;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .content-area {
+                padding: 12px;
+                padding-top: 70px;
+            }
+
+            .top-bar {
+                padding: 12px;
+                gap: 6px;
+            }
+
+            .top-bar h2 {
+                font-size: 18px;
+            }
+
+            .summary-cards {
+                gap: 12px;
+            }
+
+            .card {
+                padding: 12px;
+            }
+
+            .card-info h3 {
+                font-size: 14px;
+            }
+
+            .card-info p {
+                font-size: 18px;
+            }
+
+            .table-responsive {
+                padding: 12px;
+            }
+
+            table {
+                min-width: 520px;
+            }
+
+            table th,
+            table td {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+
+            .dataTables_wrapper .dataTables_filter input,
+            .dataTables_wrapper .dataTables_length select {
+                font-size: 13px;
+                width: 100%;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 12px;
+                padding: 6px 0;
+            }
+
+            .dataTables_wrapper .dataTables_filter,
+            .dataTables_wrapper .dataTables_length,
+            .dataTables_wrapper .dataTables_paginate {
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -211,7 +410,7 @@ $totals = $stmt->get_result()->fetch_assoc();
         <!-- Drawer Overlay -->
         <div id="drawer-overlay" class="drawer-overlay"></div>
         <main class="content-area">
-            <div class="top-bar">
+            <div class="top-bar" style="background-color: #fff; padding: 15px 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); margin-bottom: 20px; margin-top: 0;">
                 <div>
                     <h2>Stewardship Report</h2>
                     <p style="margin-top: 5px; color: #666; font-size: 16px; font-weight: 400;">
@@ -219,59 +418,62 @@ $totals = $stmt->get_result()->fetch_assoc();
                     </p>
                 </div>
             </div>
-            <div class="summary-cards">
-                <div class="card">
-                    <div class="card-info">
-                        <h3>Total Tithes</h3>
-                        <p>₱<?php echo number_format($totals['total_tithe'], 2); ?></p>
+
+            <div class="content">
+                <div class="summary-cards">
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Tithes</h3>
+                            <p>₱<?php echo number_format($totals['total_tithe'], 2); ?></p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Offerings</h3>
+                            <p>₱<?php echo number_format($totals['total_offering'], 2); ?></p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Amount</h3>
+                            <p>₱<?php echo number_format($totals['total_contributions'], 2); ?></p>
+                        </div>
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-info">
-                        <h3>Total Offerings</h3>
-                        <p>₱<?php echo number_format($totals['total_offering'], 2); ?></p>
+                    <h2>All Member Stewardship Report</h2>
+                    <div class="table-responsive">
+                        <table id="contributionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Member Name</th>
+                                    <th>Role</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Payment Method</th>
+                                    <th>Reference Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($row = $all_contributions->fetch_assoc()): ?>
+                                <tr>
+                                    <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
+                                    <td><?php echo htmlspecialchars($row['member_name']); ?></td>
+                                    <td>
+                                        <span class="role-badge <?php echo strtolower($row['member_role']); ?>">
+                                            <?php echo htmlspecialchars($row['member_role']); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo ucfirst($row['contribution_type']); ?></td>
+                                    <td>₱<?php echo number_format($row['amount'], 2); ?></td>
+                                    <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
+                                    <td><?php echo htmlspecialchars($row['reference_number']); ?></td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                <div class="card">
-                    <div class="card-info">
-                        <h3>Total Amount</h3>
-                        <p>₱<?php echo number_format($totals['total_contributions'], 2); ?></p>
-                    </div>
-                </div>
-            </div>
-            <div class="card">
-                <h2>All Member Stewardship Report</h2>
-                <div class="table-responsive">
-                    <table id="contributionsTable">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Member Name</th>
-                                <th>Role</th>
-                                <th>Type</th>
-                                <th>Amount</th>
-                                <th>Payment Method</th>
-                                <th>Reference Number</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while ($row = $all_contributions->fetch_assoc()): ?>
-                            <tr>
-                                <td><strong><?php echo date('F d, Y', strtotime($row['contribution_date'])); ?></strong></td>
-                                <td><?php echo htmlspecialchars($row['member_name']); ?></td>
-                                <td>
-                                    <span class="role-badge <?php echo strtolower($row['member_role']); ?>">
-                                        <?php echo htmlspecialchars($row['member_role']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo ucfirst($row['contribution_type']); ?></td>
-                                <td>₱<?php echo number_format($row['amount'], 2); ?></td>
-                                <td><?php echo ucfirst(str_replace('_', ' ', $row['payment_method'])); ?></td>
-                                <td><?php echo htmlspecialchars($row['reference_number']); ?></td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </main>

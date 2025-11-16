@@ -109,6 +109,42 @@ $dashboard_stats = [
     "pending_prayers" => $total_prayers
 ];
 
+// Fetch tithes and offerings data for line graph (last 12 months)
+$tithes_offerings_data = [];
+$sql = "
+    SELECT 
+        DATE_FORMAT(entry_date, '%Y-%m') as month,
+        DATE_FORMAT(entry_date, '%Y-%m-01') as month_start,
+        SUM(tithes) as total_tithes,
+        SUM(offerings) as total_offerings
+    FROM breakdown_income
+    WHERE (tithes > 0 OR offerings > 0)
+        AND entry_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+    ORDER BY month ASC
+";
+$result = $conn->query($sql);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $tithes_offerings_data[] = [
+            'month' => $row['month'],
+            'month_start' => $row['month_start'],
+            'tithes' => floatval($row['total_tithes']),
+            'offerings' => floatval($row['total_offerings'])
+        ];
+    }
+}
+
+// Prepare data for chart
+$chart_dates = [];
+$chart_tithes = [];
+$chart_offerings = [];
+foreach ($tithes_offerings_data as $data) {
+    $chart_dates[] = date('F Y', strtotime($data['month_start']));
+    $chart_tithes[] = $data['tithes'];
+    $chart_offerings[] = $data['offerings'];
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -151,76 +187,9 @@ $dashboard_stats = [
             min-height: 100vh;
         }
 
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--primary-color);
-            color: var(--white);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        .sidebar-header img {
-            height: 60px;
-            margin-bottom: 10px;
-            transition: 0.3s;
-        }
-
-        .sidebar-header h3 {
-            font-size: 18px;
-        }
-
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-
-        .sidebar-menu ul {
-            list-style: none;
-        }
-
-        .sidebar-menu li {
-            margin-bottom: 5px;
-        }
-
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: var(--white);
-            text-decoration: none;
-            transition: all 0.3s;
-            font-size: 16px;
-        }
-
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-menu a.active {
-            background-color: var(--accent-color);
-        }
-
-        .sidebar-menu i {
-            margin-right: 15px;
-            width: 20px;
-            text-align: center;
-            font-size: 20px;
-        }
-
-        .sidebar-menu span {
-            margin-left: 10px;
-        }
-
         .content-area {
             flex: 1;
-            margin-left: var(--sidebar-width);
+            margin-left: 0;
             padding: 20px;
         }
 
@@ -233,144 +202,17 @@ $dashboard_stats = [
             border-radius: 5px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            margin-top: 60px;
         }
 
         .top-bar h2 {
             font-size: 24px;
         }
 
-        .user-profile {
-            display: flex;
-            align-items: center;
-        }
-
-        .user-profile .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--accent-color);
-            color: var(--white);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 10px;
-            overflow: hidden;
-        }
-
-        .user-profile .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .user-info {
-            margin-right: 15px;
-        }
-
-        .user-info h4 {
-            font-size: 14px;
-            margin: 0;
-        }
-
-        .user-info p {
-            font-size: 12px;
-            margin: 0;
-            color: #666;
-        }
-
-        .logout-btn {
-            background-color: #f0f0f0;
-            color: var(--primary-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .logout-btn:hover {
-            background-color: #e0e0e0;
-        }
-
         .dashboard-content {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-top: 20px;
-        }
-
-        .card {
-            background-color: var(--white);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-
-        .card:hover {
-            transform: translateY(-10px);
-        }
-
-        .card h3 {
-            margin-bottom: 15px;
-            font-size: 18px;
-        }
-
-        .card p {
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--accent-color);
-        }
-
-        .card i {
-            font-size: 30px;
-            margin-bottom: 10px;
-            color: var(--accent-color);
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-                padding-top: 10px;
-            }
-            .sidebar-menu {
-                display: flex;
-                padding: 0;
-                overflow-x: auto;
-            }
-            .sidebar-menu ul {
-                display: flex;
-                width: 100%;
-            }
-            .sidebar-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .sidebar-menu a {
-                padding: 10px;
-                justify-content: center;
-            }
-            .sidebar-menu i {
-                margin-right: 0;
-            }
-            
-            .content-area {
-                margin-left: 0;
-            }
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .user-profile {
-                margin-top: 10px;
-            }
         }
 
         /* --- Drawer Navigation Styles (copied from superadmin_dashboard.php) --- */
@@ -582,8 +424,6 @@ $dashboard_stats = [
         /* Ensure content doesn't overlap with the button */
         .content-area {
             padding-top: 80px;
-            margin-left: 0;
-            padding: 20px;
         }
         /* --- SUMMARY CARDS (MATCH SUPERADMIN DASHBOARD) --- */
         .dashboard-content {
@@ -832,11 +672,11 @@ $dashboard_stats = [
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
                     <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
@@ -930,12 +770,131 @@ $dashboard_stats = [
                     </div>
                     <div class="card-decoration"></div>
                 </div>
+                <div class="summary-card full-width">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="card-content" style="width: 100%;">
+                        <h3>Tithes and Offerings Trend (Last 12 Months)</h3>
+                        <div style="position: relative; height: 300px; margin-top: 20px;">
+                            <canvas id="tithesOfferingsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-decoration"></div>
+                </div>
             </div>
         </main>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // Tithes and Offerings Line Chart
+        const tithesOfferingsCtx = document.getElementById('tithesOfferingsChart');
+        if (tithesOfferingsCtx) {
+            const chartDates = <?php echo json_encode($chart_dates); ?>;
+            const chartTithes = <?php echo json_encode($chart_tithes); ?>;
+            const chartOfferings = <?php echo json_encode($chart_offerings); ?>;
+            
+            new Chart(tithesOfferingsCtx, {
+                type: 'line',
+                data: {
+                    labels: chartDates,
+                    datasets: [
+                        {
+                            label: 'Tithes',
+                            data: chartTithes,
+                            borderColor: 'rgba(0, 139, 30, 1)',
+                            backgroundColor: 'rgba(0, 139, 30, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(0, 139, 30, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Offerings',
+                            data: chartOfferings,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12,
+                                    weight: '500'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ₱' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₱' + value.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                },
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
         // Custom Drawer Navigation JavaScript
         document.addEventListener('DOMContentLoaded', function() {
             const navToggle = document.getElementById('nav-toggle');
@@ -968,36 +927,53 @@ $dashboard_stats = [
             });
         });
 
-        // Gender Distribution Chart
-        const ctxGender = document.getElementById('genderChart').getContext('2d');
-        new Chart(ctxGender, {
-            type: 'pie',
-            data: {
-                labels: ['Male', 'Female'],
-                datasets: [{
-                    data: [<?php echo $male_count; ?>, <?php echo $female_count; ?>],
-                    backgroundColor: [
-                        'rgba(54, 162, 235, 0.8)',
-                        'rgba(255, 99, 132, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    }
-                }
+        // Automatic logout on inactivity
+        let inactivityTimeout;
+        let logoutWarningShown = false;
+
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimeout);
+            if (logoutWarningShown) {
+                const warning = document.getElementById('logout-warning');
+                if (warning) warning.remove();
+                logoutWarningShown = false;
             }
+            inactivityTimeout = setTimeout(() => {
+                console.log('Inactivity detected: showing warning and logging out soon.');
+                showLogoutWarning();
+                setTimeout(() => {
+                    window.location.href = 'logout.php';
+                }, 2000);
+            }, 60000); // 1 minute
+        }
+
+        function showLogoutWarning() {
+            if (!logoutWarningShown) {
+                const warning = document.createElement('div');
+                warning.id = 'logout-warning';
+                warning.style.position = 'fixed';
+                warning.style.top = '30px';
+                warning.style.right = '30px';
+                warning.style.background = '#f44336';
+                warning.style.color = 'white';
+                warning.style.padding = '20px 30px';
+                warning.style.borderRadius = '8px';
+                warning.style.fontSize = '18px';
+                warning.style.zIndex = '9999';
+                warning.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                warning.innerHTML = '<i class="fas fa-lock"></i> Logging out due to inactivity...';
+                document.body.appendChild(warning);
+                logoutWarningShown = true;
+            }
+        }
+
+        // Reset timer on user activity
+        ['mousemove', 'keydown', 'mousedown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, resetInactivityTimer, true);
         });
+
+        // Initialize timer
+        resetInactivityTimer();
     </script>
 </body>
 </html>

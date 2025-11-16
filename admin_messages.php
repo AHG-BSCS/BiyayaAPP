@@ -336,25 +336,52 @@ if (preg_match('/<style>(.*?)<\/style>/s', $messages_file, $matches)) {
                 }
             }
             if (foundMessages.length > 0) {
-                searchResults.innerHTML = foundMessages.map(result => {
+                // Calculate occurrences for each message and add to result object
+                foundMessages.forEach(result => {
                     const message = result.message;
-                    const thumbnailUrl = `https://img.youtube.com/vi/${message.youtube_id}/mqdefault.jpg`;
-                    const outlinePreview = result.matchingOutlinePoints.length > 0 ?
-                        result.matchingOutlinePoints.join(' | ') :
-                        (Array.isArray(message.outline) ? message.outline.slice(0, 2).join(' ') : '');
-                    return `
-                        <div class="search-result-item" onclick="location.href='admin_messages.php?message=${result.index}'">
-                            <div class="search-result-thumbnail">
-                                <img src="${thumbnailUrl}" alt="${message.title}">
+                    const titleText = message.title || '';
+                    const dateText = message.date || '';
+                    const outlineText = Array.isArray(message.outline) ? 
+                        message.outline.join(' ') : '';
+                    
+                    result.occurrences = countOccurrences(titleText, searchTerm) +
+                                       countOccurrences(dateText, searchTerm) +
+                                       countOccurrences(outlineText, searchTerm);
+                });
+
+                // Sort by occurrences (highest first)
+                foundMessages.sort((a, b) => b.occurrences - a.occurrences);
+
+                // Display search results with individual counts
+                const resultsHTML = `
+                    <div class="search-results-header">
+                        <div class="search-results-title">Search Results (${foundMessages.length} ${foundMessages.length === 1 ? 'message' : 'messages'})</div>
+                    </div>
+                    ${foundMessages.map(result => {
+                        const message = result.message;
+                        const thumbnailUrl = `https://img.youtube.com/vi/${message.youtube_id}/mqdefault.jpg`;
+                        const messageOccurrences = result.occurrences;
+                        
+                        const outlinePreview = result.matchingOutlinePoints.length > 0 ?
+                            result.matchingOutlinePoints.join(' | ') :
+                            (Array.isArray(message.outline) ? message.outline.slice(0, 2).join(' ') : '');
+                        return `
+                            <div class="search-result-item" onclick="location.href='admin_messages.php?message=${result.index}'">
+                                <div class="search-result-thumbnail">
+                                    <img src="${thumbnailUrl}" alt="${message.title}">
+                                </div>
+                                <div class="search-result-content">
+                                    <div class="search-result-title">${highlightText(message.title, searchTerm)}</div>
+                                    <div class="search-result-date">${message.date}</div>
+                                    <div class="search-result-outline">${highlightText(outlinePreview, searchTerm)}</div>
+                                </div>
+                                <div class="search-result-count">The word "${searchTerm}" appears ${messageOccurrences} ${messageOccurrences === 1 ? 'time' : 'times'}</div>
                             </div>
-                            <div class="search-result-content">
-                                <div class="search-result-title">${highlightText(message.title, searchTerm)}</div>
-                                <div class="search-result-date">${message.date}</div>
-                                <div class="search-result-outline">${highlightText(outlinePreview, searchTerm)}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                        `;
+                    }).join('')}
+                `;
+                
+                searchResults.innerHTML = resultsHTML;
                 searchResults.classList.add('show');
             } else {
                 searchInput.setCustomValidity('No messages found matching your search');
@@ -365,6 +392,14 @@ if (preg_match('/<style>(.*?)<\/style>/s', $messages_file, $matches)) {
                 }, 2000);
             }
         }
+        // Function to count occurrences of a term in text
+        function countOccurrences(text, searchTerm) {
+            if (!text || !searchTerm) return 0;
+            const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            const matches = text.match(regex);
+            return matches ? matches.length : 0;
+        }
+
         function highlightText(text, searchTerm) {
             if (!searchTerm) return text;
             const regex = new RegExp(`(${searchTerm})`, 'gi');

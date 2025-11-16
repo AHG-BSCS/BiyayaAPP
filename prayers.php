@@ -1022,7 +1022,7 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role">Super Admin</div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Super Admin'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>

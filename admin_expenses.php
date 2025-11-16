@@ -32,118 +32,753 @@ $user_result = $stmt->get_result();
 $user_data = $user_result->fetch_assoc();
 $user_id = $user_data ? $user_data['user_id'] : null;
 
-// Handle form submission for new expense entry
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_expense'])) {
-    $month = $_POST['month'];
-    $income = floatval($_POST['income']);
-    $expenses = floatval($_POST['expenses']);
-    $notes = $_POST['notes'];
-    
-    // Check if entry for this month already exists
-    $check_stmt = $conn->prepare("SELECT id FROM monthly_expenses WHERE month = ?");
-    $check_stmt->bind_param("s", $month);
-    $check_stmt->execute();
-    $existing = $check_stmt->get_result();
-    
-    if ($existing->num_rows > 0) {
-        $_SESSION['error_message'] = "An entry for this month already exists. Please update the existing entry.";
+// Ensure income/expenses connection is available
+$incomeExpensesEnabled = isset($incomeExpensesConn) && $incomeExpensesConn instanceof mysqli && !$incomeExpensesConn->connect_error;
+
+if (
+    !$incomeExpensesEnabled &&
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    (isset($_POST['breakdown_action']) || isset($_POST['delete_breakdown_entry']))
+) {
+    $_SESSION['error_message'] = "Income & expense breakdown storage is currently unavailable. Please contact the administrator.";
+    header("Location: admin_expenses.php#financial-breakdown");
+    exit();
+}
+
+$expenseDecimalCount = 28;
+$expenseUpdateBindings = "s" . str_repeat("d", $expenseDecimalCount) . "si";
+$expenseInsertBindings = "s" . str_repeat("d", $expenseDecimalCount) . "ss";
+
+function ensureBreakdownExpenseSchema(mysqli $connection): void
+{
+    static $initialized = [];
+    $connectionId = spl_object_id($connection);
+    if (isset($initialized[$connectionId])) {
+        return;
+    }
+
+    $result = $connection->query("SELECT DATABASE()");
+    if (!$result) {
+        return;
+    }
+    $row = $result->fetch_row();
+    $databaseName = $row ? $row[0] : null;
+    $result->free();
+
+    if (!$databaseName) {
+        return;
+    }
+
+    $requiredColumns = [
+        'kids_ministry',
+        'youth_ministry',
+        'music_ministry',
+        'single_professionals_ministry',
+        'young_couples_ministry',
+        'wow_ministry',
+        'amen_ministry',
+        'couples_ministry',
+        'visitation_prayer_ministry',
+        'acquisitions',
+        'materials',
+        'labor',
+        'mission_support',
+        'land_title'
+    ];
+
+    $placeholders = implode(',', array_fill(0, count($requiredColumns), "'%s'"));
+    $columnList = implode(',', array_map(fn($col) => "'" . $connection->real_escape_string($col) . "'", $requiredColumns));
+
+    $missingColumnsQuery = "
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = '" . $connection->real_escape_string($databaseName) . "'
+          AND TABLE_NAME = 'breakdown_expenses'
+          AND COLUMN_NAME IN ({$columnList})
+    ";
+
+    $existingColumns = [];
+    if ($columnsResult = $connection->query($missingColumnsQuery)) {
+        while ($columnRow = $columnsResult->fetch_assoc()) {
+            $existingColumns[] = $columnRow['COLUMN_NAME'];
+        }
+        $columnsResult->free();
+    }
+
+    $columnsToAdd = array_diff($requiredColumns, $existingColumns);
+    foreach ($columnsToAdd as $columnName) {
+        $connection->query("ALTER TABLE breakdown_expenses ADD COLUMN {$columnName} DECIMAL(12,2) DEFAULT 0");
+    }
+
+    $connection->query("
+        ALTER TABLE breakdown_expenses
+        MODIFY COLUMN total_amount DECIMAL(12,2) GENERATED ALWAYS AS (
+            speaker + workers + food + housekeeping + office_supplies + transportation + photocopy +
+            internet + government_concern + water_bill + electric_bill + special_events + needy_calamity + trainings +
+            kids_ministry + youth_ministry + music_ministry + single_professionals_ministry + young_couples_ministry +
+            wow_ministry + amen_ministry + couples_ministry + visitation_prayer_ministry + acquisitions + materials +
+            labor + mission_support + land_title
+        ) STORED
+    ");
+
+    $initialized[$connectionId] = true;
+}
+
+// Handle Financial Breakdown submissions
+if ($incomeExpensesEnabled && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['breakdown_action'])) {
+    $action = $_POST['breakdown_action'];
+    $entryType = $_POST['breakdown_type'] ?? 'income';
+    $entryDate = $_POST['breakdown_date'] ?? '';
+    $notes = trim($_POST['breakdown_notes'] ?? '');
+
+    if (empty($entryDate)) {
+        $_SESSION['error_message'] = "Please provide a date for the breakdown entry.";
     } else {
-        $stmt = $conn->prepare("
-            INSERT INTO monthly_expenses (
-                month, income, expenses, notes, created_by, created_at
-            ) VALUES (?, ?, ?, ?, ?, NOW())
-        ");
-        $stmt->bind_param("sddss", $month, $income, $expenses, $notes, $user_id);
+        if ($entryType === 'income') {
+            $tithes = isset($_POST['income_tithes']) ? floatval($_POST['income_tithes']) : 0;
+            $offerings = isset($_POST['income_offerings']) ? floatval($_POST['income_offerings']) : 0;
+            $giftsBank = isset($_POST['income_gifts_bank']) ? floatval($_POST['income_gifts_bank']) : 0;
+            $bankInterest = isset($_POST['income_bank_interest']) ? floatval($_POST['income_bank_interest']) : 0;
+            $others = isset($_POST['income_others']) ? floatval($_POST['income_others']) : 0;
+            $building = isset($_POST['income_building']) ? floatval($_POST['income_building']) : 0;
+
+            $total = $tithes + $offerings + $giftsBank + $bankInterest + $others + $building;
+
+            if ($total <= 0) {
+                $_SESSION['error_message'] = "Please enter at least one amount for the income categories.";
+            } else {
+                if ($action === 'add') {
+                    $stmt = $incomeExpensesConn->prepare("
+                        INSERT INTO breakdown_income (
+                            entry_date, tithes, offerings, gifts_bank, bank_interest, others, building, notes, created_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $createdBy = $user_id ?? $username;
+                    $stmt->bind_param(
+                        "sddddddss",
+                        $entryDate,
+                        $tithes,
+                        $offerings,
+                        $giftsBank,
+                        $bankInterest,
+                        $others,
+                        $building,
+                        $notes,
+                        $createdBy
+                    );
+
         if ($stmt->execute()) {
-            $_SESSION['success_message'] = "Monthly expense entry added successfully!";
-            header("Location: admin_expenses.php");
+                        $_SESSION['success_message'] = "Income breakdown entry added successfully!";
+                        header("Location: admin_expenses.php#financial-breakdown");
             exit();
         } else {
-            $_SESSION['error_message'] = "Error adding expense entry. Please try again.";
+                        $_SESSION['error_message'] = "Error saving income breakdown entry. Please try again.";
+                    }
+                } elseif ($action === 'update') {
+                    $entryId = isset($_POST['breakdown_entry_id']) ? intval($_POST['breakdown_entry_id']) : 0;
+                    $originalType = $_POST['original_breakdown_type'] ?? 'income';
+
+                    if ($entryId <= 0) {
+                        $_SESSION['error_message'] = "Invalid income breakdown entry selected for update.";
+                    } elseif ($originalType !== 'income') {
+                        $_SESSION['error_message'] = "Cannot change the entry type while editing. Please delete and recreate the entry if needed.";
+                    } else {
+                        $stmt = $incomeExpensesConn->prepare("
+                            UPDATE breakdown_income
+                            SET entry_date = ?, tithes = ?, offerings = ?, gifts_bank = ?, bank_interest = ?, others = ?, building = ?, notes = ?, updated_at = NOW()
+                            WHERE id = ?
+                        ");
+                        $stmt->bind_param(
+                            "sddddddsi",
+                            $entryDate,
+                            $tithes,
+                            $offerings,
+                            $giftsBank,
+                            $bankInterest,
+                            $others,
+                            $building,
+                            $notes,
+                            $entryId
+                        );
+
+                        if ($stmt->execute()) {
+                            $_SESSION['success_message'] = "Income breakdown entry updated successfully!";
+                            header("Location: admin_expenses.php#financial-breakdown");
+                            exit();
+                        } else {
+                            $_SESSION['error_message'] = "Error updating income breakdown entry. Please try again.";
+                        }
+                    }
+                }
+            }
+        } else {
+            $expenseFields = [
+                'speaker' => isset($_POST['expense_speaker']) ? floatval($_POST['expense_speaker']) : 0,
+                'workers' => isset($_POST['expense_workers']) ? floatval($_POST['expense_workers']) : 0,
+                'food' => isset($_POST['expense_food']) ? floatval($_POST['expense_food']) : 0,
+                'housekeeping' => isset($_POST['expense_housekeeping']) ? floatval($_POST['expense_housekeeping']) : 0,
+                'office_supplies' => isset($_POST['expense_office_supplies']) ? floatval($_POST['expense_office_supplies']) : 0,
+                'transportation' => isset($_POST['expense_transportation']) ? floatval($_POST['expense_transportation']) : 0,
+                'photocopy' => isset($_POST['expense_photocopy']) ? floatval($_POST['expense_photocopy']) : 0,
+                'internet' => isset($_POST['expense_internet']) ? floatval($_POST['expense_internet']) : 0,
+                'government_concern' => isset($_POST['expense_government_concern']) ? floatval($_POST['expense_government_concern']) : 0,
+                'water_bill' => isset($_POST['expense_water_bill']) ? floatval($_POST['expense_water_bill']) : 0,
+                'electric_bill' => isset($_POST['expense_electric_bill']) ? floatval($_POST['expense_electric_bill']) : 0,
+                'special_events' => isset($_POST['expense_special_events']) ? floatval($_POST['expense_special_events']) : 0,
+                'needy_calamity' => isset($_POST['expense_needy_calamity']) ? floatval($_POST['expense_needy_calamity']) : 0,
+                'trainings' => isset($_POST['expense_trainings']) ? floatval($_POST['expense_trainings']) : 0,
+                'kids_ministry' => isset($_POST['expense_kids_ministry']) ? floatval($_POST['expense_kids_ministry']) : 0,
+                'youth_ministry' => isset($_POST['expense_youth_ministry']) ? floatval($_POST['expense_youth_ministry']) : 0,
+                'music_ministry' => isset($_POST['expense_music_ministry']) ? floatval($_POST['expense_music_ministry']) : 0,
+                'single_professionals_ministry' => isset($_POST['expense_single_professionals_ministry']) ? floatval($_POST['expense_single_professionals_ministry']) : 0,
+                'young_couples_ministry' => isset($_POST['expense_young_couples_ministry']) ? floatval($_POST['expense_young_couples_ministry']) : 0,
+                'wow_ministry' => isset($_POST['expense_wow_ministry']) ? floatval($_POST['expense_wow_ministry']) : 0,
+                'amen_ministry' => isset($_POST['expense_amen_ministry']) ? floatval($_POST['expense_amen_ministry']) : 0,
+                'couples_ministry' => isset($_POST['expense_couples_ministry']) ? floatval($_POST['expense_couples_ministry']) : 0,
+                'visitation_prayer_ministry' => isset($_POST['expense_visitation_prayer_ministry']) ? floatval($_POST['expense_visitation_prayer_ministry']) : 0,
+                'acquisitions' => isset($_POST['expense_acquisitions']) ? floatval($_POST['expense_acquisitions']) : 0,
+                'materials' => isset($_POST['expense_materials']) ? floatval($_POST['expense_materials']) : 0,
+                'labor' => isset($_POST['expense_labor']) ? floatval($_POST['expense_labor']) : 0,
+                'mission_support' => isset($_POST['expense_mission_support']) ? floatval($_POST['expense_mission_support']) : 0,
+                'land_title' => isset($_POST['expense_land_title']) ? floatval($_POST['expense_land_title']) : 0
+            ];
+
+            $totalExpense = array_sum($expenseFields);
+
+            if ($totalExpense <= 0) {
+                $_SESSION['error_message'] = "Please enter at least one amount for the expense categories.";
+            } else {
+                if ($action === 'add') {
+                    $stmt = $incomeExpensesConn->prepare("
+                        INSERT INTO breakdown_expenses (
+                            entry_date, speaker, workers, food, housekeeping, office_supplies, transportation, photocopy,
+                            internet, government_concern, water_bill, electric_bill, special_events, needy_calamity, trainings,
+                            kids_ministry, youth_ministry, music_ministry, single_professionals_ministry, young_couples_ministry,
+                            wow_ministry, amen_ministry, couples_ministry, visitation_prayer_ministry, acquisitions, materials,
+                            labor, mission_support, land_title, notes, created_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $createdBy = $user_id ?? $username;
+                    $stmt->bind_param(
+                        $expenseInsertBindings,
+                        $entryDate,
+                        $expenseFields['speaker'],
+                        $expenseFields['workers'],
+                        $expenseFields['food'],
+                        $expenseFields['housekeeping'],
+                        $expenseFields['office_supplies'],
+                        $expenseFields['transportation'],
+                        $expenseFields['photocopy'],
+                        $expenseFields['internet'],
+                        $expenseFields['government_concern'],
+                        $expenseFields['water_bill'],
+                        $expenseFields['electric_bill'],
+                        $expenseFields['special_events'],
+                        $expenseFields['needy_calamity'],
+                        $expenseFields['trainings'],
+                        $expenseFields['kids_ministry'],
+                        $expenseFields['youth_ministry'],
+                        $expenseFields['music_ministry'],
+                        $expenseFields['single_professionals_ministry'],
+                        $expenseFields['young_couples_ministry'],
+                        $expenseFields['wow_ministry'],
+                        $expenseFields['amen_ministry'],
+                        $expenseFields['couples_ministry'],
+                        $expenseFields['visitation_prayer_ministry'],
+                        $expenseFields['acquisitions'],
+                        $expenseFields['materials'],
+                        $expenseFields['labor'],
+                        $expenseFields['mission_support'],
+                        $expenseFields['land_title'],
+                        $notes,
+                        $createdBy
+                    );
+
+                    if ($stmt->execute()) {
+                        $_SESSION['success_message'] = "Expense breakdown entry added successfully!";
+                        header("Location: admin_expenses.php#financial-breakdown");
+                        exit();
+                    } else {
+                        $_SESSION['error_message'] = "Error saving expense breakdown entry. Please try again.";
+                    }
+                } elseif ($action === 'update') {
+                    $entryId = isset($_POST['breakdown_entry_id']) ? intval($_POST['breakdown_entry_id']) : 0;
+                    $originalType = $_POST['original_breakdown_type'] ?? 'expense';
+
+                    if ($entryId <= 0) {
+                        $_SESSION['error_message'] = "Invalid expense breakdown entry selected for update.";
+                    } elseif ($originalType !== 'expense') {
+                        $_SESSION['error_message'] = "Cannot change the entry type while editing. Please delete and recreate the entry if needed.";
+                    } else {
+                        $stmt = $incomeExpensesConn->prepare("
+                            UPDATE breakdown_expenses
+                            SET entry_date = ?, speaker = ?, workers = ?, food = ?, housekeeping = ?, office_supplies = ?, transportation = ?, photocopy = ?,
+                                internet = ?, government_concern = ?, water_bill = ?, electric_bill = ?, special_events = ?, needy_calamity = ?, trainings = ?,
+                                kids_ministry = ?, youth_ministry = ?, music_ministry = ?, single_professionals_ministry = ?, young_couples_ministry = ?,
+                                wow_ministry = ?, amen_ministry = ?, couples_ministry = ?, visitation_prayer_ministry = ?, acquisitions = ?, materials = ?,
+                                labor = ?, mission_support = ?, land_title = ?, notes = ?, updated_at = NOW()
+        WHERE id = ?
+    ");
+                        $stmt->bind_param(
+                            $expenseUpdateBindings,
+                            $entryDate,
+                            $expenseFields['speaker'],
+                            $expenseFields['workers'],
+                            $expenseFields['food'],
+                            $expenseFields['housekeeping'],
+                            $expenseFields['office_supplies'],
+                            $expenseFields['transportation'],
+                            $expenseFields['photocopy'],
+                            $expenseFields['internet'],
+                            $expenseFields['government_concern'],
+                            $expenseFields['water_bill'],
+                            $expenseFields['electric_bill'],
+                            $expenseFields['special_events'],
+                            $expenseFields['needy_calamity'],
+                            $expenseFields['trainings'],
+                            $expenseFields['kids_ministry'],
+                            $expenseFields['youth_ministry'],
+                            $expenseFields['music_ministry'],
+                            $expenseFields['single_professionals_ministry'],
+                            $expenseFields['young_couples_ministry'],
+                            $expenseFields['wow_ministry'],
+                            $expenseFields['amen_ministry'],
+                            $expenseFields['couples_ministry'],
+                            $expenseFields['visitation_prayer_ministry'],
+                            $expenseFields['acquisitions'],
+                            $expenseFields['materials'],
+                            $expenseFields['labor'],
+                            $expenseFields['mission_support'],
+                            $expenseFields['land_title'],
+                            $notes,
+                            $entryId
+                        );
+
+    if ($stmt->execute()) {
+                            $_SESSION['success_message'] = "Expense breakdown entry updated successfully!";
+                            header("Location: admin_expenses.php#financial-breakdown");
+        exit();
+    } else {
+                            $_SESSION['error_message'] = "Error updating expense breakdown entry. Please try again.";
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-// Handle form submission for updating expense entry
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_expense'])) {
-    $expense_id = $_POST['expense_id'];
-    $income = floatval($_POST['income']);
-    $expenses = floatval($_POST['expenses']);
-    $notes = $_POST['notes'];
-    
-    $stmt = $conn->prepare("
-        UPDATE monthly_expenses 
-        SET income = ?, expenses = ?, notes = ?, updated_at = NOW()
-        WHERE id = ?
-    ");
-    $stmt->bind_param("ddsi", $income, $expenses, $notes, $expense_id);
+if ($incomeExpensesEnabled && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_breakdown_entry'])) {
+    $entryId = isset($_POST['entry_id']) ? intval($_POST['entry_id']) : 0;
+    $entryType = $_POST['entry_type'] ?? 'income';
+
+    if ($entryId > 0) {
+        if ($entryType === 'income') {
+            $stmt = $incomeExpensesConn->prepare("DELETE FROM breakdown_income WHERE id = ?");
+        } else {
+            $stmt = $incomeExpensesConn->prepare("DELETE FROM breakdown_expenses WHERE id = ?");
+        }
+
+        if ($stmt) {
+            $stmt->bind_param("i", $entryId);
     if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Expense entry updated successfully!";
-        header("Location: admin_expenses.php");
-        exit();
+                $_SESSION['success_message'] = "Breakdown entry deleted successfully!";
     } else {
-        $_SESSION['error_message'] = "Error updating expense entry. Please try again.";
+                $_SESSION['error_message'] = "Error deleting breakdown entry. Please try again.";
+            }
+        }
     }
+
+    header("Location: admin_expenses.php#financial-breakdown");
+    exit();
 }
 
-// Handle deletion of expense entry
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_expense'])) {
-    $expense_id = $_POST['expense_id'];
-    
-    $stmt = $conn->prepare("DELETE FROM monthly_expenses WHERE id = ?");
-    $stmt->bind_param("i", $expense_id);
-    if ($stmt->execute()) {
-        $_SESSION['success_message'] = "Expense entry deleted successfully!";
-        header("Location: admin_expenses.php");
-        exit();
-    } else {
-        $_SESSION['error_message'] = "Error deleting expense entry. Please try again.";
+
+// Financial breakdown data
+$breakdownFilterDate = '';
+if (!empty($_GET['breakdown_date'])) {
+    $dateCandidate = DateTime::createFromFormat('Y-m-d', $_GET['breakdown_date']);
+    if ($dateCandidate) {
+        $breakdownFilterDate = $dateCandidate->format('Y-m-d');
     }
 }
+$hasBreakdownFilter = $breakdownFilterDate !== '';
 
-// Get all monthly expenses
-$expenses_query = "
-    SELECT 
-        me.id,
-        me.month,
-        me.income,
-        me.expenses,
-        (me.income - me.expenses) as difference,
-        me.notes,
-        me.created_at,
-        me.updated_at,
-        up.full_name as created_by_name
-    FROM monthly_expenses me
-    LEFT JOIN user_profiles up ON me.created_by = up.user_id
-    ORDER BY me.month ASC
-";
-$all_expenses = $conn->query($expenses_query);
+$breakdownIncomeEntries = [];
+$breakdownIncomeTotals = [
+    'tithes' => 0,
+    'offerings' => 0,
+    'gifts_bank' => 0,
+    'bank_interest' => 0,
+    'others' => 0,
+    'building' => 0,
+    'total' => 0
+];
 
-// Calculate totals and averages
+$breakdownExpenseEntries = [];
+$breakdownExpenseTotals = [
+    'speaker' => 0,
+    'workers' => 0,
+    'food' => 0,
+    'housekeeping' => 0,
+    'office_supplies' => 0,
+    'transportation' => 0,
+    'photocopy' => 0,
+    'internet' => 0,
+    'government_concern' => 0,
+    'water_bill' => 0,
+    'electric_bill' => 0,
+    'special_events' => 0,
+    'needy_calamity' => 0,
+    'trainings' => 0,
+    'kids_ministry' => 0,
+    'youth_ministry' => 0,
+    'music_ministry' => 0,
+    'single_professionals_ministry' => 0,
+    'young_couples_ministry' => 0,
+    'wow_ministry' => 0,
+    'amen_ministry' => 0,
+    'couples_ministry' => 0,
+    'visitation_prayer_ministry' => 0,
+    'acquisitions' => 0,
+    'materials' => 0,
+    'labor' => 0,
+    'mission_support' => 0,
+    'land_title' => 0,
+    'total' => 0
+];
+
+$expenses_data = [];
 $totals = [
     'total_income' => 0,
     'total_expenses' => 0,
     'total_difference' => 0,
     'count' => 0
 ];
+$averages = [
+    'avg_income' => 0,
+    'avg_expenses' => 0,
+    'avg_difference' => 0
+];
 
-$expenses_data = [];
-if ($all_expenses) {
-    while ($row = $all_expenses->fetch_assoc()) {
-        $expenses_data[] = $row;
-        $totals['total_income'] += $row['income'];
-        $totals['total_expenses'] += $row['expenses'];
-        $totals['total_difference'] += $row['difference'];
+if ($incomeExpensesEnabled) {
+    ensureBreakdownExpenseSchema($incomeExpensesConn);
+    $incomeResult = $incomeExpensesConn->query("
+        SELECT id, entry_date, tithes, offerings, gifts_bank, bank_interest, others, building, notes, created_by, created_at, updated_at
+        FROM breakdown_income
+        ORDER BY entry_date DESC, id DESC
+    ");
+
+    if ($incomeResult) {
+        while ($row = $incomeResult->fetch_assoc()) {
+            $row['tithes'] = floatval($row['tithes']);
+            $row['offerings'] = floatval($row['offerings']);
+            $row['gifts_bank'] = floatval($row['gifts_bank']);
+            $row['bank_interest'] = floatval($row['bank_interest']);
+            $row['others'] = floatval($row['others']);
+            $row['building'] = floatval($row['building']);
+
+            $row['total_amount'] = $row['tithes'] + $row['offerings'] + $row['gifts_bank'] + $row['bank_interest'] + $row['others'] + $row['building'];
+
+            $breakdownIncomeTotals['tithes'] += $row['tithes'];
+            $breakdownIncomeTotals['offerings'] += $row['offerings'];
+            $breakdownIncomeTotals['gifts_bank'] += $row['gifts_bank'];
+            $breakdownIncomeTotals['bank_interest'] += $row['bank_interest'];
+            $breakdownIncomeTotals['others'] += $row['others'];
+            $breakdownIncomeTotals['building'] += $row['building'];
+            $breakdownIncomeTotals['total'] += $row['total_amount'];
+
+            $breakdownIncomeEntries[] = $row;
+        }
+    }
+
+    $expenseResult = $incomeExpensesConn->query("
+        SELECT id, entry_date, speaker, workers, food, housekeeping, office_supplies, transportation, photocopy, internet, government_concern, water_bill, electric_bill, special_events, needy_calamity, trainings,
+               kids_ministry, youth_ministry, music_ministry, single_professionals_ministry, young_couples_ministry, wow_ministry, amen_ministry, couples_ministry, visitation_prayer_ministry,
+               acquisitions, materials, labor, mission_support, land_title,
+               total_amount, notes, created_by, created_at, updated_at
+        FROM breakdown_expenses
+        ORDER BY entry_date DESC, id DESC
+    ");
+
+    if ($expenseResult) {
+        while ($row = $expenseResult->fetch_assoc()) {
+            $row['speaker'] = floatval($row['speaker']);
+            $row['workers'] = floatval($row['workers']);
+            $row['food'] = floatval($row['food']);
+            $row['housekeeping'] = floatval($row['housekeeping']);
+            $row['office_supplies'] = floatval($row['office_supplies']);
+            $row['transportation'] = floatval($row['transportation']);
+            $row['photocopy'] = floatval($row['photocopy']);
+            $row['internet'] = floatval($row['internet']);
+            $row['government_concern'] = floatval($row['government_concern']);
+            $row['water_bill'] = floatval($row['water_bill']);
+            $row['electric_bill'] = floatval($row['electric_bill']);
+            $row['special_events'] = floatval($row['special_events']);
+            $row['needy_calamity'] = floatval($row['needy_calamity']);
+            $row['trainings'] = floatval($row['trainings']);
+            $row['kids_ministry'] = isset($row['kids_ministry']) ? floatval($row['kids_ministry']) : 0;
+            $row['youth_ministry'] = isset($row['youth_ministry']) ? floatval($row['youth_ministry']) : 0;
+            $row['music_ministry'] = isset($row['music_ministry']) ? floatval($row['music_ministry']) : 0;
+            $row['single_professionals_ministry'] = isset($row['single_professionals_ministry']) ? floatval($row['single_professionals_ministry']) : 0;
+            $row['young_couples_ministry'] = isset($row['young_couples_ministry']) ? floatval($row['young_couples_ministry']) : 0;
+            $row['wow_ministry'] = isset($row['wow_ministry']) ? floatval($row['wow_ministry']) : 0;
+            $row['amen_ministry'] = isset($row['amen_ministry']) ? floatval($row['amen_ministry']) : 0;
+            $row['couples_ministry'] = isset($row['couples_ministry']) ? floatval($row['couples_ministry']) : 0;
+            $row['visitation_prayer_ministry'] = isset($row['visitation_prayer_ministry']) ? floatval($row['visitation_prayer_ministry']) : 0;
+            $row['acquisitions'] = isset($row['acquisitions']) ? floatval($row['acquisitions']) : 0;
+            $row['materials'] = isset($row['materials']) ? floatval($row['materials']) : 0;
+            $row['labor'] = isset($row['labor']) ? floatval($row['labor']) : 0;
+            $row['mission_support'] = isset($row['mission_support']) ? floatval($row['mission_support']) : 0;
+            $row['land_title'] = isset($row['land_title']) ? floatval($row['land_title']) : 0;
+            $row['total_amount'] = isset($row['total_amount']) ? floatval($row['total_amount']) : (
+                $row['speaker'] + $row['workers'] + $row['food'] + $row['housekeeping'] + $row['office_supplies'] +
+                $row['transportation'] + $row['photocopy'] + $row['internet'] + $row['government_concern'] +
+                $row['water_bill'] + $row['electric_bill'] + $row['special_events'] + $row['needy_calamity'] + $row['trainings'] +
+                $row['kids_ministry'] + $row['youth_ministry'] + $row['music_ministry'] + $row['single_professionals_ministry'] +
+                $row['young_couples_ministry'] + $row['wow_ministry'] + $row['amen_ministry'] + $row['couples_ministry'] +
+                $row['visitation_prayer_ministry'] + $row['acquisitions'] + $row['materials'] + $row['labor'] +
+                $row['mission_support'] + $row['land_title']
+            );
+
+            $breakdownExpenseTotals['speaker'] += $row['speaker'];
+            $breakdownExpenseTotals['workers'] += $row['workers'];
+            $breakdownExpenseTotals['food'] += $row['food'];
+            $breakdownExpenseTotals['housekeeping'] += $row['housekeeping'];
+            $breakdownExpenseTotals['office_supplies'] += $row['office_supplies'];
+            $breakdownExpenseTotals['transportation'] += $row['transportation'];
+            $breakdownExpenseTotals['photocopy'] += $row['photocopy'];
+            $breakdownExpenseTotals['internet'] += $row['internet'];
+            $breakdownExpenseTotals['government_concern'] += $row['government_concern'];
+            $breakdownExpenseTotals['water_bill'] += $row['water_bill'];
+            $breakdownExpenseTotals['electric_bill'] += $row['electric_bill'];
+            $breakdownExpenseTotals['special_events'] += $row['special_events'];
+            $breakdownExpenseTotals['needy_calamity'] += $row['needy_calamity'];
+            $breakdownExpenseTotals['trainings'] += $row['trainings'];
+            $breakdownExpenseTotals['kids_ministry'] += $row['kids_ministry'];
+            $breakdownExpenseTotals['youth_ministry'] += $row['youth_ministry'];
+            $breakdownExpenseTotals['music_ministry'] += $row['music_ministry'];
+            $breakdownExpenseTotals['single_professionals_ministry'] += $row['single_professionals_ministry'];
+            $breakdownExpenseTotals['young_couples_ministry'] += $row['young_couples_ministry'];
+            $breakdownExpenseTotals['wow_ministry'] += $row['wow_ministry'];
+            $breakdownExpenseTotals['amen_ministry'] += $row['amen_ministry'];
+            $breakdownExpenseTotals['couples_ministry'] += $row['couples_ministry'];
+            $breakdownExpenseTotals['visitation_prayer_ministry'] += $row['visitation_prayer_ministry'];
+            $breakdownExpenseTotals['acquisitions'] += $row['acquisitions'];
+            $breakdownExpenseTotals['materials'] += $row['materials'];
+            $breakdownExpenseTotals['labor'] += $row['labor'];
+            $breakdownExpenseTotals['mission_support'] += $row['mission_support'];
+            $breakdownExpenseTotals['land_title'] += $row['land_title'];
+            $breakdownExpenseTotals['total'] += $row['total_amount'];
+
+            $breakdownExpenseEntries[] = $row;
+        }
+    }
+}
+
+$displayIncomeEntries = $breakdownIncomeEntries;
+$displayExpenseEntries = $breakdownExpenseEntries;
+
+if ($hasBreakdownFilter) {
+    $displayIncomeEntries = array_values(array_filter($breakdownIncomeEntries, function ($entry) use ($breakdownFilterDate) {
+        return isset($entry['entry_date']) && $entry['entry_date'] === $breakdownFilterDate;
+    }));
+
+    $displayExpenseEntries = array_values(array_filter($breakdownExpenseEntries, function ($entry) use ($breakdownFilterDate) {
+        return isset($entry['entry_date']) && $entry['entry_date'] === $breakdownFilterDate;
+    }));
+    
+    // No pagination when filtering by date
+    $breakdownPagination = null;
+} else {
+    // Pagination: Show 6 entries (cards) at a time
+    $breakdownPage = isset($_GET['breakdown_page']) ? max(0, intval($_GET['breakdown_page'])) : 0;
+    $entriesPerPage = 6;
+    
+    // Entries are already sorted by date DESC, so we can paginate directly
+    $totalIncomeEntries = count($breakdownIncomeEntries);
+    $totalExpenseEntries = count($breakdownExpenseEntries);
+    
+    // Calculate pagination for income entries
+    $incomeTotalPages = max(1, ceil($totalIncomeEntries / $entriesPerPage));
+    $incomeStartIndex = $breakdownPage * $entriesPerPage;
+    $incomeEndIndex = min($incomeStartIndex + $entriesPerPage, $totalIncomeEntries);
+    $displayIncomeEntries = array_slice($breakdownIncomeEntries, $incomeStartIndex, $entriesPerPage);
+    
+    // Calculate pagination for expense entries
+    $expenseTotalPages = max(1, ceil($totalExpenseEntries / $entriesPerPage));
+    $expenseStartIndex = $breakdownPage * $entriesPerPage;
+    $expenseEndIndex = min($expenseStartIndex + $entriesPerPage, $totalExpenseEntries);
+    $displayExpenseEntries = array_slice($breakdownExpenseEntries, $expenseStartIndex, $entriesPerPage);
+    
+    // Use the maximum pages for navigation (so both tabs can navigate)
+    $totalPages = max($incomeTotalPages, $expenseTotalPages);
+    
+    // Ensure page is within valid range
+    if ($breakdownPage >= $totalPages) {
+        $breakdownPage = $totalPages - 1;
+    }
+    if ($breakdownPage < 0) {
+        $breakdownPage = 0;
+    }
+    
+    // Store pagination info for use in HTML
+    $breakdownPagination = [
+        'current_page' => $breakdownPage,
+        'total_pages' => $totalPages,
+        'total_income_entries' => $totalIncomeEntries,
+        'total_expense_entries' => $totalExpenseEntries,
+        'entries_per_page' => $entriesPerPage,
+        'has_previous' => $breakdownPage > 0,
+        'has_next' => $breakdownPage < $totalPages - 1
+    ];
+}
+
+$displayIncomeTotals = $breakdownIncomeTotals;
+if ($hasBreakdownFilter) {
+    $displayIncomeTotals = [
+        'tithes' => 0,
+        'offerings' => 0,
+        'gifts_bank' => 0,
+        'bank_interest' => 0,
+        'others' => 0,
+        'building' => 0,
+        'total' => 0
+    ];
+    foreach ($displayIncomeEntries as $entry) {
+        $displayIncomeTotals['tithes'] += isset($entry['tithes']) ? floatval($entry['tithes']) : 0;
+        $displayIncomeTotals['offerings'] += isset($entry['offerings']) ? floatval($entry['offerings']) : 0;
+        $displayIncomeTotals['gifts_bank'] += isset($entry['gifts_bank']) ? floatval($entry['gifts_bank']) : 0;
+        $displayIncomeTotals['bank_interest'] += isset($entry['bank_interest']) ? floatval($entry['bank_interest']) : 0;
+        $displayIncomeTotals['others'] += isset($entry['others']) ? floatval($entry['others']) : 0;
+        $displayIncomeTotals['building'] += isset($entry['building']) ? floatval($entry['building']) : 0;
+        $displayIncomeTotals['total'] += isset($entry['total_amount']) ? floatval($entry['total_amount']) : 0;
+    }
+}
+
+$displayExpenseTotals = $breakdownExpenseTotals;
+if ($hasBreakdownFilter) {
+    $displayExpenseTotals = [
+        'speaker' => 0,
+        'workers' => 0,
+        'food' => 0,
+        'housekeeping' => 0,
+        'office_supplies' => 0,
+        'transportation' => 0,
+        'photocopy' => 0,
+        'internet' => 0,
+        'government_concern' => 0,
+        'water_bill' => 0,
+        'electric_bill' => 0,
+        'special_events' => 0,
+        'needy_calamity' => 0,
+        'trainings' => 0,
+        'kids_ministry' => 0,
+        'youth_ministry' => 0,
+        'music_ministry' => 0,
+        'single_professionals_ministry' => 0,
+        'young_couples_ministry' => 0,
+        'wow_ministry' => 0,
+        'amen_ministry' => 0,
+        'couples_ministry' => 0,
+        'visitation_prayer_ministry' => 0,
+        'acquisitions' => 0,
+        'materials' => 0,
+        'labor' => 0,
+        'mission_support' => 0,
+        'land_title' => 0,
+        'total' => 0
+    ];
+    foreach ($displayExpenseEntries as $entry) {
+        $displayExpenseTotals['speaker'] += isset($entry['speaker']) ? floatval($entry['speaker']) : 0;
+        $displayExpenseTotals['workers'] += isset($entry['workers']) ? floatval($entry['workers']) : 0;
+        $displayExpenseTotals['food'] += isset($entry['food']) ? floatval($entry['food']) : 0;
+        $displayExpenseTotals['housekeeping'] += isset($entry['housekeeping']) ? floatval($entry['housekeeping']) : 0;
+        $displayExpenseTotals['office_supplies'] += isset($entry['office_supplies']) ? floatval($entry['office_supplies']) : 0;
+        $displayExpenseTotals['transportation'] += isset($entry['transportation']) ? floatval($entry['transportation']) : 0;
+        $displayExpenseTotals['photocopy'] += isset($entry['photocopy']) ? floatval($entry['photocopy']) : 0;
+        $displayExpenseTotals['internet'] += isset($entry['internet']) ? floatval($entry['internet']) : 0;
+        $displayExpenseTotals['government_concern'] += isset($entry['government_concern']) ? floatval($entry['government_concern']) : 0;
+        $displayExpenseTotals['water_bill'] += isset($entry['water_bill']) ? floatval($entry['water_bill']) : 0;
+        $displayExpenseTotals['electric_bill'] += isset($entry['electric_bill']) ? floatval($entry['electric_bill']) : 0;
+        $displayExpenseTotals['special_events'] += isset($entry['special_events']) ? floatval($entry['special_events']) : 0;
+        $displayExpenseTotals['needy_calamity'] += isset($entry['needy_calamity']) ? floatval($entry['needy_calamity']) : 0;
+        $displayExpenseTotals['trainings'] += isset($entry['trainings']) ? floatval($entry['trainings']) : 0;
+        $displayExpenseTotals['kids_ministry'] += isset($entry['kids_ministry']) ? floatval($entry['kids_ministry']) : 0;
+        $displayExpenseTotals['youth_ministry'] += isset($entry['youth_ministry']) ? floatval($entry['youth_ministry']) : 0;
+        $displayExpenseTotals['music_ministry'] += isset($entry['music_ministry']) ? floatval($entry['music_ministry']) : 0;
+        $displayExpenseTotals['single_professionals_ministry'] += isset($entry['single_professionals_ministry']) ? floatval($entry['single_professionals_ministry']) : 0;
+        $displayExpenseTotals['young_couples_ministry'] += isset($entry['young_couples_ministry']) ? floatval($entry['young_couples_ministry']) : 0;
+        $displayExpenseTotals['wow_ministry'] += isset($entry['wow_ministry']) ? floatval($entry['wow_ministry']) : 0;
+        $displayExpenseTotals['amen_ministry'] += isset($entry['amen_ministry']) ? floatval($entry['amen_ministry']) : 0;
+        $displayExpenseTotals['couples_ministry'] += isset($entry['couples_ministry']) ? floatval($entry['couples_ministry']) : 0;
+        $displayExpenseTotals['visitation_prayer_ministry'] += isset($entry['visitation_prayer_ministry']) ? floatval($entry['visitation_prayer_ministry']) : 0;
+        $displayExpenseTotals['acquisitions'] += isset($entry['acquisitions']) ? floatval($entry['acquisitions']) : 0;
+        $displayExpenseTotals['materials'] += isset($entry['materials']) ? floatval($entry['materials']) : 0;
+        $displayExpenseTotals['labor'] += isset($entry['labor']) ? floatval($entry['labor']) : 0;
+        $displayExpenseTotals['mission_support'] += isset($entry['mission_support']) ? floatval($entry['mission_support']) : 0;
+        $displayExpenseTotals['land_title'] += isset($entry['land_title']) ? floatval($entry['land_title']) : 0;
+        $displayExpenseTotals['total'] += isset($entry['total_amount']) ? floatval($entry['total_amount']) : 0;
+    }
+}
+
+$monthlySummary = [];
+
+if ($incomeExpensesEnabled) {
+    foreach ($breakdownIncomeEntries as $entry) {
+        $monthKey = date('Y-m', strtotime($entry['entry_date']));
+
+        if (!isset($monthlySummary[$monthKey])) {
+            $monthlySummary[$monthKey] = [
+                'income' => 0,
+                'expenses' => 0
+            ];
+        }
+
+        $monthlySummary[$monthKey]['income'] += $entry['total_amount'];
+    }
+
+    foreach ($breakdownExpenseEntries as $entry) {
+        $monthKey = date('Y-m', strtotime($entry['entry_date']));
+
+        if (!isset($monthlySummary[$monthKey])) {
+            $monthlySummary[$monthKey] = [
+                'income' => 0,
+                'expenses' => 0
+            ];
+        }
+
+        $monthlySummary[$monthKey]['expenses'] += $entry['total_amount'];
+    }
+}
+
+if (!empty($monthlySummary)) {
+    ksort($monthlySummary);
+
+    foreach ($monthlySummary as $monthKey => $values) {
+        $income = isset($values['income']) ? floatval($values['income']) : 0;
+        $expenses = isset($values['expenses']) ? floatval($values['expenses']) : 0;
+        $difference = $income - $expenses;
+
+        $expenses_data[] = [
+            'month' => $monthKey,
+            'income' => $income,
+            'expenses' => $expenses,
+            'difference' => $difference
+        ];
+
+        $totals['total_income'] += $income;
+        $totals['total_expenses'] += $expenses;
+        $totals['total_difference'] += $difference;
         $totals['count']++;
     }
 }
 
-// Calculate averages
-$averages = [
-    'avg_income' => $totals['count'] > 0 ? $totals['total_income'] / $totals['count'] : 0,
-    'avg_expenses' => $totals['count'] > 0 ? $totals['total_expenses'] / $totals['count'] : 0,
-    'avg_difference' => $totals['count'] > 0 ? $totals['total_difference'] / $totals['count'] : 0
-];
+if ($totals['count'] > 0) {
+    $averages['avg_income'] = $totals['total_income'] / $totals['count'];
+    $averages['avg_expenses'] = $totals['total_expenses'] / $totals['count'];
+    $averages['avg_difference'] = $totals['total_difference'] / $totals['count'];
+}
 
 // Site configuration
 $site_settings = getSiteSettings($conn);
@@ -358,9 +993,88 @@ $church_name = $site_settings['church_name'];
             margin-bottom: 20px;
         }
 
+        .breakdown-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 16px;
+        }
+
+        .breakdown-header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .breakdown-search-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .breakdown-search-form input[type="date"] {
+            padding: 10px 14px;
+            border: 1px solid #d5d5d5;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .breakdown-search-form input[type="date"]:hover,
+        .breakdown-search-form input[type="date"]:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(0, 139, 30, 0.15);
+            outline: none;
+        }
+
+        .breakdown-header-actions .btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 500;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .breakdown-header-actions .btn-primary {
+            background-color: var(--accent-color);
+            color: #fff;
+        }
+
+        .breakdown-header-actions .btn-primary:hover {
+            background-color: rgb(0, 112, 24);
+        }
+
+        .breakdown-header-actions .btn-primary i {
+            font-size: 18px;
+        }
+
+        .breakdown-header-actions .btn-secondary {
+            background-color: #6c757d;
+            color: #fff;
+        }
+
+        .breakdown-header-actions .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
         .card h2 {
             margin-bottom: 20px;
             color: var(--primary-color);
+        }
+
+        .breakdown-card-header h2 {
+            margin: 0 !important;
         }
 
         .card-icon {
@@ -412,6 +1126,21 @@ $church_name = $site_settings['church_name'];
             min-height: 80px;
         }
 
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .form-control:focus {
+            border-color: var(--accent-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 139, 30, 0.1);
+        }
+
         .form-actions {
             display: flex;
             gap: 10px;
@@ -456,6 +1185,13 @@ $church_name = $site_settings['church_name'];
 
         .form-actions .btn-danger:hover {
             background-color: #d32f2f;
+        }
+
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
         }
 
         /* Alerts */
@@ -599,6 +1335,129 @@ $church_name = $site_settings['church_name'];
 
         /* Responsive Updates */
         @media (max-width: 768px) {
+            .custom-drawer {
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
+            }
+            .custom-drawer.open {
+                left: 0;
+            }
+            .drawer-header {
+                padding: 15px;
+                min-height: auto;
+            }
+            .drawer-logo {
+                height: 40px;
+            }
+            .drawer-title {
+                font-size: 14px;
+            }
+            .drawer-close {
+                font-size: 18px;
+            }
+            .drawer-content {
+                padding: 10px 0;
+            }
+            .drawer-menu {
+                display: block;
+            }
+            .drawer-menu li {
+                margin-bottom: 0;
+            }
+            .drawer-link {
+                padding: 12px 18px;
+                justify-content: flex-start;
+                font-size: 14px;
+            }
+            .drawer-link i {
+                font-size: 16px;
+                min-width: 20px;
+            }
+            .drawer-profile {
+                padding: 15px;
+                flex-direction: row;
+                align-items: center;
+                text-align: left;
+            }
+            .drawer-profile .avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .drawer-profile .name {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .role {
+                font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
+            }
+            .nav-toggle-container {
+                display: block;
+            }
+            .content-area {
+                margin-left: 0;
+                padding-top: 70px;
+            }
+            .tab-navigation {
+                flex-wrap: wrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .tab-navigation a {
+                padding: 12px 10px;
+                font-size: 13px;
+                min-width: auto;
+                flex: 1 1 auto;
+            }
+            .tab-content {
+                padding: 15px 10px;
+            }
+            .table-responsive {
+                padding: 10px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                width: 100%;
+            }
+            table {
+                font-size: 14px;
+                min-width: 600px;
+                width: auto !important;
+            }
+            #expensesTable {
+                min-width: 600px !important;
+                width: auto !important;
+                table-layout: auto;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            #monthly-expenses .card {
+                padding: 10px;
+            }
+            #monthly-expenses .table-responsive {
+                margin: 10px 0 0;
+                padding: 10px;
+            }
+            .top-bar {
+                padding: 12px 15px;
+            }
+            .top-bar h2 {
+                font-size: 20px;
+            }
             .modal-content {
                 margin: 5% auto;
                 width: 95%;
@@ -616,26 +1475,55 @@ $church_name = $site_settings['church_name'];
 
             .dataTables_wrapper {
                 overflow-x: auto;
-            }
-
-            th, td {
-                padding: 10px;
-                font-size: 14px;
+                -webkit-overflow-scrolling: touch;
             }
         }
-
-        .table-responsive {
-            overflow-x: auto;
-            margin-top: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        
+        @media (max-width: 480px) {
+            .tab-navigation {
+                flex-direction: column;
+            }
+            .tab-navigation a {
+                width: 100%;
+                padding: 12px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            .tab-navigation a:last-child {
+                border-bottom: none;
+            }
+            .table-responsive {
+                padding: 5px;
+            }
+            table {
+                font-size: 12px;
+                min-width: 500px;
+                width: auto !important;
+            }
+            #expensesTable {
+                min-width: 500px !important;
+                width: auto !important;
+                table-layout: auto;
+            }
+            th, td {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            #monthly-expenses .card {
+                padding: 8px;
+            }
+            #monthly-expenses .table-responsive {
+                margin: 8px 0 0;
+                padding: 8px;
+            }
+            .top-bar h2 {
+                font-size: 18px;
+            }
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1000px;
+            min-width: 1400px;
             table-layout: fixed;
         }
         
@@ -659,6 +1547,180 @@ $church_name = $site_settings['church_name'];
         
         table tr:hover {
             background-color: #f5f5f5;
+        }
+
+        .expense-card-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 1024px) {
+            .expense-card-list {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .expense-card-list {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .expense-card {
+            background: var(--white);
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .expense-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(15, 23, 42, 0.14);
+        }
+
+        .expense-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, var(--accent-color) 0%, rgb(0, 112, 9) 100%);
+            color: #fff;
+        }
+
+        .expense-card .card-header .date {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .expense-card .card-header .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .expense-card .card-header .actions .action-btn {
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+        }
+
+        .expense-card .card-body {
+            padding: 20px;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 16px;
+        }
+
+        .expense-item:last-child {
+            border-bottom: none;
+        }
+
+        .expense-item .label {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .expense-item .value {
+            color: var(--primary-color);
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .expense-card .card-footer {
+            background: #f8f9fa;
+            padding: 16px 20px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .expense-card .card-footer .note {
+            color: #64748b;
+            font-size: 13px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .expense-card .card-footer .total {
+            color: var(--accent-color);
+            font-weight: 700;
+            font-size: 16px;
+            white-space: nowrap;
+        }
+
+        .breakdown-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        .breakdown-pagination .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .breakdown-pagination .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .breakdown-pagination .btn:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .breakdown-pagination .pagination-info {
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .expense-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .expense-summary-item {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            padding: 15px 18px;
+        }
+
+        .expense-summary-item .label {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .expense-summary-item .value {
+            font-weight: 600;
+            color: var(--primary-color);
         }
 
         /* Summary row styling */
@@ -742,11 +1804,28 @@ $church_name = $site_settings['church_name'];
         /* Ensure table doesn't move during initialization */
         #expensesTable {
             visibility: hidden;
+            width: 100% !important;
+            table-layout: fixed;
         }
         
         #expensesTable.dataTable {
             visibility: visible;
         }
+
+        #expensesTable th,
+        #expensesTable td {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        #monthly-expenses .table-responsive,
+        #monthly-expenses .dataTables_wrapper {
+            width: 100% !important;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+          
 
         /* Preserve custom styling for DataTable columns */
         .month-column {
@@ -982,12 +2061,18 @@ $church_name = $site_settings['church_name'];
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -1069,6 +2154,41 @@ $church_name = $site_settings['church_name'];
             display: block;
         }
 
+        /* Financial Breakdown inner tabs */
+        .breakdown-tab-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .breakdown-tab-navigation a {
+            padding: 10px 20px;
+            background-color: #f3f4f6;
+            color: var(--primary-color);
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .breakdown-tab-navigation a.active {
+            background-color: var(--accent-color);
+            color: var(--white);
+        }
+
+        .breakdown-tab-navigation a:hover:not(.active) {
+            background-color: #e5e7eb;
+        }
+
+        .breakdown-tab-content .breakdown-pane {
+            display: none;
+        }
+
+        .breakdown-tab-content .breakdown-pane.active {
+            display: block;
+        }
+
         /* Insights Tab Styles */
         .insights-grid {
             display: grid;
@@ -1141,10 +2261,42 @@ $church_name = $site_settings['church_name'];
         /* Ensure table doesn't move during initialization */
         #expensesTable {
             visibility: hidden;
+            width: 100% !important;
+            table-layout: fixed;
         }
         
         #expensesTable.dataTable {
             visibility: visible;
+        }
+
+        #expensesTable th,
+        #expensesTable td {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        #monthly-expenses .table-responsive,
+        #monthly-expenses .dataTables_wrapper {
+            width: 100% !important;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #monthly-expenses > .card {
+            max-width: 1320px;
+            margin: 0 auto 30px;
+        }
+
+        #monthly-expenses .table-responsive {
+            margin: 20px 0 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            padding: 0;
+        }
+
+        #monthly-expenses .table-responsive table {
+            margin: 0;
         }
 
     </style>
@@ -1224,12 +2376,12 @@ $church_name = $site_settings['church_name'];
                     <?php if (!empty($user_profile['profile_picture'])): ?>
                         <img src="<?php echo htmlspecialchars($user_profile['profile_picture']); ?>" alt="Profile Picture">
                     <?php else: ?>
-                        <?php echo strtoupper(substr($user_profile['username'] ?? 'U', 0, 1)); ?>
+                        <?php echo strtoupper(substr($user_profile['full_name'] ?? $user_profile['username'] ?? 'U', 0, 1)); ?>
                     <?php endif; ?>
                 </div>
                 <div class="profile-info">
-                    <div class="name"><?php echo htmlspecialchars($user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role"><?php echo htmlspecialchars($_SESSION['user_role']); ?></div>
+                    <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? $_SESSION['user_role'] ?? 'Administrator'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
@@ -1270,20 +2422,294 @@ $church_name = $site_settings['church_name'];
 
                 <!-- Tab Navigation -->
                 <div class="tab-navigation">
-                    <a href="#monthly-expenses" class="active" data-tab="monthly-expenses">Monthly Expenses</a>
+                    <a href="#financial-breakdown" class="active" data-tab="financial-breakdown">Financial Report Breakdown</a>
+                    <a href="#monthly-expenses" data-tab="monthly-expenses">Monthly Expenses</a>
                     <a href="#insights" data-tab="insights">Insights</a>
                 </div>
 
                 <div class="tab-content">
-                    <!-- Monthly Expenses Tab -->
-                    <div class="tab-pane active" id="monthly-expenses">
+                    <!-- Financial Report Breakdown Tab -->
+                    <div class="tab-pane active" id="financial-breakdown">
                         <!-- Action Button -->
-                        <div class="action-bar">
-                            <button class="btn btn-primary" onclick="openExpenseModal()">
-                                <i class="fas fa-plus-circle"></i> Add Monthly Expense
+                        <div class="card">
+                            <div class="card-header breakdown-card-header">
+                                <h2>Financial Report Breakdown</h2>
+                                <div class="breakdown-header-actions">
+                                    <form method="GET" action="" class="breakdown-search-form">
+                                        <input type="date" name="breakdown_date" value="<?php echo htmlspecialchars($breakdownFilterDate); ?>">
+                                        <?php foreach ($_GET as $paramKey => $paramValue): ?>
+                                            <?php if ($paramKey === 'breakdown_date' || is_array($paramValue)) { continue; } ?>
+                                            <input type="hidden" name="<?php echo htmlspecialchars($paramKey); ?>" value="<?php echo htmlspecialchars($paramValue); ?>">
+                                        <?php endforeach; ?>
+                                        <button type="submit" class="btn btn-secondary">Search</button>
+                                        <?php if ($hasBreakdownFilter): ?>
+                                            <button type="button" class="btn btn-secondary" onclick="window.location.href='admin_expenses.php#financial-breakdown';">Clear</button>
+                                        <?php endif; ?>
+                                    </form>
+                                    <button type="button" class="btn btn-primary" onclick="openBreakdownModal()">
+                                <i class="fas fa-plus-circle"></i> Add Breakdown Entry
                             </button>
+                                </div>
                         </div>
 
+                            <div class="breakdown-tab-navigation">
+                                <a href="#breakdown-income" class="active" data-breakdown-tab="income">Income</a>
+                                <a href="#breakdown-expenses" data-breakdown-tab="expenses">Expenses</a>
+                            </div>
+
+                            <div class="breakdown-tab-content">
+                                <div class="breakdown-pane active" id="breakdown-income">
+                                    <?php if (!empty($displayIncomeEntries)): ?>
+                                        <div class="expense-card-list">
+                                            <?php foreach ($displayIncomeEntries as $incomeEntry): ?>
+                                                <?php
+                                                    $incomeEntryPayload = htmlspecialchars(json_encode([
+                                                        'id' => (int) $incomeEntry['id'],
+                                                        'entry_date' => $incomeEntry['entry_date'],
+                                                        'tithes' => (float) $incomeEntry['tithes'],
+                                                        'offerings' => (float) $incomeEntry['offerings'],
+                                                        'gifts_bank' => (float) $incomeEntry['gifts_bank'],
+                                                        'bank_interest' => (float) $incomeEntry['bank_interest'],
+                                                        'others' => (float) $incomeEntry['others'],
+                                                        'building' => (float) $incomeEntry['building'],
+                                                        'notes' => $incomeEntry['notes'] ?? ''
+                                                    ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+                                                    $incomeFields = [
+                                                        'Tithes' => $incomeEntry['tithes'],
+                                                        'Offerings' => $incomeEntry['offerings'],
+                                                        'Gifts Received through Bank' => $incomeEntry['gifts_bank'],
+                                                        'Bank Interest' => $incomeEntry['bank_interest'],
+                                                        'Others' => $incomeEntry['others'],
+                                                        'Building' => $incomeEntry['building']
+                                                    ];
+                                                ?>
+                                                <div class="expense-card">
+                                                    <div class="card-header">
+                                                        <div class="date"><?php echo htmlspecialchars(date('F d, Y', strtotime($incomeEntry['entry_date']))); ?></div>
+                                                        <div class="actions">
+                                                            <button type="button" class="action-btn edit-btn" data-entry="<?php echo $incomeEntryPayload; ?>" onclick="handleIncomeEdit(this)">
+                                                                <i class="fas fa-edit"></i>
+                                                            </button>
+                                                            <button type="button" class="action-btn delete-btn" onclick="confirmDeleteBreakdown(<?php echo intval($incomeEntry['id']); ?>, 'income')">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                    </div>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <?php foreach ($incomeFields as $label => $value): ?>
+                                                            <div class="expense-item">
+                                                                <span class="label"><?php echo $label; ?></span>
+                                                                <span class="value">₱<?php echo number_format((float) $value, 2); ?></span>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                    <div class="card-footer">
+                                                        <div class="note">
+                                                            <?php echo $incomeEntry['notes'] !== '' ? nl2br(htmlspecialchars($incomeEntry['notes'])) : 'No notes provided.'; ?>
+                                                        </div>
+                                                        <div class="total">Total: ₱<?php echo number_format($incomeEntry['total_amount'], 2); ?></div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <?php if (!$hasBreakdownFilter && isset($breakdownPagination) && $breakdownPagination !== null && $breakdownPagination['total_pages'] > 1): ?>
+                                            <div class="breakdown-pagination">
+                                                <button type="button" class="btn btn-secondary" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] - 1; ?>)" <?php echo !$breakdownPagination['has_previous'] ? 'disabled' : ''; ?>>
+                                                    <i class="fas fa-chevron-left"></i> Previous
+                                                </button>
+                                                <span class="pagination-info">
+                                                    Showing <?php echo count($displayIncomeEntries); ?> of <?php echo $breakdownPagination['total_income_entries']; ?> income entries 
+                                                    (Page <?php echo ($breakdownPagination['current_page'] + 1); ?> of <?php echo $breakdownPagination['total_pages']; ?>)
+                                                </span>
+                                                <button type="button" class="btn btn-secondary" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] + 1; ?>)" <?php echo !$breakdownPagination['has_next'] ? 'disabled' : ''; ?>>
+                                                    Next <i class="fas fa-chevron-right"></i>
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <div style="text-align:center; color:#666; padding:25px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+                                            <?php echo $hasBreakdownFilter ? 'No income breakdown entries found for the selected date.' : 'No income breakdown entries found.'; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
+                                <div class="breakdown-pane" id="breakdown-expenses">
+                                    <?php if (!empty($displayExpenseEntries)): ?>
+                                        <div class="expense-card-list">
+                                            <?php foreach ($displayExpenseEntries as $expenseEntry): ?>
+                                                <?php
+                                                    $expenseEntryPayload = htmlspecialchars(json_encode([
+                                                        'id' => (int) $expenseEntry['id'],
+                                                        'entry_date' => $expenseEntry['entry_date'],
+                                                        'speaker' => (float) $expenseEntry['speaker'],
+                                                        'workers' => (float) $expenseEntry['workers'],
+                                                        'food' => (float) $expenseEntry['food'],
+                                                        'housekeeping' => (float) $expenseEntry['housekeeping'],
+                                                        'office_supplies' => (float) $expenseEntry['office_supplies'],
+                                                        'transportation' => (float) $expenseEntry['transportation'],
+                                                        'photocopy' => (float) $expenseEntry['photocopy'],
+                                                        'internet' => (float) $expenseEntry['internet'],
+                                                        'government_concern' => (float) $expenseEntry['government_concern'],
+                                                        'water_bill' => (float) $expenseEntry['water_bill'],
+                                                        'electric_bill' => (float) $expenseEntry['electric_bill'],
+                                                        'special_events' => (float) $expenseEntry['special_events'],
+                                                        'needy_calamity' => (float) $expenseEntry['needy_calamity'],
+                                                        'trainings' => (float) $expenseEntry['trainings'],
+                                                        'kids_ministry' => (float) $expenseEntry['kids_ministry'],
+                                                        'youth_ministry' => (float) $expenseEntry['youth_ministry'],
+                                                        'music_ministry' => (float) $expenseEntry['music_ministry'],
+                                                        'single_professionals_ministry' => (float) $expenseEntry['single_professionals_ministry'],
+                                                        'young_couples_ministry' => (float) $expenseEntry['young_couples_ministry'],
+                                                        'wow_ministry' => (float) $expenseEntry['wow_ministry'],
+                                                        'amen_ministry' => (float) $expenseEntry['amen_ministry'],
+                                                        'couples_ministry' => (float) $expenseEntry['couples_ministry'],
+                                                        'visitation_prayer_ministry' => (float) $expenseEntry['visitation_prayer_ministry'],
+                                                        'acquisitions' => (float) $expenseEntry['acquisitions'],
+                                                        'materials' => (float) $expenseEntry['materials'],
+                                                        'labor' => (float) $expenseEntry['labor'],
+                                                        'mission_support' => (float) $expenseEntry['mission_support'],
+                                                        'land_title' => (float) $expenseEntry['land_title'],
+                                                        'notes' => $expenseEntry['notes'] ?? ''
+                                                    ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+                                                ?>
+                                                <div class="expense-card">
+                                                    <div class="card-header">
+                                                        <div class="date"><?php echo htmlspecialchars(date('F d, Y', strtotime($expenseEntry['entry_date']))); ?></div>
+                                                        <div class="actions">
+                                                            <button type="button" class="action-btn edit-btn" data-entry="<?php echo $expenseEntryPayload; ?>" onclick="handleExpenseEdit(this)">
+                                                                <i class="fas fa-edit"></i>
+                                                            </button>
+                                                            <button type="button" class="action-btn delete-btn" onclick="confirmDeleteBreakdown(<?php echo intval($expenseEntry['id']); ?>, 'expense')">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                    </div>
+                                </div>
+                                                    <div class="card-body">
+                                                        <?php
+                                                            $expenseFields = [
+                                                                'Speaker' => $expenseEntry['speaker'],
+                                                                'Workers' => $expenseEntry['workers'],
+                                                                'Food' => $expenseEntry['food'],
+                                                                'House Keeping' => $expenseEntry['housekeeping'],
+                                                                'Office Supplies' => $expenseEntry['office_supplies'],
+                                                                'Transportation' => $expenseEntry['transportation'],
+                                                                'Photocopy' => $expenseEntry['photocopy'],
+                                                                'Internet' => $expenseEntry['internet'],
+                                                                'Government Concern' => $expenseEntry['government_concern'],
+                                                                'Water Bill' => $expenseEntry['water_bill'],
+                                                                'Electric Bill' => $expenseEntry['electric_bill'],
+                                                                'Special Events' => $expenseEntry['special_events'],
+                                                                'Needy / Calamity / Emergency' => $expenseEntry['needy_calamity'],
+                                                                'Trainings' => $expenseEntry['trainings'],
+                                                                'Kids Ministry' => $expenseEntry['kids_ministry'],
+                                                                'Youth Ministry' => $expenseEntry['youth_ministry'],
+                                                                'Music Ministry' => $expenseEntry['music_ministry'],
+                                                                'Single Professionals Ministry' => $expenseEntry['single_professionals_ministry'],
+                                                                'Young Couples Ministry' => $expenseEntry['young_couples_ministry'],
+                                                                'WOW Ministry' => $expenseEntry['wow_ministry'],
+                                                                'AMEN Ministry' => $expenseEntry['amen_ministry'],
+                                                                'Couples Ministry' => $expenseEntry['couples_ministry'],
+                                                                'Visitation / Prayer Ministry' => $expenseEntry['visitation_prayer_ministry'],
+                                                                'Acquisitions' => $expenseEntry['acquisitions'],
+                                                                'Materials' => $expenseEntry['materials'],
+                                                                'Labor' => $expenseEntry['labor'],
+                                                                'Mission Support' => $expenseEntry['mission_support'],
+                                                                'Land Title' => $expenseEntry['land_title']
+                                                            ];
+
+                                                            $hasVisibleExpense = false;
+                                                            foreach ($expenseFields as $value) {
+                                                                if (floatval($value) > 0) {
+                                                                    $hasVisibleExpense = true;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        ?>
+                                                        <?php if ($hasVisibleExpense): ?>
+                                                            <?php foreach ($expenseFields as $label => $value): ?>
+                                                                <?php if (floatval($value) > 0): ?>
+                                                                    <div class="expense-item">
+                                                                        <span class="label"><?php echo $label; ?></span>
+                                                                        <span class="value">₱<?php echo number_format($value, 2); ?></span>
+                            </div>
+                                                                <?php endif; ?>
+                                                            <?php endforeach; ?>
+                                                        <?php else: ?>
+                                                            <div class="expense-item">
+                                                                <span class="label">Expenses</span>
+                                                                <span class="value">No individual expense categories recorded.</span>
+                        </div>
+                                                        <?php endif; ?>
+                    </div>
+                                                    <div class="card-footer">
+                                                        <div class="note">
+                                                            <?php echo $expenseEntry['notes'] !== '' ? nl2br(htmlspecialchars($expenseEntry['notes'])) : 'No notes provided.'; ?>
+                    </div>
+                                                        <div class="total">Total: ₱<?php echo number_format($expenseEntry['total_amount'], 2); ?></div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <?php if (!$hasBreakdownFilter && isset($breakdownPagination) && $breakdownPagination !== null && $breakdownPagination['total_pages'] > 1): ?>
+                                            <div class="breakdown-pagination">
+                                                <button type="button" class="btn btn-secondary" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] - 1; ?>)" <?php echo !$breakdownPagination['has_previous'] ? 'disabled' : ''; ?>>
+                                                    <i class="fas fa-chevron-left"></i> Previous
+                                                </button>
+                                                <span class="pagination-info">
+                                                    Showing <?php echo count($displayExpenseEntries); ?> of <?php echo $breakdownPagination['total_expense_entries']; ?> expense entries 
+                                                    (Page <?php echo ($breakdownPagination['current_page'] + 1); ?> of <?php echo $breakdownPagination['total_pages']; ?>)
+                                                </span>
+                                                <button type="button" class="btn btn-secondary" onclick="navigateBreakdownPage(<?php echo $breakdownPagination['current_page'] + 1; ?>)" <?php echo !$breakdownPagination['has_next'] ? 'disabled' : ''; ?>>
+                                                    Next <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <div style="text-align:center; color:#666; padding:25px; background:white; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+                                            <?php echo $hasBreakdownFilter ? 'No expense breakdown entries found for the selected date.' : 'No expense breakdown entries found.'; ?>
+                                        </div>
+                                    <?php endif; ?>
+
+                                    <?php
+                                        $expenseTotalsLabels = [
+                                            'speaker' => 'Speaker',
+                                            'workers' => 'Workers',
+                                            'food' => 'Food',
+                                            'housekeeping' => 'House Keeping',
+                                            'office_supplies' => 'Office Supplies',
+                                            'transportation' => 'Transportation',
+                                            'photocopy' => 'Photocopy',
+                                            'internet' => 'Internet',
+                                            'government_concern' => 'Government Concern',
+                                            'water_bill' => 'Water Bill',
+                                            'electric_bill' => 'Electric Bill',
+                                            'special_events' => 'Special Events',
+                                            'needy_calamity' => 'Needy / Calamity / Emergency',
+                                            'trainings' => 'Trainings',
+                                            'kids_ministry' => 'Kids Ministry',
+                                            'youth_ministry' => 'Youth Ministry',
+                                            'music_ministry' => 'Music Ministry',
+                                            'single_professionals_ministry' => 'Single Professionals Ministry',
+                                            'young_couples_ministry' => 'Young Couples Ministry',
+                                            'wow_ministry' => 'WOW Ministry',
+                                            'amen_ministry' => 'AMEN Ministry',
+                                            'couples_ministry' => 'Couples Ministry',
+                                            'visitation_prayer_ministry' => 'Visitation / Prayer Ministry',
+                                            'acquisitions' => 'Acquisitions',
+                                            'materials' => 'Materials',
+                                            'labor' => 'Labor',
+                                            'mission_support' => 'Mission Support',
+                                            'land_title' => 'Land Title'
+                                        ];
+                                        // Totals retained for future use even though summary display is removed
+                                    ?>
+                                 </div>
+                            </div>
+                        </div>
+                        </div>
+
+                    <!-- Monthly Expenses Tab -->
+                    <div class="tab-pane" id="monthly-expenses">
                         <!-- Expenses Table -->
                         <div class="card">
                             <h2>Monthly Financial Summary</h2>
@@ -1295,10 +2721,10 @@ $church_name = $site_settings['church_name'];
                                             <th>Income (₱)</th>
                                             <th>Expenses (₱)</th>
                                             <th>Difference (₱)</th>
-                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <?php if (!empty($expenses_data)): ?>
                                         <?php foreach ($expenses_data as $row): ?>
                                         <tr>
                                             <td class="month-column" data-order="<?php echo strtotime($row['month'] . '-01'); ?>"><strong><?php echo date('F Y', strtotime($row['month'] . '-01')); ?></strong></td>
@@ -1307,19 +2733,11 @@ $church_name = $site_settings['church_name'];
                                             <td class="<?php echo $row['expenses'] > $row['income'] ? 'negative-expenses' : ($row['difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
                                                 ₱<?php echo number_format($row['difference'], 2); ?>
                                             </td>
-                                            <td>
-                                                <div class="action-buttons">
-                                                    <button class="action-btn edit-btn" onclick="editExpense(<?php echo $row['id']; ?>, '<?php echo $row['month']; ?>', <?php echo $row['income']; ?>, <?php echo $row['expenses']; ?>, '<?php echo htmlspecialchars($row['notes']); ?>')">
-                                                        <i class="fas fa-edit"></i>
-                                                    </button>
-                                                    <button class="action-btn delete-btn" onclick="deleteExpense(<?php echo $row['id']; ?>)">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
                                         </tr>
                                         <?php endforeach; ?>
+                                        <?php endif; ?>
                                     </tbody>
+                                    <?php if (!empty($expenses_data)): ?>
                                     <tfoot>
                                         <tr class="summary-row">
                                             <td><strong>AVERAGE</strong></td>
@@ -1328,9 +2746,9 @@ $church_name = $site_settings['church_name'];
                                             <td class="<?php echo $averages['avg_expenses'] > $averages['avg_income'] ? 'negative-expenses' : ($averages['avg_difference'] >= 0 ? 'positive-difference' : 'negative-difference'); ?>">
                                                 <strong>₱<?php echo number_format($averages['avg_difference'], 2); ?></strong>
                                             </td>
-                                            <td></td>
                                         </tr>
                                     </tfoot>
+                                    <?php endif; ?>
                                 </table>
                             </div>
                         </div>
@@ -1348,61 +2766,207 @@ $church_name = $site_settings['church_name'];
                             <div id="legend-chart" style="margin-top: 20px;"></div>
                         </div>
                     </div>
-                </div>
+        
+        </div>
             </div>
         </main>
-    </div>
+        </div>
 
-    <!-- Add Expense Modal -->
-    <div id="expenseModal" class="modal">
-        <div class="modal-content">
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteBreakdownModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
             <div class="modal-header">
-                <h3 id="modalTitle">Add Monthly Expense</h3>
-                <span class="close" onclick="closeExpenseModal()">&times;</span>
+                <h3>Confirm Delete</h3>
+                <span class="close" onclick="closeDeleteBreakdownModal()">&times;</span>
             </div>
-            <form method="POST" action="" class="expense-form" id="expenseForm">
-                <input type="hidden" id="expense_id" name="expense_id">
-                <div class="form-group">
-                    <label for="month">Month</label>
-                    <input type="month" id="month" name="month" required>
-                </div>
-                <div class="form-group">
-                    <label for="income">Income (₱)</label>
-                    <input type="number" id="income" name="income" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="expenses">Expenses (₱)</label>
-                    <input type="number" id="expenses" name="expenses" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="notes">Notes</label>
-                    <textarea id="notes" name="notes" placeholder="Optional notes about this month's finances..."></textarea>
-                </div>
+            <form method="POST" action="" id="deleteBreakdownForm">
+                <input type="hidden" name="entry_id" id="delete_entry_id">
+                <input type="hidden" name="entry_type" id="delete_entry_type">
+                <p style="margin: 20px 0; font-size: 16px;">Are you sure you want to delete this entry? This action cannot be undone.</p>
                 <div class="form-actions">
-                    <button type="submit" name="submit_expense" id="submitBtn" class="btn btn-primary">Add Expense</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
+                    <button type="submit" name="delete_breakdown_entry" class="btn btn-primary" style="background-color: #f44336;">Yes, Delete</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDeleteBreakdownModal()">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="modal">
+    <!-- Add Breakdown Entry Modal -->
+    <div id="breakdownModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Confirm Delete</h3>
-                <span class="close" onclick="closeDeleteModal()">&times;</span>
+                <h3 id="breakdownModalTitle">Add Breakdown Entry</h3>
+                <span class="close" onclick="closeBreakdownModal()">&times;</span>
             </div>
-            <div style="padding: 20px;">
-                <p>Are you sure you want to delete this expense entry? This action cannot be undone.</p>
-                <form method="POST" action="" id="deleteForm">
-                    <input type="hidden" id="delete_expense_id" name="expense_id">
-                    <div class="form-actions">
-                        <button type="submit" name="delete_expense" class="btn btn-danger">Delete</button>
-                        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+            <form method="POST" action="" class="expense-form" id="breakdownForm">
+                <input type="hidden" id="breakdown_action" name="breakdown_action" value="add">
+                <input type="hidden" id="breakdown_entry_id" name="breakdown_entry_id">
+                <input type="hidden" id="original_breakdown_type" name="original_breakdown_type" value="income">
+                <div class="form-group">
+                    <label for="breakdown_date">Date</label>
+                    <input type="date" id="breakdown_date" name="breakdown_date" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="breakdown_type">Type</label>
+                    <select id="breakdown_type" name="breakdown_type" class="form-control" required>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
+
+                <div id="income-fields" class="breakdown-type-section">
+                <div class="form-group">
+                        <label for="income_tithes">Tithes (₱)</label>
+                        <input type="number" id="income_tithes" name="income_tithes" class="form-control" step="0.01" min="0" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                        <label for="income_offerings">Offerings (₱)</label>
+                        <input type="number" id="income_offerings" name="income_offerings" class="form-control" step="0.01" min="0" placeholder="0.00">
                     </div>
-                </form>
-            </div>
+                    <div class="form-group">
+                        <label for="income_gifts_bank">Gifts Received through Bank (₱)</label>
+                        <input type="number" id="income_gifts_bank" name="income_gifts_bank" class="form-control" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="income_bank_interest">Bank Interest (₱)</label>
+                        <input type="number" id="income_bank_interest" name="income_bank_interest" class="form-control" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="income_others">Others (e.g., wedding, dedication, etc.) (₱)</label>
+                        <input type="number" id="income_others" name="income_others" class="form-control" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="income_building">Building (₱)</label>
+                        <input type="number" id="income_building" name="income_building" class="form-control" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div id="expense-fields" class="breakdown-type-section" style="display:none;">
+                    <div class="category-grid">
+                    <div class="form-group">
+                            <label for="expense_speaker">Speaker (₱)</label>
+                            <input type="number" id="expense_speaker" name="expense_speaker" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_workers">Workers (₱)</label>
+                            <input type="number" id="expense_workers" name="expense_workers" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_food">Food (₱)</label>
+                            <input type="number" id="expense_food" name="expense_food" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_housekeeping">House Keeping (₱)</label>
+                            <input type="number" id="expense_housekeeping" name="expense_housekeeping" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_office_supplies">Office Supplies (₱)</label>
+                            <input type="number" id="expense_office_supplies" name="expense_office_supplies" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_transportation">Transportation (₱)</label>
+                            <input type="number" id="expense_transportation" name="expense_transportation" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_photocopy">Photocopy (₱)</label>
+                            <input type="number" id="expense_photocopy" name="expense_photocopy" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_internet">Internet (₱)</label>
+                            <input type="number" id="expense_internet" name="expense_internet" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_government_concern">Government Concern (₱)</label>
+                            <input type="number" id="expense_government_concern" name="expense_government_concern" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_water_bill">Water Bill (₱)</label>
+                            <input type="number" id="expense_water_bill" name="expense_water_bill" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_electric_bill">Electric Bill (₱)</label>
+                            <input type="number" id="expense_electric_bill" name="expense_electric_bill" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_special_events">Special Events (₱)</label>
+                            <input type="number" id="expense_special_events" name="expense_special_events" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_needy_calamity">Needy/Calamity/Emergency (₱)</label>
+                            <input type="number" id="expense_needy_calamity" name="expense_needy_calamity" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_trainings">Trainings (₱)</label>
+                            <input type="number" id="expense_trainings" name="expense_trainings" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_kids_ministry">Kids Ministry (₱)</label>
+                            <input type="number" id="expense_kids_ministry" name="expense_kids_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_youth_ministry">Youth Ministry (₱)</label>
+                            <input type="number" id="expense_youth_ministry" name="expense_youth_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_music_ministry">Music Ministry (₱)</label>
+                            <input type="number" id="expense_music_ministry" name="expense_music_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_single_professionals_ministry">Single Professionals Ministry (₱)</label>
+                            <input type="number" id="expense_single_professionals_ministry" name="expense_single_professionals_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_young_couples_ministry">Young Couples Ministry (₱)</label>
+                            <input type="number" id="expense_young_couples_ministry" name="expense_young_couples_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_wow_ministry">WOW Ministry (₱)</label>
+                            <input type="number" id="expense_wow_ministry" name="expense_wow_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_amen_ministry">AMEN Ministry (₱)</label>
+                            <input type="number" id="expense_amen_ministry" name="expense_amen_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_couples_ministry">Couples Ministry (₱)</label>
+                            <input type="number" id="expense_couples_ministry" name="expense_couples_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_visitation_prayer_ministry">Visitation / Prayer Ministry (₱)</label>
+                            <input type="number" id="expense_visitation_prayer_ministry" name="expense_visitation_prayer_ministry" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_acquisitions">Acquisitions (₱)</label>
+                            <input type="number" id="expense_acquisitions" name="expense_acquisitions" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_materials">Materials (₱)</label>
+                            <input type="number" id="expense_materials" name="expense_materials" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_labor">Labor (₱)</label>
+                            <input type="number" id="expense_labor" name="expense_labor" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_mission_support">Mission Support (₱)</label>
+                            <input type="number" id="expense_mission_support" name="expense_mission_support" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="expense_land_title">Land Title (₱)</label>
+                            <input type="number" id="expense_land_title" name="expense_land_title" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="breakdown_notes">Notes</label>
+                    <textarea id="breakdown_notes" name="breakdown_notes" class="form-control" placeholder="Optional notes..." rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" id="breakdownSubmitBtn" class="btn btn-primary">Save Entry</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeBreakdownModal()">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1410,71 +2974,335 @@ $church_name = $site_settings['church_name'];
     <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script>
+        let breakdownIncomeTable;
+        // let breakdownIncomeTable;
+
+        function toggleBreakdownTypeFields() {
+            const typeInput = document.getElementById('breakdown_type');
+            const incomeSection = document.getElementById('income-fields');
+            const expenseSection = document.getElementById('expense-fields');
+            const type = typeInput ? typeInput.value : 'income';
+
+            if (incomeSection) {
+                incomeSection.style.display = type === 'income' ? 'block' : 'none';
+            }
+            if (expenseSection) {
+                expenseSection.style.display = type === 'income' ? 'none' : 'block';
+            }
+
+            const incomeFieldIds = [
+                'income_tithes',
+                'income_offerings',
+                'income_gifts_bank',
+                'income_bank_interest',
+                'income_others',
+                'income_building'
+            ];
+            const expenseFieldIds = [
+                'expense_speaker',
+                'expense_workers',
+                'expense_food',
+                'expense_housekeeping',
+                'expense_office_supplies',
+                'expense_transportation',
+                'expense_photocopy',
+                'expense_internet',
+                'expense_government_concern',
+                'expense_water_bill',
+                'expense_electric_bill',
+                'expense_special_events',
+                'expense_needy_calamity',
+                'expense_trainings',
+                'expense_kids_ministry',
+                'expense_youth_ministry',
+                'expense_music_ministry',
+                'expense_single_professionals_ministry',
+                'expense_young_couples_ministry',
+                'expense_wow_ministry',
+                'expense_amen_ministry',
+                'expense_couples_ministry',
+                'expense_visitation_prayer_ministry',
+                'expense_acquisitions',
+                'expense_materials',
+                'expense_labor',
+                'expense_mission_support',
+                'expense_land_title'
+            ];
+
+            incomeFieldIds.forEach(id => {
+                const field = document.getElementById(id);
+                if (!field) {
+                    return;
+                }
+                if (type === 'income') {
+                    field.disabled = false;
+                } else {
+                    field.value = '';
+                    field.disabled = true;
+                }
+            });
+
+            expenseFieldIds.forEach(id => {
+                const field = document.getElementById(id);
+                if (!field) {
+                    return;
+                }
+                if (type === 'expense') {
+                    field.disabled = false;
+                } else {
+                    field.value = '';
+                    field.disabled = true;
+                }
+            });
+        }
+
         $(document).ready(function() {
             $('#expensesTable').DataTable({
                 columnDefs: [
-                    { width: '20%', targets: 0 }, // Month
-                    { width: '20%', targets: 1 }, // Income
-                    { width: '20%', targets: 2 }, // Expenses
-                    { width: '20%', targets: 3 }, // Difference
-                    { width: '20%', targets: 4 }  // Actions
+                    { width: '30%', targets: 0 }, // Month
+                    { width: '23%', targets: 1 }, // Income
+                    { width: '23%', targets: 2 }, // Expenses
+                    { width: '24%', targets: 3 }  // Difference
                 ],
                 autoWidth: false,
                 responsive: true,
+                scrollX: true,
                 order: [[0, 'asc']], // Sort by first column (Month) in ascending order
-                orderClasses: false
+                orderClasses: false,
+                language: {
+                    emptyTable: 'No monthly summary data available yet. Add income and expense breakdown entries to populate this table.'
+                }
             });
+
+            const breakdownTypeSelect = document.getElementById('breakdown_type');
+            if (breakdownTypeSelect) {
+                breakdownTypeSelect.addEventListener('change', function () {
+                    if (this.dataset.locked === 'true') {
+                        const lockedValue = this.dataset.lockedValue || this.value;
+                        if (this.value !== lockedValue) {
+                            alert('Cannot change the entry type while editing. Please delete and recreate the entry if needed.');
+                            this.value = lockedValue;
+                        }
+                    }
+                    toggleBreakdownTypeFields();
+                });
+                toggleBreakdownTypeFields();
+            }
         });
 
-        function openExpenseModal() {
-            document.getElementById('modalTitle').textContent = 'Add Monthly Expense';
-            document.getElementById('expenseForm').reset();
-            document.getElementById('expense_id').value = '';
-            document.getElementById('submitBtn').textContent = 'Add Expense';
-            document.getElementById('submitBtn').name = 'submit_expense';
-            document.getElementById('expenseModal').style.display = 'block';
-            
-            // Set default month to current month
+        function openBreakdownModal(options) {
+            const config = options || {};
+            const mode = config.mode || 'add';
+            const entryType = config.type || 'income';
+            const entry = config.entry || null;
+
+            const modal = document.getElementById('breakdownModal');
+            if (modal) {
+                modal.style.display = 'block';
+            }
+            document.body.style.overflow = 'hidden';
+
+            const form = document.getElementById('breakdownForm');
+            if (form) {
+                form.reset();
+            }
+
+            const actionInput = document.getElementById('breakdown_action');
+            if (actionInput) {
+                actionInput.value = mode === 'edit' ? 'update' : 'add';
+            }
+
+            const entryIdInput = document.getElementById('breakdown_entry_id');
+            if (entryIdInput) {
+                entryIdInput.value = entry && entry.id ? entry.id : '';
+                }
+
+            const originalTypeInput = document.getElementById('original_breakdown_type');
+            if (originalTypeInput) {
+                originalTypeInput.value = entryType;
+            }
+
+            const typeInput = document.getElementById('breakdown_type');
+            if (typeInput) {
+                typeInput.value = entryType;
+                if (mode === 'edit') {
+                    typeInput.dataset.locked = 'true';
+                    typeInput.dataset.lockedValue = entryType;
+                } else {
+                    delete typeInput.dataset.locked;
+                    delete typeInput.dataset.lockedValue;
+                }
+            }
+
+            const submitBtn = document.getElementById('breakdownSubmitBtn');
+            if (submitBtn) {
+                submitBtn.textContent = mode === 'edit' ? 'Update Entry' : 'Save Entry';
+            }
+
+            const modalTitle = document.getElementById('breakdownModalTitle');
+            if (modalTitle) {
+                modalTitle.textContent = mode === 'edit' ? 'Edit Breakdown Entry' : 'Add Breakdown Entry';
+            }
+
             const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            document.getElementById('month').value = `${year}-${month}`;
+            const formattedToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+            const dateInput = document.getElementById('breakdown_date');
+            if (dateInput) {
+                if (entry && entry.entry_date) {
+                    dateInput.value = entry.entry_date;
+                } else {
+                    dateInput.value = formattedToday;
+                }
+            }
+
+            const notesInput = document.getElementById('breakdown_notes');
+            if (notesInput) {
+                notesInput.value = entry && entry.notes ? entry.notes : '';
+            }
+
+            toggleBreakdownTypeFields();
+
+            if (entry) {
+            if (entryType === 'income') {
+                    const incomeFields = {
+                        income_tithes: entry.tithes ?? 0,
+                        income_offerings: entry.offerings ?? 0,
+                        income_gifts_bank: entry.gifts_bank ?? 0,
+                        income_bank_interest: entry.bank_interest ?? 0,
+                        income_others: entry.others ?? 0,
+                        income_building: entry.building ?? 0
+                };
+                    Object.keys(incomeFields).forEach(id => {
+                        const field = document.getElementById(id);
+                        if (field) {
+                            field.value = incomeFields[id];
+                        }
+                    });
+            } else {
+                    const expenseFields = {
+                        expense_speaker: entry.speaker ?? 0,
+                        expense_workers: entry.workers ?? 0,
+                        expense_food: entry.food ?? 0,
+                        expense_housekeeping: entry.housekeeping ?? 0,
+                        expense_office_supplies: entry.office_supplies ?? 0,
+                        expense_transportation: entry.transportation ?? 0,
+                        expense_photocopy: entry.photocopy ?? 0,
+                        expense_internet: entry.internet ?? 0,
+                        expense_government_concern: entry.government_concern ?? 0,
+                        expense_water_bill: entry.water_bill ?? 0,
+                        expense_electric_bill: entry.electric_bill ?? 0,
+                        expense_special_events: entry.special_events ?? 0,
+                        expense_needy_calamity: entry.needy_calamity ?? 0,
+                        expense_trainings: entry.trainings ?? 0,
+                        expense_kids_ministry: entry.kids_ministry ?? 0,
+                        expense_youth_ministry: entry.youth_ministry ?? 0,
+                        expense_music_ministry: entry.music_ministry ?? 0,
+                        expense_single_professionals_ministry: entry.single_professionals_ministry ?? 0,
+                        expense_young_couples_ministry: entry.young_couples_ministry ?? 0,
+                        expense_wow_ministry: entry.wow_ministry ?? 0,
+                        expense_amen_ministry: entry.amen_ministry ?? 0,
+                        expense_couples_ministry: entry.couples_ministry ?? 0,
+                        expense_visitation_prayer_ministry: entry.visitation_prayer_ministry ?? 0,
+                        expense_acquisitions: entry.acquisitions ?? 0,
+                        expense_materials: entry.materials ?? 0,
+                        expense_labor: entry.labor ?? 0,
+                        expense_mission_support: entry.mission_support ?? 0,
+                        expense_land_title: entry.land_title ?? 0
+                    };
+                    Object.keys(expenseFields).forEach(id => {
+                        const field = document.getElementById(id);
+                        if (field) {
+                            field.value = expenseFields[id];
+                }
+                    });
+                }
+            }
         }
 
-        function editExpense(id, month, income, expenses, notes) {
-            document.getElementById('modalTitle').textContent = 'Edit Monthly Expense';
-            document.getElementById('expense_id').value = id;
-            document.getElementById('month').value = month;
-            document.getElementById('income').value = income;
-            document.getElementById('expenses').value = expenses;
-            document.getElementById('notes').value = notes;
-            document.getElementById('submitBtn').textContent = 'Update Expense';
-            document.getElementById('submitBtn').name = 'update_expense';
-            document.getElementById('expenseModal').style.display = 'block';
+        function closeBreakdownModal() {
+            const modal = document.getElementById('breakdownModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            document.body.style.overflow = '';
+
+            const form = document.getElementById('breakdownForm');
+            if (form) {
+                form.reset();
+            }
+
+            const actionInput = document.getElementById('breakdown_action');
+            if (actionInput) {
+                actionInput.value = 'add';
+            }
+
+            const entryIdInput = document.getElementById('breakdown_entry_id');
+            if (entryIdInput) {
+                entryIdInput.value = '';
+            }
+
+            const typeInput = document.getElementById('breakdown_type');
+            if (typeInput) {
+                delete typeInput.dataset.locked;
+                delete typeInput.dataset.lockedValue;
+                typeInput.value = 'income';
+            }
+
+            const originalTypeInput = document.getElementById('original_breakdown_type');
+            if (originalTypeInput) {
+                originalTypeInput.value = 'income';
+                }
+
+            const submitBtn = document.getElementById('breakdownSubmitBtn');
+            if (submitBtn) {
+                submitBtn.textContent = 'Save Entry';
+            }
+
+            const modalTitle = document.getElementById('breakdownModalTitle');
+            if (modalTitle) {
+                modalTitle.textContent = 'Add Breakdown Entry';
+            }
+
+            const today = new Date();
+            const formattedToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const dateInput = document.getElementById('breakdown_date');
+            if (dateInput) {
+                dateInput.value = formattedToday;
+            }
+
+            toggleBreakdownTypeFields();
         }
 
-        function closeExpenseModal() {
-            document.getElementById('expenseModal').style.display = 'none';
+        // Delete Breakdown Modal Functions
+        function confirmDeleteBreakdown(id, type) {
+            document.getElementById('delete_entry_id').value = id;
+            document.getElementById('delete_entry_type').value = type;
+            document.getElementById('deleteBreakdownModal').style.display = 'block';
         }
 
-        function deleteExpense(id) {
-            document.getElementById('delete_expense_id').value = id;
-            document.getElementById('deleteModal').style.display = 'block';
-        }
-
-        function closeDeleteModal() {
-            document.getElementById('deleteModal').style.display = 'none';
+        function closeDeleteBreakdownModal() {
+            document.getElementById('deleteBreakdownModal').style.display = 'none';
         }
 
         // Close modals when clicking outside
         window.onclick = function(event) {
             const expenseModal = document.getElementById('expenseModal');
             const deleteModal = document.getElementById('deleteModal');
+            const breakdownModal = document.getElementById('breakdownModal');
+            const deleteBreakdownModal = document.getElementById('deleteBreakdownModal');
+            
             if (event.target == expenseModal) {
                 expenseModal.style.display = 'none';
             }
             if (event.target == deleteModal) {
                 deleteModal.style.display = 'none';
+            }
+            if (event.target == breakdownModal) {
+                closeBreakdownModal();
+            }
+            if (event.target == deleteBreakdownModal) {
+                deleteBreakdownModal.style.display = 'none';
             }
         }
 
@@ -1490,6 +3318,7 @@ $church_name = $site_settings['church_name'];
         });
 
         // Tab Navigation JS
+        document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.tab-navigation a').forEach(tab => {
             tab.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -1498,9 +3327,73 @@ $church_name = $site_settings['church_name'];
                 
                 this.classList.add('active');
                 const tabId = this.getAttribute('data-tab');
-                document.getElementById(tabId).classList.add('active');
+                    const tabPane = document.getElementById(tabId);
+                    if (tabPane) {
+                        tabPane.classList.add('active');
+                    }
+                });
             });
+
+            const breakdownTabs = document.querySelectorAll('.breakdown-tab-navigation a');
+            const breakdownPanes = document.querySelectorAll('.breakdown-tab-content .breakdown-pane');
+
+            breakdownTabs.forEach(tab => {
+                tab.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    breakdownTabs.forEach(t => t.classList.remove('active'));
+                    breakdownPanes.forEach(pane => pane.classList.remove('active'));
+
+                    this.classList.add('active');
+                    const target = this.getAttribute('data-breakdown-tab');
+                    const pane = document.getElementById(`breakdown-${target}`);
+                    if (pane) {
+                        pane.classList.add('active');
+                    }
+                    
+                    // Update URL parameter to preserve breakdown tab state
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('breakdown_tab', target);
+                    // Preserve the hash (main tab) if it exists
+                    const hash = window.location.hash || '#financial-breakdown';
+                    window.history.replaceState({}, '', url.toString() + hash);
+                });
+            });
+            
+            // Restore breakdown tab state from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const breakdownTabParam = urlParams.get('breakdown_tab');
+            if (breakdownTabParam === 'expenses' || breakdownTabParam === 'income') {
+                breakdownTabs.forEach(t => t.classList.remove('active'));
+                breakdownPanes.forEach(pane => pane.classList.remove('active'));
+                
+                const targetTab = document.querySelector(`.breakdown-tab-navigation a[data-breakdown-tab="${breakdownTabParam}"]`);
+                const targetPane = document.getElementById(`breakdown-${breakdownTabParam}`);
+                
+                if (targetTab && targetPane) {
+                    targetTab.classList.add('active');
+                    targetPane.classList.add('active');
+                }
+            }
         });
+
+        // Breakdown pagination navigation
+        function navigateBreakdownPage(page) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('breakdown_page', page);
+            // Remove breakdown_date if it exists (pagination overrides date filter)
+            url.searchParams.delete('breakdown_date');
+            
+            // Detect which breakdown tab is currently active (income or expenses)
+            const activeBreakdownTab = document.querySelector('.breakdown-tab-navigation a.active');
+            const breakdownTab = activeBreakdownTab ? activeBreakdownTab.getAttribute('data-breakdown-tab') : 'income';
+            
+            // Preserve the breakdown tab in URL parameter
+            url.searchParams.set('breakdown_tab', breakdownTab);
+            
+            // Preserve the hash (main tab) if it exists
+            const hash = window.location.hash || '#financial-breakdown';
+            window.location.href = url.toString() + hash;
+        }
 
         // Drawer Navigation JS
         document.addEventListener('DOMContentLoaded', function() {
@@ -1533,6 +3426,8 @@ $church_name = $site_settings['church_name'];
                 }
             });
         });
+
+        
 
         // Chart Configuration
         <?php
@@ -1652,6 +3547,55 @@ $church_name = $site_settings['church_name'];
             const chart = new ApexCharts(document.getElementById("legend-chart"), options);
             chart.render();
         }
+
+        function handleIncomeEdit(button) {
+            if (!button) {
+                return;
+            }
+            const payload = button.getAttribute('data-entry');
+            if (!payload) {
+                return;
+            }
+            try {
+                const entry = JSON.parse(payload);
+                openBreakdownModal({
+                    mode: 'edit',
+                    type: 'income',
+                    entry
+                });
+            } catch (error) {
+                console.error('Failed to parse income entry payload', error);
+            }
+        }
+
+        function handleExpenseEdit(button) {
+            if (!button) {
+                return;
+            }
+            const payload = button.getAttribute('data-entry');
+            if (!payload) {
+                return;
+            }
+            try {
+                const entry = JSON.parse(payload);
+                openBreakdownModal({
+                    mode: 'edit',
+                    type: 'expense',
+                    entry
+                });
+            } catch (error) {
+                console.error('Failed to parse expense entry payload', error);
+            }
+        }
     </script>
+<?php if ($hasBreakdownFilter): ?>
+    <script>
+        window.addEventListener('load', function () {
+            if (location.hash !== '#financial-breakdown') {
+                location.hash = 'financial-breakdown';
+            }
+        });
+    </script>
+<?php endif; ?>
 </body>
 </html> 

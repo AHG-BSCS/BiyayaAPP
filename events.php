@@ -359,10 +359,12 @@ $pinned_event = getPinnedEvent($conn);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            visibility: hidden;
         }
 
         .custom-drawer.open {
             left: 0;
+            visibility: visible;
         }
 
         .drawer-header {
@@ -498,17 +500,24 @@ $pinned_event = getPinnedEvent($conn);
         }
         .drawer-profile .profile-info {
             flex: 1;
+            min-width: 0;
         }
         .drawer-profile .name {
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;
@@ -522,9 +531,7 @@ $pinned_event = getPinnedEvent($conn);
             cursor: pointer;
             transition: background 0.2s;
         }
-        .drawer-profile .logout-btn:hover {
-            background: #d32f2f;
-        }
+        .drawer-profile .logout-btn:hover { background: #d32f2f; }
 
         .drawer-overlay {
             position: fixed;
@@ -622,80 +629,193 @@ $pinned_event = getPinnedEvent($conn);
         }
 
         @media (max-width: 768px) {
-            .dashboard-container {
-                flex-direction: column;
-            }
             .custom-drawer {
-                width: 100%;
-                height: auto;
-                position: relative;
+                width: 260px;
+                left: -260px;
+            }
+            
+            .custom-drawer.open {
                 left: 0;
             }
-            .drawer-header {
+            
+            .content-area {
                 padding: 15px;
-                min-height: auto;
+                padding-top: 70px;
             }
-            .drawer-logo {
-                height: 40px;
-            }
-            .drawer-title {
-                font-size: 16px;
-            }
-            .drawer-close {
-                font-size: 18px;
-            }
-            .drawer-content {
-                padding: 10px 0;
-            }
-            .drawer-menu {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            .drawer-menu li {
-                margin-bottom: 0;
-                flex: 1;
-            }
-            .drawer-link {
-                padding: 12px 8px;
-                justify-content: center;
-                font-size: 14px;
-            }
-            .drawer-link i {
-                font-size: 18px;
-                min-width: 20px;
-            }
-            .drawer-profile {
-                padding: 15px;
+            
+            .top-bar {
                 flex-direction: column;
-                align-items: center;
-                text-align: center;
+                align-items: flex-start;
+                padding: 15px;
+            }
+            
+            .top-bar h2 {
+                font-size: 20px;
+            }
+            
+            .user-profile {
+                margin-top: 10px;
+            }
+
+            /* Sidebar profile - mobile adjustments */
+            .drawer-profile {
+                padding: 16px;
+                gap: 12px;
             }
             .drawer-profile .avatar {
-                width: 40px;
-                height: 40px;
-                font-size: 18px;
+                width: 44px;
+                height: 44px;
+                font-size: 20px;
             }
             .drawer-profile .name {
                 font-size: 14px;
-                margin-bottom: 2px;
             }
             .drawer-profile .role {
                 font-size: 12px;
             }
-            .nav-toggle-container {
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 13px;
+                white-space: nowrap;
+            }
+            
+            /* Events specific mobile styles */
+            .events-content {
+                margin-top: 15px;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+            
+            .search-box {
+                width: 100%;
+                margin-bottom: 0;
+            }
+            
+            .btn {
+                width: 100%;
+                text-align: center;
+                padding: 12px 20px;
+            }
+            
+            .event-form {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            
+            .form-group {
+                margin-bottom: 15px;
+            }
+            
+            .form-control {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+            
+            .events-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+                margin-top: 15px;
+            }
+            
+            .event-category {
+                padding: 15px;
+            }
+            
+            .event-category h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            
+            .event-item {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+            
+            .event-details h4 {
+                font-size: 16px;
+                margin-bottom: 8px;
+            }
+            
+            .event-details p {
+                font-size: 14px;
+                margin-bottom: 8px;
+                word-wrap: break-word;
+            }
+            
+            .event-details img {
+                max-width: 100% !important;
+                height: auto !important;
+                margin-bottom: 10px !important;
+            }
+            
+            .event-actions {
+                flex-direction: column;
+                gap: 8px;
+                margin-top: 12px;
+            }
+            
+            .event-actions .btn {
+                width: 100%;
+                margin: 0;
+            }
+            
+            .event-actions form {
+                width: 100%;
                 display: block;
             }
+            
+            .current-image {
+                padding: 12px;
+            }
+            
+            .current-image img {
+                max-width: 100% !important;
+                width: 100% !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .custom-drawer {
+                width: 260px;
+                left: -260px;
+            }
+            
+            .custom-drawer.open {
+                left: 0;
+            }
+            
             .content-area {
-                margin-left: 0;
-                padding-top: 20px;
+                padding: 10px;
+                padding-top: 70px;
             }
+            
             .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
+                padding: 12px;
             }
-            .user-profile {
-                margin-top: 10px;
+            
+            .top-bar h2 {
+                font-size: 18px;
+            }
+            
+            .event-form {
+                padding: 12px;
+            }
+            
+            .event-category {
+                padding: 12px;
+            }
+            
+            .event-item {
+                padding: 10px;
+            }
+            
+            .btn {
+                padding: 10px 15px;
+                font-size: 13px;
             }
         }
 
@@ -804,26 +924,6 @@ $pinned_event = getPinnedEvent($conn);
             margin-top: 20px;
         }
 
-        @media (max-width: 768px) {
-            .events-grid {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            
-            .event-category {
-                padding: 15px;
-            }
-            
-            .action-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .search-box {
-                width: 100%;
-                margin-bottom: 10px;
-            }
-        }
 
         .event-category {
             background-color: var(--white);
@@ -942,6 +1042,76 @@ $pinned_event = getPinnedEvent($conn);
             margin: 0 0 10px 0;
             font-weight: 500;
         }
+
+        /* Date and Time Input Styling */
+        .date-input-wrapper {
+            position: relative;
+            max-width: 300px;
+        }
+
+        .date-icon {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            padding-left: 12px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .date-icon svg {
+            width: 12px;
+            height: 12px;
+            color: #6b7280;
+        }
+
+        .date-input {
+            background-color: #f9fafb;
+            border: 1px solid #d1d5db;
+            color: #111827;
+            font-size: 14px;
+            border-radius: 8px;
+            padding: 10px 10px 10px 40px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .time-input {
+            background-color: #f9fafb;
+            border: 1px solid #d1d5db;
+            color: #111827;
+            font-size: 14px;
+            border-radius: 8px;
+            padding: 10px 15px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .event-image {
+            width: 100%;
+            max-width: 320px;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+
+        @media (max-width: 768px) {
+            .date-input-wrapper {
+                max-width: 100%;
+            }
+            
+            .date-input,
+            .time-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+            
+            .event-image {
+                max-width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1036,7 +1206,7 @@ $pinned_event = getPinnedEvent($conn);
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role">Super Admin</div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? ($_SESSION['user_role'] ?? 'User')); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
@@ -1096,18 +1266,18 @@ $pinned_event = getPinnedEvent($conn);
                             </div>
                             <div class="form-group">
                                 <label for="add_date">Date</label>
-                                <div style="position: relative; max-width: 300px;">
-                                  <div style="position: absolute; top: 0; bottom: 0; left: 0; display: flex; align-items: center; padding-left: 12px; pointer-events: none;">
-                                     <svg style="width: 12px; height: 12px; color: #6b7280;" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                                <div class="date-input-wrapper">
+                                  <div class="date-icon">
+                                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/>
                                       </svg>
                                   </div>
-                                  <input id="add_date" name="date" type="date" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 10px 10px 40px; width: 100%; box-sizing: border-box;" required>
+                                  <input id="add_date" name="date" type="date" class="form-control date-input" required>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label for="add_time">Time</label>
-                                <input id="add_time" name="time" type="time" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 15px; width: 100%; box-sizing: border-box;" required>
+                                <input id="add_time" name="time" type="time" class="form-control time-input" required>
                             </div>
                             <div class="form-group">
                                 <label for="add_description">Description</label>
@@ -1147,18 +1317,18 @@ $pinned_event = getPinnedEvent($conn);
                             </div>
                             <div class="form-group">
                                 <label for="edit_date">Date</label>
-                                <div style="position: relative; max-width: 300px;">
-                                  <div style="position: absolute; top: 0; bottom: 0; left: 0; display: flex; align-items: center; padding-left: 12px; pointer-events: none;">
-                                     <svg style="width: 12px; height: 12px; color: #6b7280;" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                                <div class="date-input-wrapper">
+                                  <div class="date-icon">
+                                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z"/>
                                       </svg>
                                   </div>
-                                  <input id="edit_date" name="date" type="date" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 10px 10px 40px; width: 100%; box-sizing: border-box;" value="<?php echo ($edit_event ? $edit_event['event_date'] : ''); ?>" required>
+                                  <input id="edit_date" name="date" type="date" class="form-control date-input" value="<?php echo ($edit_event ? $edit_event['event_date'] : ''); ?>" required>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <label for="edit_time">Time</label>
-                                <input id="edit_time" name="time" type="time" style="background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 14px; border-radius: 8px; padding: 10px 15px; width: 100%; box-sizing: border-box;" value="<?php echo ($edit_event ? $edit_event['event_time'] : ''); ?>" required>
+                                <input id="edit_time" name="time" type="time" class="form-control time-input" value="<?php echo ($edit_event ? $edit_event['event_time'] : ''); ?>" required>
                             </div>
                             <div class="form-group">
                                 <label for="edit_description">Description</label>
@@ -1194,7 +1364,7 @@ $pinned_event = getPinnedEvent($conn);
                             <div class="event-item event-search-item">
                                 <div class="event-details">
                                     <?php if (!empty($pinned_event['event_image'])): ?>
-                                        <img src="<?php echo htmlspecialchars($pinned_event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
+                                        <img src="<?php echo htmlspecialchars($pinned_event['event_image']); ?>" alt="Event Image" class="event-image" />
                                     <?php endif; ?>
                                     <h4><?php echo $pinned_event['title']; ?></h4>
                                     <p><i class="fas fa-calendar-alt"></i> <?php echo $pinned_event['date']; ?> at <?php echo date("h:i A", strtotime($pinned_event['time'])); ?></p>
@@ -1251,7 +1421,7 @@ $pinned_event = getPinnedEvent($conn);
                                     <div class="event-item event-search-item">
                                         <div class="event-details">
                                             <?php if (!empty($event['event_image'])): ?>
-                                                <img src="<?php echo htmlspecialchars($event['event_image']); ?>" alt="Event Image" style="width:100%;max-width:320px;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;" />
+                                                <img src="<?php echo htmlspecialchars($event['event_image']); ?>" alt="Event Image" class="event-image" />
                                             <?php endif; ?>
                                             <h4><?php echo $event['title']; ?></h4>
                                             <p><i class="fas fa-calendar-alt"></i> <?php echo $event['date']; ?> at <?php echo date("h:i A", strtotime($event['time'])); ?></p>
@@ -1336,22 +1506,46 @@ $pinned_event = getPinnedEvent($conn);
             const drawerClose = document.getElementById('drawer-close');
             const overlay = document.getElementById('drawer-overlay');
 
+            // Ensure drawer is closed on page load
+            if (drawer) {
+                drawer.classList.remove('open');
+            }
+            if (overlay) {
+                overlay.classList.remove('open');
+            }
+
             // Open drawer
-            navToggle.addEventListener('click', function() {
-                drawer.classList.add('open');
-                overlay.classList.add('open');
-                document.body.style.overflow = 'hidden';
-            });
+            if (navToggle) {
+                navToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (drawer) {
+                        drawer.classList.add('open');
+                    }
+                    if (overlay) {
+                        overlay.classList.add('open');
+                    }
+                    document.body.style.overflow = 'hidden';
+                });
+            }
 
             // Close drawer
             function closeDrawer() {
-                drawer.classList.remove('open');
-                overlay.classList.remove('open');
+                if (drawer) {
+                    drawer.classList.remove('open');
+                }
+                if (overlay) {
+                    overlay.classList.remove('open');
+                }
                 document.body.style.overflow = '';
             }
 
-            drawerClose.addEventListener('click', closeDrawer);
-            overlay.addEventListener('click', closeDrawer);
+            if (drawerClose) {
+                drawerClose.addEventListener('click', closeDrawer);
+            }
+            if (overlay) {
+                overlay.addEventListener('click', closeDrawer);
+            }
 
             // Close drawer on escape key
             document.addEventListener('keydown', function(e) {
@@ -1359,8 +1553,6 @@ $pinned_event = getPinnedEvent($conn);
                     closeDrawer();
                 }
             });
-
-
         });
     </script>
 </body>

@@ -383,6 +383,7 @@ if (
             border-bottom: 1px solid #eee;
             cursor: pointer;
             transition: background-color 0.3s;
+            position: relative;
         }
 
         .search-result-item:last-child {
@@ -438,10 +439,48 @@ if (
             border-radius: 2px;
         }
 
-        .highlight {
-            background-color: #fff3cd;
-            padding: 0 2px;
-            border-radius: 2px;
+        .search-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px 5px 0 0;
+        }
+
+        .search-results-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .search-results-count {
+            font-size: 14px;
+            color: var(--accent-color);
+            font-weight: 600;
+            background-color: var(--white);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--accent-color);
+        }
+
+        .search-result-count {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 11px;
+            color: var(--accent-color);
+            font-weight: 600;
+            background-color: var(--white);
+            padding: 6px 12px;
+            border-radius: 15px;
+            border: 1px solid var(--accent-color);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            white-space: nowrap;
+            max-width: 250px;
+            text-align: center;
         }
 
         .live-alert {
@@ -1005,37 +1044,68 @@ if (
             console.log('Found messages:', foundMessages);
 
             if (foundMessages.length > 0) {
-                // Display search results
-                searchResults.innerHTML = foundMessages.map(result => {
+                // Calculate occurrences for each message and add to result object
+                foundMessages.forEach(result => {
                     const message = result.message;
-                    const thumbnailUrl = `https://img.youtube.com/vi/${message.youtube_id}/mqdefault.jpg`;
-                    
-                    // Show all matching outline points or first two points if no matches
-                    const outlinePreview = result.matchingOutlinePoints.length > 0 ?
-                        result.matchingOutlinePoints.join(' | ') :
-                        (Array.isArray(message.outline) ? message.outline.slice(0, 2).map(point => {
+                    const titleText = message.title || '';
+                    const dateText = message.date || '';
+                    const outlineText = Array.isArray(message.outline) ? 
+                        message.outline.map(point => {
                             if (typeof point === 'object' && point.text) {
                                 return point.text;
                             } else if (typeof point === 'string') {
                                 return point;
                             }
                             return '';
-                        }).join(' ') : '');
+                        }).join(' ') : '';
                     
-                    return `
-                        <div class="search-result-item" onclick="location.href='member_messages.php?message=${result.index}'">
-                            <div class="search-result-thumbnail">
-                                <img src="${thumbnailUrl}" alt="${message.title}">
+                    result.occurrences = countOccurrences(titleText, searchTerm) +
+                                       countOccurrences(dateText, searchTerm) +
+                                       countOccurrences(outlineText, searchTerm);
+                });
+
+                // Sort by occurrences (highest first)
+                foundMessages.sort((a, b) => b.occurrences - a.occurrences);
+
+                // Display search results with individual counts
+                const resultsHTML = `
+                    <div class="search-results-header">
+                        <div class="search-results-title">Search Results (${foundMessages.length} ${foundMessages.length === 1 ? 'message' : 'messages'})</div>
+                    </div>
+                    ${foundMessages.map(result => {
+                        const message = result.message;
+                        const thumbnailUrl = `https://img.youtube.com/vi/${message.youtube_id}/mqdefault.jpg`;
+                        const messageOccurrences = result.occurrences;
+                        
+                        // Show all matching outline points or first two points if no matches
+                        const outlinePreview = result.matchingOutlinePoints.length > 0 ?
+                            result.matchingOutlinePoints.join(' | ') :
+                            (Array.isArray(message.outline) ? message.outline.slice(0, 2).map(point => {
+                                if (typeof point === 'object' && point.text) {
+                                    return point.text;
+                                } else if (typeof point === 'string') {
+                                    return point;
+                                }
+                                return '';
+                            }).join(' ') : '');
+                        
+                        return `
+                            <div class="search-result-item" onclick="location.href='member_messages.php?message=${result.index}'">
+                                <div class="search-result-thumbnail">
+                                    <img src="${thumbnailUrl}" alt="${message.title}">
+                                </div>
+                                <div class="search-result-content">
+                                    <div class="search-result-title">${highlightText(message.title, searchTerm)}</div>
+                                    <div class="search-result-date">${message.date}</div>
+                                    <div class="search-result-outline">${highlightText(outlinePreview, searchTerm)}</div>
+                                </div>
+                                <div class="search-result-count">The word "${searchTerm}" appears ${messageOccurrences} ${messageOccurrences === 1 ? 'time' : 'times'}</div>
                             </div>
-                            <div class="search-result-content">
-                                <div class="search-result-title">${highlightText(message.title, searchTerm)}</div>
-                                <div class="search-result-date">${message.date}</div>
-                                <div class="search-result-outline">${highlightText(outlinePreview, searchTerm)}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                        `;
+                    }).join('')}
+                `;
                 
+                searchResults.innerHTML = resultsHTML;
                 searchResults.classList.add('show');
                 // Hide video container when showing search results
                 document.getElementById('videoContainer').style.display = 'none';
@@ -1049,6 +1119,14 @@ if (
                     searchInput.setCustomValidity('');
                 }, 2000);
             }
+        }
+
+        // Function to count occurrences of a term in text
+        function countOccurrences(text, searchTerm) {
+            if (!text || !searchTerm) return 0;
+            const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            const matches = text.match(regex);
+            return matches ? matches.length : 0;
         }
 
         // Function to highlight matching text

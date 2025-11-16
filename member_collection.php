@@ -317,12 +317,14 @@ $live_message = getLiveMessage($conn);
         
         .table-responsive {
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
+            min-width: 600px;
         }
         
         table th, table td {
@@ -442,12 +444,129 @@ $live_message = getLiveMessage($conn);
         }
         
         @media (max-width: 768px) {
+            .custom-drawer {
+                width: 280px;
+                left: -280px;
+                position: fixed;
+                height: 100vh;
+            }
+            .custom-drawer.open {
+                left: 0;
+            }
+            .drawer-header {
+                padding: 15px;
+                min-height: auto;
+            }
+            .drawer-logo {
+                height: 40px;
+            }
+            .drawer-title {
+                font-size: 14px;
+            }
+            .drawer-close {
+                font-size: 18px;
+            }
+            .drawer-content {
+                padding: 10px 0;
+            }
+            .drawer-menu {
+                display: block;
+            }
+            .drawer-menu li {
+                margin-bottom: 0;
+            }
+            .drawer-link {
+                padding: 12px 18px;
+                justify-content: flex-start;
+                font-size: 14px;
+            }
+            .drawer-link i {
+                font-size: 16px;
+                min-width: 20px;
+            }
+            .drawer-profile {
+                padding: 15px;
+                flex-direction: row;
+                align-items: center;
+                text-align: left;
+            }
+            .drawer-profile .avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .drawer-profile .name {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .role {
+                font-size: 12px;
+                line-height: 1.3;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+            .drawer-profile .logout-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                margin-left: 8px;
+            }
+            .nav-toggle-container {
+                display: block;
+            }
+            .content-area {
+                margin-left: 0;
+                padding-top: 70px;
+            }
             .top-bar {
                 flex-direction: column;
                 align-items: flex-start;
+                margin-top: 0;
             }
             .user-profile {
                 margin-top: 10px;
+            }
+            .table-responsive {
+                padding: 10px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table {
+                font-size: 14px;
+                min-width: 600px;
+                width: auto !important;
+                table-layout: auto;
+            }
+            #contributions-table {
+                min-width: 600px !important;
+                width: auto !important;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 13px;
+            }
+            .dataTables_wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            table {
+                font-size: 12px;
+                min-width: 500px;
+            }
+            #contributions-table {
+                min-width: 500px !important;
+            }
+            th, td {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            .table-responsive {
+                padding: 5px;
             }
         }
         /* Drawer Navigation CSS (from member_prayers.php) */
@@ -618,12 +737,18 @@ $live_message = getLiveMessage($conn);
             font-size: 16px;
             font-weight: 600;
             color: #222;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .role {
             font-size: 13px;
             color: var(--accent-color);
             font-weight: 500;
             margin-top: 2px;
+            line-height: 1.3;
+            overflow-wrap: normal;
+            word-break: normal;
         }
         .drawer-profile .logout-btn {
             background: #f44336;

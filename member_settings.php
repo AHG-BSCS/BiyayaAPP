@@ -79,6 +79,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
 
+        // Handle password change
+        if (!empty($_POST['new_password'])) {
+            // Check if current password is provided
+            if (empty($_POST['current_password'])) {
+                $message = "Current password is required to change password.";
+                $messageType = "danger";
+            } else {
+                // Verify current password
+                $current_password = $_POST['current_password'];
+                if (md5($current_password) !== $user_profile['password']) {
+                    $message = "Current password is incorrect.";
+                    $messageType = "danger";
+                } else {
+                    // Check if new password and confirm password match
+                    if ($_POST['new_password'] !== $_POST['confirm_new_password']) {
+                        $message = "New password and confirm password do not match.";
+                        $messageType = "danger";
+                    } else {
+                        // Hash the new password
+                        $profile_data['password'] = md5($_POST['new_password']);
+                    }
+                }
+            }
+        }
+
         if (empty($message)) {
             // Check if username or email already exists for other users
             $check_sql = "SELECT * FROM user_profiles WHERE (username = ? OR email = ?) AND user_id != ?";
@@ -991,6 +1016,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                         <label for="profile_picture">Upload New Profile Picture</label>
                                         <input type="file" id="profile_picture" name="profile_picture" class="form-control" accept="image/*">
                                         <small class="form-text text-muted">Recommended size: 200x200 pixels. Maximum file size: 5MB. Allowed formats: JPG, JPEG, PNG, GIF</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="current_password">Current Password</label>
+                                        <input type="password" id="current_password" name="current_password" class="form-control">
+                                        <small class="form-text text-muted">Required to change password</small>
+                                    </div>
+                                </div>
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="new_password">New Password</label>
+                                        <input type="password" id="new_password" name="new_password" class="form-control">
+                                        <small class="form-text text-muted">Leave blank to keep current password</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-col">
+                                    <div class="form-group">
+                                        <label for="confirm_new_password">Confirm New Password</label>
+                                        <input type="password" id="confirm_new_password" name="confirm_new_password" class="form-control">
                                     </div>
                                 </div>
                             </div>

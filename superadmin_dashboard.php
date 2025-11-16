@@ -9,7 +9,7 @@ $church_logo = getChurchLogo($conn);
 
 // Check if user is logged in and is super administrator only
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Super Admin") {
-            header("Location: index.php");
+    header("Location: index.php");
     exit;
 }
 // Define $is_super_admin as true for use in the rest of the file
@@ -106,6 +106,42 @@ $bible_verses = [
 $verse_index = intval(date('z')) % count($bible_verses);
 $verse_of_the_day = $bible_verses[$verse_index];
 
+// Fetch tithes and offerings data for line graph (last 12 months)
+$tithes_offerings_data = [];
+$sql = "
+    SELECT 
+        DATE_FORMAT(entry_date, '%Y-%m') as month,
+        DATE_FORMAT(entry_date, '%Y-%m-01') as month_start,
+        SUM(tithes) as total_tithes,
+        SUM(offerings) as total_offerings
+    FROM breakdown_income
+    WHERE (tithes > 0 OR offerings > 0)
+        AND entry_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(entry_date, '%Y-%m')
+    ORDER BY month ASC
+";
+$result = $conn->query($sql);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $tithes_offerings_data[] = [
+            'month' => $row['month'],
+            'month_start' => $row['month_start'],
+            'tithes' => floatval($row['total_tithes']),
+            'offerings' => floatval($row['total_offerings'])
+        ];
+    }
+}
+
+// Prepare data for chart
+$chart_dates = [];
+$chart_tithes = [];
+$chart_offerings = [];
+foreach ($tithes_offerings_data as $data) {
+    $chart_dates[] = date('F Y', strtotime($data['month_start']));
+    $chart_tithes[] = $data['tithes'];
+    $chart_offerings[] = $data['offerings'];
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -148,73 +184,6 @@ $verse_of_the_day = $bible_verses[$verse_index];
             min-height: 100vh;
         }
 
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--primary-color);
-            color: var(--white);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-
-        .sidebar-header {
-            padding: 20px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            overflow: hidden;
-        }
-
-        .sidebar-header img {
-            height: 60px;
-            margin-bottom: 10px;
-            transition: 0.3s;
-        }
-
-        .sidebar-header h3 {
-            font-size: 18px;
-        }
-
-        .sidebar-menu {
-            padding: 20px 0;
-        }
-
-        .sidebar-menu ul {
-            list-style: none;
-        }
-
-        .sidebar-menu li {
-            margin-bottom: 5px;
-        }
-
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: var(--white);
-            text-decoration: none;
-            transition: all 0.3s;
-            font-size: 16px;
-        }
-
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-menu a.active {
-            background-color: var(--accent-color);
-        }
-
-        .sidebar-menu i {
-            margin-right: 15px;
-            width: 20px;
-            text-align: center;
-            font-size: 20px;
-        }
-
-        .sidebar-menu span {
-            margin-left: 10px;
-        }
-
         .content-area {
             flex: 1;
             padding: 20px;
@@ -234,60 +203,6 @@ $verse_of_the_day = $bible_verses[$verse_index];
 
         .top-bar h2 {
             font-size: 24px;
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-        }
-
-        .user-profile .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--accent-color);
-            color: var(--white);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 10px;
-            overflow: hidden;
-        }
-
-        .user-profile .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .user-info {
-            margin-right: 15px;
-        }
-
-        .user-info h4 {
-            font-size: 14px;
-            margin: 0;
-        }
-
-        .user-info p {
-            font-size: 12px;
-            margin: 0;
-            color: #666;
-        }
-
-        .logout-btn {
-            background-color: #f0f0f0;
-            color: var(--primary-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .logout-btn:hover {
-            background-color: #e0e0e0;
         }
 
         .dashboard-content {
@@ -993,7 +908,7 @@ $verse_of_the_day = $bible_verses[$verse_index];
                 </div>
                 <div class="profile-info">
                     <div class="name"><?php echo htmlspecialchars($user_profile['full_name'] ?? $user_profile['username'] ?? 'Unknown User'); ?></div>
-                    <div class="role">Super Admin</div>
+                    <div class="role"><?php echo htmlspecialchars($user_profile['role'] ?? 'Super Admin'); ?></div>
                 </div>
                 <form action="logout.php" method="post" style="margin:0;">
                     <button type="submit" class="logout-btn">Logout</button>
@@ -1089,12 +1004,131 @@ $verse_of_the_day = $bible_verses[$verse_index];
                     </div>
                     <div class="card-decoration"></div>
                 </div>
+                <div class="summary-card full-width">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="card-content" style="width: 100%;">
+                        <h3>Tithes and Offerings Trend (Last 12 Months)</h3>
+                        <div style="position: relative; height: 300px; margin-top: 20px;">
+                            <canvas id="tithesOfferingsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-decoration"></div>
+                </div>
             </div>
         </main>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // Tithes and Offerings Line Chart
+        const tithesOfferingsCtx = document.getElementById('tithesOfferingsChart');
+        if (tithesOfferingsCtx) {
+            const chartDates = <?php echo json_encode($chart_dates); ?>;
+            const chartTithes = <?php echo json_encode($chart_tithes); ?>;
+            const chartOfferings = <?php echo json_encode($chart_offerings); ?>;
+            
+            new Chart(tithesOfferingsCtx, {
+                type: 'line',
+                data: {
+                    labels: chartDates,
+                    datasets: [
+                        {
+                            label: 'Tithes',
+                            data: chartTithes,
+                            borderColor: 'rgba(0, 139, 30, 1)',
+                            backgroundColor: 'rgba(0, 139, 30, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(0, 139, 30, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        },
+                        {
+                            label: 'Offerings',
+                            data: chartOfferings,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: {
+                                    size: 12,
+                                    weight: '500'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ₱' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₱' + value.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                                },
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                font: {
+                                    size: 11
+                                }
+                            },
+                            grid: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
         // Custom Drawer Navigation JavaScript
         document.addEventListener('DOMContentLoaded', function() {
             const navToggle = document.getElementById('nav-toggle');
@@ -1126,111 +1160,54 @@ $verse_of_the_day = $bible_verses[$verse_index];
                 }
             });
         });
-    </script>
-    <script>
 
-        // Actual vs Predicted Income Chart (placeholder data)
-        // TODO: Replace with real data from financialreport.php
-        const months2025 = <?php echo json_encode($months_2025); ?>;
-        const actualData2025 = <?php echo json_encode($actual_data_2025); ?>;
-        const predictedData2025 = <?php echo json_encode($predicted_data_2025); ?>;
-        const ctxDashboardActualVsPredicted = document.getElementById('dashboardActualVsPredictedChart').getContext('2d');
-        new Chart(ctxDashboardActualVsPredicted, {
-            type: 'bar',
-            data: {
-                labels: months2025,
-                datasets: [
-                    {
-                        label: 'Actual Income',
-                        data: actualData2025,
-                        backgroundColor: 'rgba(255, 140, 0, 0.85)',
-                        borderColor: 'rgba(255, 140, 0, 1)',
-                        borderWidth: 2
-                    },
-                    {
-                        label: 'Predicted Amount',
-                        data: predictedData2025,
-                        backgroundColor: 'rgba(0, 100, 0, 0.85)',
-                        borderColor: 'rgba(0, 100, 0, 1)',
-                        borderWidth: 2
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Amount (₱)'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Month'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true
-                    },
-                    title: {
-                        display: true,
-                        text: 'Actual Income vs Predicted Amount (2025)'
-                    }
-                }
+        // Automatic logout on inactivity
+        let inactivityTimeout;
+        let logoutWarningShown = false;
+
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimeout);
+            if (logoutWarningShown) {
+                const warning = document.getElementById('logout-warning');
+                if (warning) warning.remove();
+                logoutWarningShown = false;
             }
+            inactivityTimeout = setTimeout(() => {
+                console.log('Inactivity detected: showing warning and logging out soon.');
+                showLogoutWarning();
+                setTimeout(() => {
+                    window.location.href = 'logout.php';
+                }, 2000);
+            }, 60000); // 1 minute
+        }
+
+        function showLogoutWarning() {
+            if (!logoutWarningShown) {
+                const warning = document.createElement('div');
+                warning.id = 'logout-warning';
+                warning.style.position = 'fixed';
+                warning.style.top = '30px';
+                warning.style.right = '30px';
+                warning.style.background = '#f44336';
+                warning.style.color = 'white';
+                warning.style.padding = '20px 30px';
+                warning.style.borderRadius = '8px';
+                warning.style.fontSize = '18px';
+                warning.style.zIndex = '9999';
+                warning.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                warning.innerHTML = '<i class="fas fa-lock"></i> Logging out due to inactivity...';
+                document.body.appendChild(warning);
+                logoutWarningShown = true;
+            }
+        }
+
+        // Reset timer on user activity
+        ['mousemove', 'keydown', 'mousedown', 'touchstart'].forEach(evt => {
+            document.addEventListener(evt, resetInactivityTimer, true);
         });
 
-        // Monthly Income Predictions Chart (2025)
-        const ctxDashboardPrediction2025 = document.getElementById('dashboardPredictionChart2025').getContext('2d');
-        new Chart(ctxDashboardPrediction2025, {
-            type: 'bar',
-            data: {
-                labels: months2025,
-                datasets: [
-                    {
-                        label: 'Predicted Amount',
-                        data: predictedData2025,
-                        backgroundColor: 'rgba(0, 100, 0, 0.8)',
-                        borderColor: 'rgba(0, 100, 0, 1)',
-                        borderWidth: 2
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Amount (₱)'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Month'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true
-                    },
-                    title: {
-                        display: true,
-                        text: 'Monthly Income Predictions (2025)'
-                    }
-                }
-            }
-        });
+        // Initialize timer
+        resetInactivityTimer();
     </script>
 </body>
 </html> 
