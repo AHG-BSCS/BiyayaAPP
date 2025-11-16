@@ -1,7 +1,7 @@
 <?php
 
-$servername = "localhost";
-$username = "root";  
+$servername = "";
+$username = "";  
 $password = "";      
 $dbname = "churchdb";
 
@@ -640,4 +640,5 @@ function getChurchLogo($conn) {
 
 // Include user functions
 require_once 'user_functions.php';
+
 ?> 
