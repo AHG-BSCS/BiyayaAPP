@@ -156,7 +156,10 @@ try {
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $is_super_admin) {
     try {
         // Use existing mysqli connection from config.php
-        
+        if (!$conn instanceof mysqli) {
+            throw new Exception("Database connection is not available.");
+        }
+
         // Get the next ID
         $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM membership_records");
         $result = $stmt->fetch_assoc();
@@ -199,7 +202,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
             spiritual_birthday, inviter, how_know, attendance_duration, previous_church, membership_class_officiant
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $stmt = $pdo->prepare($sql);
+        $stmt = $conn->prepare($sql);
         
         // Bind parameters using mysqli
         $stmt->bind_param("ssssssssssssssssssssssssssss", 
@@ -219,11 +222,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         header("Location: " . $_SERVER['PHP_SELF'] . "#membership");
         exit();
 
-    } catch(PDOException $e) {
+    } catch(Exception $e) {
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $pdo = null;
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && $is_super_admin) {
