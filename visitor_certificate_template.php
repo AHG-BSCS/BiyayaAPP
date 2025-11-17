@@ -11,10 +11,17 @@ if (!isset($_GET['id'])) {
 $visitor_id = $_GET['id'];
 
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // Use database credentials from config.php
+    // Ensure variables are defined (fallback if config.php didn't load properly)
+    if (!isset($servername)) $servername = "localhost";
+    if (!isset($username)) $username = "root";
+    if (!isset($password)) $password = "";
+    if (!isset($dbname)) $dbname = "churchdb";
     
-    $stmt = $conn->prepare("SELECT * FROM visitor_records WHERE id = :id");
+    $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    $stmt = $pdo->prepare("SELECT * FROM visitor_records WHERE id = :id");
     $stmt->bindParam(':id', $visitor_id);
     $stmt->execute();
     $visitor = $stmt->fetch(PDO::FETCH_ASSOC);
