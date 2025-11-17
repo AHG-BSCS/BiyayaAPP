@@ -11,10 +11,11 @@ if (!isset($_GET['id'])) {
 $marriage_id = $_GET['id'];
 
 try {
-    $conn = new PDO("mysql:host=localhost;dbname=churchdb", "root", "");
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    // Use database credentials from config.php
+    $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    $stmt = $conn->prepare("SELECT * FROM marriage_records WHERE id = :id");
+    $stmt = $pdo->prepare("SELECT * FROM marriage_records WHERE id = :id");
     $stmt->bindParam(':id', $marriage_id);
     $stmt->execute();
     $marriage = $stmt->fetch(PDO::FETCH_ASSOC);
