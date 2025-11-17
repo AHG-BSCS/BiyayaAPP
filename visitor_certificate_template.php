@@ -157,7 +157,7 @@ try {
         .print-date {
             position: absolute;
             top: 70%;
-            left: 75%;
+            left: 70%;
             transform: translate(-50%, -50%);
             font-size: 25px;
             color: #000;
