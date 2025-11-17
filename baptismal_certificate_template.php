@@ -159,7 +159,11 @@ try {
 <body>
     <div class="certificate">
         <div class="certificate-content">
-            <img src="certificates/Baptismal Certificate.jpg" alt="Baptismal Certificate">
+            <?php
+                $certificateImage = 'Baptismal Certificate.jpg';
+                $certificateSrc = 'certificates/' . rawurlencode($certificateImage);
+            ?>
+            <img src="<?php echo htmlspecialchars($certificateSrc); ?>" alt="Baptismal Certificate">
             <div class="member-name"><?php echo htmlspecialchars($baptismal['name']); ?></div>
             <div class="baptismal-message">This certifies that the above named person was baptized in the name of the Father, the Son, and the Holy Spirit on <?php echo date('F d, Y', strtotime($baptismal['baptism_date'])); ?> at <?php echo htmlspecialchars($baptismal['venue']); ?>.</div>
         </div>
