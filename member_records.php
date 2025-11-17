@@ -199,7 +199,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
             spiritual_birthday, inviter, how_know, attendance_duration, previous_church, membership_class_officiant
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters using mysqli
         $stmt->bind_param("ssssssssssssssssssssssssssss", 
@@ -223,19 +223,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
@@ -298,7 +293,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
                 membership_class_officiant = :membership_class_officiant
                 WHERE id = :id";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -344,21 +339,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $is_super_admin) {
     $id = $_POST['id'];
     $type = isset($_POST['type']) ? $_POST['type'] : '';
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
+    // Use database credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         if ($type === 'baptismal') {
-            $stmt = $conn->prepare("DELETE FROM baptismal_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM baptismal_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $message = "Baptismal record deleted successfully!";
@@ -367,12 +359,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             exit();
         } else if ($type === 'membership') {
             // Existing membership delete logic
-        $stmt = $conn->prepare("SELECT name FROM membership_records WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT name FROM membership_records WHERE id = :id");
         $stmt->bindParam(':id', $id);
         $stmt->execute();
         $member = $stmt->fetch(PDO::FETCH_ASSOC);
         $memberName = $member ? $member['name'] : 'Unknown Member';
-            $stmt = $conn->prepare("DELETE FROM membership_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM membership_records WHERE id = :id");
         $stmt->bindParam(':id', $id);
         $stmt->execute();
         $message = "✅ Member record for <strong>{$memberName}</strong> (ID: {$id}) has been successfully deleted from the system.";
@@ -380,12 +372,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
         header("Location: " . $_SERVER['PHP_SELF']);
         exit();
         } else if ($type === 'marriage') {
-            $stmt = $conn->prepare("SELECT couple FROM marriage_records WHERE id = :id");
+            $stmt = $pdo->prepare("SELECT couple FROM marriage_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $marriage = $stmt->fetch(PDO::FETCH_ASSOC);
             $coupleName = $marriage ? $marriage['couple'] : 'Unknown Couple';
-            $stmt = $conn->prepare("DELETE FROM marriage_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM marriage_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $message = "✅ Marriage record for <strong>{$coupleName}</strong> (ID: {$id}) has been successfully deleted from the system.";
@@ -393,12 +385,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
             exit();
         } else if ($type === 'child_dedication') {
-            $stmt = $conn->prepare("SELECT child_name FROM child_dedication_records WHERE id = :id");
+            $stmt = $pdo->prepare("SELECT child_name FROM child_dedication_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $child = $stmt->fetch(PDO::FETCH_ASSOC);
             $childName = $child ? $child['child_name'] : 'Unknown Child';
-            $stmt = $conn->prepare("DELETE FROM child_dedication_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM child_dedication_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $message = "✅ Child dedication record for <strong>{$childName}</strong> (ID: {$id}) has been successfully deleted from the system.";
@@ -406,12 +398,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
             exit();
         } else if ($type === 'visitor') {
-            $stmt = $conn->prepare("SELECT name FROM visitor_records WHERE id = :id");
+            $stmt = $pdo->prepare("SELECT name FROM visitor_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $visitor = $stmt->fetch(PDO::FETCH_ASSOC);
             $visitorName = $visitor ? $visitor['name'] : 'Unknown Visitor';
-            $stmt = $conn->prepare("DELETE FROM visitor_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM visitor_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $message = "✅ Visitor record for <strong>{$visitorName}</strong> (ID: {$id}) has been successfully deleted from the system.";
@@ -419,12 +411,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
             exit();
         } else if ($type === 'burial') {
-            $stmt = $conn->prepare("SELECT deceased_name FROM burial_records WHERE id = :id");
+            $stmt = $pdo->prepare("SELECT deceased_name FROM burial_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $burial = $stmt->fetch(PDO::FETCH_ASSOC);
             $deceasedName = $burial ? $burial['deceased_name'] : 'Unknown Deceased';
-            $stmt = $conn->prepare("DELETE FROM burial_records WHERE id = :id");
+            $stmt = $pdo->prepare("DELETE FROM burial_records WHERE id = :id");
             $stmt->bindParam(':id', $id);
             $stmt->execute();
             $message = "✅ Burial record for <strong>{$deceasedName}</strong> (ID: {$id}) has been successfully deleted from the system.";
@@ -443,22 +435,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
         $new_status = $_POST['status'];
 
         // Get member name and current status for better messaging
-        $stmt = $conn->prepare("SELECT name, status FROM membership_records WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT name, status FROM membership_records WHERE id = :id");
         $stmt->bindParam(':id', $id);
         $stmt->execute();
         $member = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -467,7 +454,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
 
         // Prepare SQL statement
         $sql = "UPDATE membership_records SET status = :status WHERE id = :id";
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -493,15 +480,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["change_status"]) && $i
 
 // Handle visitor record save (add or edit)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
@@ -516,7 +498,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
         // Check if this is an add (empty id) or edit (existing id) operation
         if (empty($id)) {
             // Add new visitor record
-            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM visitor_records");
+            $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM visitor_records");
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $next_id = "V" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
@@ -527,7 +509,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
                 :id, :name, :visit_date, :contact, :address, :purpose, :invited_by, :status
             )";
 
-            $stmt = $conn->prepare($sql);
+            $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $next_id);
             $stmt->bindParam(':name', $name);
             $stmt->bindParam(':visit_date', $visit_date);
@@ -551,7 +533,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
                     status = :status
                     WHERE id = :id";
 
-            $stmt = $conn->prepare($sql);
+            $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $id);
             $stmt->bindParam(':name', $name);
             $stmt->bindParam(':visit_date', $visit_date);
@@ -575,27 +557,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle visitor record deletions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
 
         // Prepare SQL statement
         $sql = "DELETE FROM visitor_records WHERE id = :id";
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -614,20 +591,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle burial record save (add or edit)
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
@@ -639,7 +611,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
         // Check if this is an add (empty id) or edit (existing id) operation
         if (empty($id)) {
             // Add new burial record
-            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM burial_records");
+            $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM burial_records");
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $next_id = "B" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
@@ -650,7 +622,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
                 :id, :deceased_name, :burial_date, :officiant, :venue
             )";
 
-            $stmt = $conn->prepare($sql);
+            $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $next_id);
             $stmt->bindParam(':deceased_name', $deceased_name);
             $stmt->bindParam(':burial_date', $burial_date);
@@ -668,7 +640,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
                     venue = :venue
                     WHERE id = :id";
 
-            $stmt = $conn->prepare($sql);
+            $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $id);
             $stmt->bindParam(':deceased_name', $deceased_name);
             $stmt->bindParam(':burial_date', $burial_date);
@@ -689,27 +661,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle burial record deletions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
 
         // Prepare SQL statement
         $sql = "DELETE FROM burial_records WHERE id = :id";
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -728,23 +695,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $i
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle marriage form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Get the next ID
-        $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM marriage_records");
+        $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM marriage_records");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $next_id = "M" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
@@ -788,7 +750,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is
             :witnesses, :officiated_by
         )";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $next_id);
@@ -828,20 +790,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle marriage record edits
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
@@ -894,7 +851,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $i
                 officiated_by = :officiated_by
                 WHERE id = :id";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -934,23 +891,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $i
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle child dedication form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Get the next ID
-        $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM child_dedication_records");
+        $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM child_dedication_records");
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $next_id = "C" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
 
@@ -980,7 +932,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]
             :witnesses, :officiated_by
         )";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $next_id);
@@ -1010,20 +962,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle child dedication record edits
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"]) && $is_super_admin) {
-    // Database connection
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
-
+    // Database connection - use credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // Store POST values in variables
         $id = $_POST['id'];
@@ -1056,7 +1003,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"
                 officiated_by = :officiated_by
                 WHERE id = :id";
 
-        $stmt = $conn->prepare($sql);
+        $stmt = $pdo->prepare($sql);
         
         // Bind parameters
         $stmt->bindParam(':id', $id);
@@ -1086,7 +1033,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
     }
-    $conn = null;
+    $pdo = null;
 }
 
 // Handle form submissions
@@ -1107,14 +1054,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
     if (!empty($message)) {
         // Do not proceed if validation failed
     } else {
-        $servername = "localhost";
-        $username = "root";
-        $password = "";
-        $dbname = "churchdb";
+        // Use database credentials from config.php
         try {
-            $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-            $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $stmt = $conn->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM baptismal_records");
+            $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(id, 2) AS UNSIGNED)) as max_id FROM baptismal_records");
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $next_id = "B" . sprintf("%03d", ($result['max_id'] ?? 0) + 1);
             // Store POST values in variables
@@ -1146,7 +1090,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
             $officiant = $_POST['officiant'];
             $venue = $_POST['venue'];
             $sql = "INSERT INTO baptismal_records (id, name, nickname, address, telephone, cellphone, email, civil_status, sex, birthday, father_name, mother_name, children, education, course, school, year, company, position, business, spiritual_birthday, inviter, how_know, attendance_duration, previous_church, baptism_date, officiant, venue) VALUES (:id, :name, :nickname, :address, :telephone, :cellphone, :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children, :education, :course, :school, :year, :company, :position, :business, :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :baptism_date, :officiant, :venue)";
-            $stmt = $conn->prepare($sql);
+            $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $next_id);
             $stmt->bindParam(':name', $name);
             $stmt->bindParam(':nickname', $nickname);
@@ -1217,14 +1161,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     $baptism_date = $_POST['edit_bap_baptism_date'];
     $officiant = $_POST['edit_bap_officiant'];
     $venue = $_POST['edit_bap_venue'];
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "churchdb";
+    // Use database credentials from config.php
     try {
-        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $stmt = $conn->prepare("UPDATE baptismal_records SET name = :name, nickname = :nickname, address = :address, telephone = :telephone, cellphone = :cellphone, email = :email, civil_status = :civil_status, sex = :sex, birthday = :birthday, father_name = :father_name, mother_name = :mother_name, children = :children, education = :education, course = :course, school = :school, year = :year, company = :company, position = :position, business = :business, spiritual_birthday = :spiritual_birthday, inviter = :inviter, how_know = :how_know, attendance_duration = :attendance_duration, previous_church = :previous_church, baptism_date = :baptism_date, officiant = :officiant, venue = :venue WHERE id = :id");
+        $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $stmt = $pdo->prepare("UPDATE baptismal_records SET name = :name, nickname = :nickname, address = :address, telephone = :telephone, cellphone = :cellphone, email = :email, civil_status = :civil_status, sex = :sex, birthday = :birthday, father_name = :father_name, mother_name = :mother_name, children = :children, education = :education, course = :course, school = :school, year = :year, company = :company, position = :position, business = :business, spiritual_birthday = :spiritual_birthday, inviter = :inviter, how_know = :how_know, attendance_duration = :attendance_duration, previous_church = :previous_church, baptism_date = :baptism_date, officiant = :officiant, venue = :venue WHERE id = :id");
         $stmt->bindParam(':name', $name);
         $stmt->bindParam(':nickname', $nickname);
         $stmt->bindParam(':address', $address);
