@@ -21,7 +21,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
-$current_user_identifier = $_SESSION["user"] ?? ($user_profile['user_id'] ?? ($user_profile['username'] ?? null));
 
 // Process prayer request submission
 $message = "";
@@ -32,16 +31,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["submit_prayer"])) {
     $request = trim($_POST["prayer_request"] ?? "");
     $urgency = $_POST["prayer_urgency"] ?? "normal";
     $anonymous = isset($_POST["anonymous"]);
-    $created_by = $current_user_identifier;
     
     if (!empty($category) && !empty($request)) {
         // Use full name if available, otherwise username
         $member_name = $anonymous ? "Anonymous" : ($user_profile['full_name'] ?? ($user_profile['username'] ?? ($_SESSION["user"] ?? "Unknown Admin")));
         
-        $sql = "INSERT INTO prayer_requests (member_name, prayer_request, category, urgency, anonymous, created_by) VALUES (?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO prayer_requests (member_name, prayer_request, category, urgency, anonymous) VALUES (?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        $anonymous_value = $anonymous ? 1 : 0;
-        $stmt->bind_param("ssssis", $member_name, $request, $category, $urgency, $anonymous_value, $created_by);
+        $stmt->bind_param("ssssi", $member_name, $request, $category, $urgency, $anonymous);
         
         if ($stmt->execute()) {
             $message = "Prayer request submitted successfully!";
@@ -52,26 +49,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["submit_prayer"])) {
         }
     } else {
         $message = "Please fill in all required fields.";
-        $messageType = "danger";
-    }
-}
-
-// Handle deletion of prayer requests
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_prayer"])) {
-    $prayer_id = intval($_POST["prayer_id"] ?? 0);
-    if ($prayer_id > 0 && $current_user_identifier) {
-        $sql = "DELETE FROM prayer_requests WHERE id = ? AND created_by = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("is", $prayer_id, $current_user_identifier);
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
-            $message = "Prayer request deleted successfully.";
-            $messageType = "success";
-        } else {
-            $message = "Unable to delete this prayer request.";
-            $messageType = "danger";
-        }
-    } else {
-        $message = "Invalid prayer request.";
         $messageType = "danger";
     }
 }
@@ -122,7 +99,6 @@ if ($result && $result->num_rows > 0) {
             "category" => $row['category'],
             "urgency" => $row['urgency'],
             "anonymous" => $row['anonymous'],
-            "created_by" => $row['created_by'] ?? null,
             "date" => $row['created_at'],
             "reactions" => [
                 "heart" => $row['heart_reactions'],
@@ -489,28 +465,6 @@ $live_message = getLiveMessage($conn);
         .reaction-buttons {
             display: flex;
             gap: 10px;
-        }
-        
-        .prayer-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .delete-prayer-form .delete-btn {
-            border: 1px solid #f0625f;
-            border-radius: 20px;
-            background-color: #fff5f5;
-            color: #f0625f;
-            padding: 8px 12px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        
-        .delete-prayer-form .delete-btn:hover {
-            background-color: #f0625f;
-            color: #fff;
         }
         
         .reaction-btn {
@@ -1200,7 +1154,6 @@ $live_message = getLiveMessage($conn);
                         <p style="text-align: center; color: #666; padding: 20px;">No prayer requests yet. Be the first to submit one!</p>
                     <?php else: ?>
                         <?php foreach ($prayer_requests as $prayer): ?>
-                            <?php $canDelete = $current_user_identifier && isset($prayer['created_by']) && $prayer['created_by'] === $current_user_identifier; ?>
                             <div class="prayer-request">
                                 <div class="prayer-header">
                                     <div>
@@ -1220,30 +1173,19 @@ $live_message = getLiveMessage($conn);
                                     <div class="prayer-date">
                                         <i class="fas fa-calendar"></i> <?php echo date('F j, Y', strtotime($prayer['date'])); ?>
                                     </div>
-                                    <div class="prayer-actions">
-                                        <div class="reaction-buttons">
-                                            <button class="reaction-btn heart" onclick="react(<?php echo $prayer['id']; ?>, 'heart', event)">
-                                                <i class="fas fa-heart"></i>
-                                                <span class="reaction-count"><?php echo $prayer['reactions']['heart']; ?></span>
-                                            </button>
-                                            <button class="reaction-btn praying" onclick="react(<?php echo $prayer['id']; ?>, 'praying', event)">
-                                                <i class="fas fa-hands-praying"></i>
-                                                <span class="reaction-count"><?php echo $prayer['reactions']['praying']; ?></span>
-                                            </button>
-                                            <button class="reaction-btn like" onclick="react(<?php echo $prayer['id']; ?>, 'like', event)">
-                                                <i class="fas fa-thumbs-up"></i>
-                                                <span class="reaction-count"><?php echo $prayer['reactions']['like']; ?></span>
-                                            </button>
-                                        </div>
-                                        <?php if ($canDelete): ?>
-                                            <form method="post" class="delete-prayer-form" onsubmit="return confirmDelete(this);">
-                                                <input type="hidden" name="prayer_id" value="<?php echo (int)$prayer['id']; ?>">
-                                                <input type="hidden" name="delete_prayer" value="1">
-                                                <button type="submit" class="delete-btn">
-                                                    <i class="fas fa-trash-alt"></i> Delete
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
+                                    <div class="reaction-buttons">
+                                        <button class="reaction-btn heart" onclick="react(<?php echo $prayer['id']; ?>, 'heart', event)">
+                                            <i class="fas fa-heart"></i>
+                                            <span class="reaction-count"><?php echo $prayer['reactions']['heart']; ?></span>
+                                        </button>
+                                        <button class="reaction-btn praying" onclick="react(<?php echo $prayer['id']; ?>, 'praying', event)">
+                                            <i class="fas fa-hands-praying"></i>
+                                            <span class="reaction-count"><?php echo $prayer['reactions']['praying']; ?></span>
+                                        </button>
+                                        <button class="reaction-btn like" onclick="react(<?php echo $prayer['id']; ?>, 'like', event)">
+                                            <i class="fas fa-thumbs-up"></i>
+                                            <span class="reaction-count"><?php echo $prayer['reactions']['like']; ?></span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1362,10 +1304,6 @@ $live_message = getLiveMessage($conn);
                 closePrayerModal();
             }
         });
-
-        function confirmDelete(form) {
-            return confirm('Are you sure you want to delete this prayer request?');
-        }
 
         document.addEventListener('DOMContentLoaded', function() {
             var alertSuccess = document.getElementById('prayer-success-alert');
