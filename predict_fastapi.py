@@ -163,64 +163,12 @@ async def predict(request: PredictionRequest):
         
         logger.info(f"Generated {len(result)} predictions for 2025")
         
-        # Validate prediction variation
+        # Log prediction statistics for monitoring
         prediction_values = [r.yhat for r in result]
         prediction_std = np.std(prediction_values)
         prediction_mean = np.mean(prediction_values)
         
         logger.info(f"Prediction statistics - Mean: {prediction_mean:.2f}, Std: {prediction_std:.2f}")
-        
-        # Check if predictions are too uniform or have identical confidence intervals
-        confidence_variation = any(
-            abs(r.yhat_lower - r.yhat) > 0.01 or abs(r.yhat_upper - r.yhat) > 0.01 
-            for r in result
-        )
-        
-        # Enhanced check for low predictions
-        if prediction_std < 50 or not confidence_variation or prediction_mean < 10000:
-            logger.warning(f"Low predictions detected. Mean: {prediction_mean:.2f}, Std: {prediction_std:.2f}. Applying enhanced variation.")
-            
-            # Calculate enhanced base amount from historical data with growth factor
-            base_amount = max(data_mean * 1.2, 15000)
-            
-            if base_amount < 15000:
-                base_amount = 20000
-            
-            logger.info(f"Using enhanced base amount: {base_amount:.2f}")
-            
-            # Generate realistic predictions with seasonal patterns
-            for i, pred in enumerate(result):
-                month = int(pred.month.split('-')[1])
-                
-                # Enhanced seasonal factors for church donations with higher values
-                seasonal_factors = {
-                    1: 1.1, 2: 1.05, 3: 1.2, 4: 1.3, 5: 1.15, 6: 1.0,
-                    7: 0.95, 8: 1.0, 9: 1.1, 10: 1.15, 11: 1.25, 12: 1.4
-                }
-                
-                seasonal_factor = seasonal_factors.get(month, 1.0)
-                random_factor = 1.0 + (np.random.random() - 0.5) * 0.2
-                growth_trend = 1.0 + (i * 0.02)
-                new_prediction = base_amount * seasonal_factor * random_factor * growth_trend
-                new_prediction = max(new_prediction, 12000)
-                
-                # Update the prediction with realistic confidence intervals
-                pred.yhat = round(new_prediction, 2)
-                pred.yhat_lower = round(new_prediction * 0.8, 2)
-                pred.yhat_upper = round(new_prediction * 1.25, 2)
-            
-            logger.info("Applied enhanced seasonal variation with growth trend and higher base values")
-        
-        # Final validation: Ensure all predictions are realistic for church donations
-        min_realistic_value = 10000
-        for pred in result:
-            if pred.yhat < min_realistic_value:
-                logger.warning(f"Low prediction detected: {pred.yhat}. Adjusting to minimum realistic value.")
-                pred.yhat = min_realistic_value
-                pred.yhat_lower = round(min_realistic_value * 0.8, 2)
-                pred.yhat_upper = round(min_realistic_value * 1.25, 2)
-        
-        logger.info(f"Final prediction statistics - Mean: {np.mean([r.yhat for r in result]):.2f}, Std: {np.std([r.yhat for r in result]):.2f}")
         
         return result
         
