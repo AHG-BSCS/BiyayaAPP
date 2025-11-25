@@ -29,6 +29,11 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
 $site_settings = getSiteSettings($conn);
 $church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
+$allowed_tabs = ['membership', 'baptismal', 'marriage', 'child-dedication', 'visitor', 'burial'];
+$active_tab = $_GET['tab'] ?? 'membership';
+if (!in_array($active_tab, $allowed_tabs, true)) {
+    $active_tab = 'membership';
+}
 
 // Helper function to format dates
 function formatDate($date) {
@@ -219,7 +224,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
     $messageType = "success";
 
         // Refresh the page to show the new record and stay on membership tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#membership");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=membership");
         exit();
 
     } catch(Exception $e) {
@@ -334,7 +339,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
             $messageType = "success";
 
         // Refresh the page to show the updated record
-        header("Location: " . $_SERVER['PHP_SELF']);
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=membership");
         exit();
 
     } catch(PDOException $e) {
@@ -357,7 +362,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             $stmt->execute();
             $message = "Baptismal record deleted successfully!";
             $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=baptismal");
             exit();
         } else if ($type === 'membership') {
             // Existing membership delete logic
@@ -371,7 +376,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
         $stmt->execute();
         $message = "✅ Member record for <strong>{$memberName}</strong> (ID: {$id}) has been successfully deleted from the system.";
         $messageType = "success";
-        header("Location: " . $_SERVER['PHP_SELF']);
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=membership");
         exit();
         } else if ($type === 'marriage') {
             $stmt = $pdo->prepare("SELECT couple FROM marriage_records WHERE id = :id");
@@ -384,7 +389,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             $stmt->execute();
             $message = "✅ Marriage record for <strong>{$coupleName}</strong> (ID: {$id}) has been successfully deleted from the system.";
             $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=marriage");
             exit();
         } else if ($type === 'child_dedication') {
             $stmt = $pdo->prepare("SELECT child_name FROM child_dedication_records WHERE id = :id");
@@ -397,7 +402,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_record"]) && $i
             $stmt->execute();
             $message = "✅ Child dedication record for <strong>{$childName}</strong> (ID: {$id}) has been successfully deleted from the system.";
             $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=child-dedication");
             exit();
         } else if ($type === 'visitor') {
             $stmt = $pdo->prepare("SELECT name FROM visitor_records WHERE id = :id");
@@ -552,7 +557,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_visitor"]) && $is
         $messageType = "success";
 
         // Refresh the page to show the updated record and stay on visitor tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=visitor");
         exit();
 
     } catch(PDOException $e) {
@@ -586,7 +591,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_visitor"]) && $
         $messageType = "success";
 
         // Refresh the page to show the updated records and stay on visitor tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#visitor");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=visitor");
         exit();
 
     } catch(PDOException $e) {
@@ -656,7 +661,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["save_burial"]) && $is_
         $messageType = "success";
 
         // Refresh the page to show the updated record and stay on burial tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#burial");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=burial");
         exit();
 
     } catch(PDOException $e) {
@@ -690,7 +695,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_burial"]) && $i
         $messageType = "success";
 
         // Refresh the page to show the updated records and stay on burial tab
-        header("Location: " . $_SERVER['PHP_SELF'] . "#burial");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=burial");
         exit();
 
     } catch(PDOException $e) {
@@ -785,7 +790,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_marriage"]) && $is
         $messageType = "success";
 
         // Refresh the page to show the new record
-        header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=marriage");
         exit();
 
     } catch(PDOException $e) {
@@ -886,7 +891,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_marriage"]) && $i
         $messageType = "success";
 
         // Refresh the page to show the updated record
-        header("Location: " . $_SERVER['PHP_SELF'] . "#marriage");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=marriage");
         exit();
 
     } catch(PDOException $e) {
@@ -957,7 +962,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_child_dedication"]
         $messageType = "success";
 
         // Refresh the page to show the new record
-        header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=child-dedication");
         exit();
 
     } catch(PDOException $e) {
@@ -1028,7 +1033,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_child_dedication"
         $messageType = "success";
 
         // Refresh the page to show the updated record
-        header("Location: " . $_SERVER['PHP_SELF'] . "#child-dedication");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=child-dedication");
         exit();
 
     } catch(PDOException $e) {
@@ -1124,7 +1129,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
             $stmt->execute();
             $message = "New baptismal record added successfully!";
             $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+            header("Location: " . $_SERVER['PHP_SELF'] . "?tab=baptismal");
             exit();
         } catch(PDOException $e) {
             $message = "Error: " . $e->getMessage();
@@ -1199,7 +1204,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         $stmt->execute();
         $message = "Baptismal record updated successfully!";
         $messageType = "success";
-        header("Location: " . $_SERVER['PHP_SELF'] . "#baptismal");
+        header("Location: " . $_SERVER['PHP_SELF'] . "?tab=baptismal");
         exit();
     } catch(PDOException $e) {
         $message = "Error updating baptismal record: " . $e->getMessage();
@@ -2403,17 +2408,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                 <?php endif; ?>
 
                 <div class="tab-navigation">
-                    <a href="#membership" class="active" data-tab="membership">Membership</a>
-                    <a href="#baptismal" data-tab="baptismal">Baptismal</a>
-                    <a href="#marriage" data-tab="marriage">Marriage</a>
-                    <a href="#child-dedication" data-tab="child-dedication">Child Dedication</a>
-                    <a href="#visitor" data-tab="visitor">Visitor's Record</a>
-                    <a href="#burial" data-tab="burial">Burial Records</a>
+                    <a href="?tab=membership" class="<?php echo $active_tab === 'membership' ? 'active' : ''; ?>" data-tab="membership">Membership</a>
+                    <a href="?tab=baptismal" class="<?php echo $active_tab === 'baptismal' ? 'active' : ''; ?>" data-tab="baptismal">Baptismal</a>
+                    <a href="?tab=marriage" class="<?php echo $active_tab === 'marriage' ? 'active' : ''; ?>" data-tab="marriage">Marriage</a>
+                    <a href="?tab=child-dedication" class="<?php echo $active_tab === 'child-dedication' ? 'active' : ''; ?>" data-tab="child-dedication">Child Dedication</a>
+                    <a href="?tab=visitor" class="<?php echo $active_tab === 'visitor' ? 'active' : ''; ?>" data-tab="visitor">Visitor's Record</a>
+                    <a href="?tab=burial" class="<?php echo $active_tab === 'burial' ? 'active' : ''; ?>" data-tab="burial">Burial Records</a>
                 </div>
 
                 <div class="tab-content">
                     <!-- Membership Tab -->
-                    <div class="tab-pane active" id="membership">
+                    <div class="tab-pane <?php echo $active_tab === 'membership' ? 'active' : ''; ?>" id="membership">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-membership-btn">
@@ -2469,7 +2474,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
 
                     <!-- Baptismal Tab -->
-                    <div class="tab-pane" id="baptismal">
+                    <div class="tab-pane <?php echo $active_tab === 'baptismal' ? 'active' : ''; ?>" id="baptismal">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-baptismal-btn">
@@ -2514,7 +2519,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
 
                     <!-- Marriage Tab -->
-                    <div class="tab-pane" id="marriage">
+                    <div class="tab-pane <?php echo $active_tab === 'marriage' ? 'active' : ''; ?>" id="marriage">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-marriage-btn">
@@ -2557,7 +2562,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
 
                     <!-- Child Dedication Tab -->
-                    <div class="tab-pane" id="child-dedication">
+                    <div class="tab-pane <?php echo $active_tab === 'child-dedication' ? 'active' : ''; ?>" id="child-dedication">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-child-dedication-btn">
@@ -2602,7 +2607,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
 
                     <!-- Visitor's Record Tab -->
-                    <div class="tab-pane" id="visitor">
+                    <div class="tab-pane <?php echo $active_tab === 'visitor' ? 'active' : ''; ?>" id="visitor">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-visitor-btn">
@@ -2655,7 +2660,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                     </div>
 
                     <!-- Burial Records Tab -->
-                    <div class="tab-pane" id="burial">
+                    <div class="tab-pane <?php echo $active_tab === 'burial' ? 'active' : ''; ?>" id="burial">
                         <div class="action-bar">
                             <?php if ($is_super_admin): ?>
                                 <button class="btn" id="add-burial-btn">
@@ -4742,14 +4747,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         const tabLinks = document.querySelectorAll('.tab-navigation a');
         const tabPanes = document.querySelectorAll('.tab-pane');
 
+        function activateTab(tabId, updateUrl = true) {
+            tabLinks.forEach(link => {
+                const isActive = link.getAttribute('data-tab') === tabId;
+                link.classList.toggle('active', isActive);
+            });
+            tabPanes.forEach(pane => {
+                pane.classList.toggle('active', pane.id === tabId);
+            });
+            if (updateUrl) {
+                const url = new URL(window.location);
+                url.searchParams.set('tab', tabId);
+                history.replaceState(null, '', url.toString());
+            }
+        }
+
         tabLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                tabLinks.forEach(l => l.classList.remove('active'));
-                tabPanes.forEach(p => p.classList.remove('active'));
-                link.classList.add('active');
                 const tabId = link.getAttribute('data-tab');
-                document.getElementById(tabId).classList.add('active');
+                activateTab(tabId);
             });
         });
 
@@ -5358,29 +5375,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                 printFrame.src = `child_dedication_certificate_template.php?id=${childId}`;
             });
 
-            // Stay on baptismal tab if hash is present
-            if (window.location.hash === '#baptismal') {
-                document.querySelectorAll('.tab-navigation a').forEach(link => link.classList.remove('active'));
-                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-                document.querySelector('.tab-navigation a[data-tab="baptismal"]').classList.add('active');
-                document.getElementById('baptismal').classList.add('active');
+            const params = new URLSearchParams(window.location.search);
+            let defaultTab = params.get('tab');
+            if (!defaultTab || !document.getElementById(defaultTab)) {
+                const activePane = document.querySelector('.tab-pane.active');
+                defaultTab = activePane ? activePane.id : 'membership';
             }
-
-            // Hash-based tab activation FIRST
-            let hash = window.location.hash;
-            let defaultTab = 'membership';
-            if (hash && document.querySelector('.tab-navigation a[data-tab="' + hash.replace('#', '') + '"]')) {
-                defaultTab = hash.replace('#', '');
-            }
-            document.querySelectorAll('.tab-navigation a').forEach(link => link.classList.remove('active'));
-            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-            document.querySelector('.tab-navigation a[data-tab="' + defaultTab + '"]').classList.add('active');
-            document.getElementById(defaultTab).classList.add('active');
-
-            // Remove the hash from the URL after activating the tab
-            if (window.location.hash) {
-                history.replaceState(null, '', window.location.pathname);
-            }
+            activateTab(defaultTab, false);
 
             document.getElementById('edit-baptismal-exit-btn')?.addEventListener('click', function() {
                 closeModal('edit-baptismal-modal');
@@ -5563,13 +5564,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         }
     </script>
     <script>
-        $(document).ready(function() {
-            $('#membership-table').DataTable();
-            $('#baptismal-table').DataTable();
-            $('#marriage-table').DataTable();
-            $('#child-dedication-table').DataTable();
-            $('#visitor-table').DataTable();
-            $('#burial-table').DataTable(); // Add this line for burial tab
+        document.addEventListener('DOMContentLoaded', function() {
+            new DataTable('#membership-table');
+            new DataTable('#baptismal-table');
+            new DataTable('#marriage-table');
+            new DataTable('#child-dedication-table');
+            new DataTable('#visitor-table');
+            new DataTable('#burial-table');
         });
     </script>
     <!-- Add this modal at the end of the file before </body> -->
