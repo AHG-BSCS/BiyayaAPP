@@ -4736,7 +4736,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="//cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+    <script src="//cdn.datatables.net/2.3.5/js/dataTables.min.js"></script>
     <script>
         // Tab Navigation
         const tabLinks = document.querySelectorAll('.tab-navigation a');
