@@ -124,7 +124,7 @@ if (!function_exists('getProphetPredictionFromArray')) {
         return null;
     }
 
-    $ch = curl_init('https://cocd-predict.onrender.com/predict');
+    $ch = curl_init('https://biyaya-prediction.onrender.com/predict');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
@@ -393,7 +393,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
             }
         }
 
-        $ch = curl_init('https://cocd-predict.onrender.com/predict');
+        $ch = curl_init('https://biyaya-prediction.onrender.com/predict');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $weekly_data]));
@@ -546,7 +546,7 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
             return null;
         }
 
-        $ch = curl_init('https://cocd-predict.onrender.com/predict');
+        $ch = curl_init('https://biyaya-prediction.onrender.com/predict');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));

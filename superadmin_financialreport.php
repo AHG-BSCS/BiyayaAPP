@@ -454,7 +454,7 @@ function getProphetPrediction($conn) {
     if (count($prophet_data) < $minimumRequiredMonths) {
         return null;
     }
-    $ch = curl_init('https://cocd-predict.onrender.com/predict');
+    $ch = curl_init('https://biyaya-prediction.onrender.com/predict');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['data' => $prophet_data]));
