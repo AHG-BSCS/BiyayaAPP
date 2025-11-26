@@ -72,12 +72,17 @@ $result = $conn->query($sql);
 
 if ($result && $result->num_rows > 0) {
     while($row = $result->fetch_assoc()) {
+        $outline_data = json_decode($row['outline'], true);
+        if (!is_array($outline_data)) {
+            $outline_data = [];
+        }
+
         $messages[] = [
             "id" => $row['id'],
             "title" => $row['title'],
             "youtube_id" => $row['youtube_id'],
             "date" => $row['date'],
-            "outline" => json_decode($row['outline'], true)
+            "outline" => $outline_data
         ];
     }
 }
@@ -118,39 +123,103 @@ $current_page = basename($_SERVER['PHP_SELF']);
             line-height: 1.6;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .dashboard-container {
+            min-height: 100vh;
             padding: 20px;
+            background: linear-gradient(180deg, #f5f7fa 0%, #eef1f4 100%);
         }
 
-        .header {
+        .content-area {
+            width: 100%;
+        }
+
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            background-color: var(--white);
+            padding: 20px 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
-        .header h1 {
+        .top-bar-left h1 {
+            font-size: 26px;
+            margin-bottom: 5px;
+        }
+
+        .top-bar-left p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--accent-color);
+            color: var(--white);
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 6px 18px rgba(0, 139, 30, 0.15);
+            transition: background-color 0.3s ease;
+        }
+
+        .back-btn i {
+            font-size: 14px;
+        }
+
+        .back-btn:hover {
+            background-color: rgb(0, 112, 9);
+        }
+
+        .section-card {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        .section-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .section-card-header h2 {
+            font-size: 20px;
             color: var(--primary-color);
         }
 
-        .back-btn {
-            background-color: var(--accent-color);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
+        .section-card-header p {
+            margin: 0;
+            color: #6b7280;
             font-size: 14px;
+        }
+
+        .badge {
+            background-color: rgba(0, 139, 30, 0.1);
+            color: var(--accent-color);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
         }
 
         .messages-table {
             width: 100%;
             background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             overflow: hidden;
             margin-top: 20px;
         }
@@ -176,18 +245,43 @@ $current_page = basename($_SERVER['PHP_SELF']);
             background-color: #f8f9fa;
         }
 
-        .delete-btn {
-            background-color: var(--danger-color);
-            color: white;
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-start;
+        }
+
+        .action-btn {
+            width: 32px;
+            height: 32px;
             border: none;
-            padding: 8px 15px;
             border-radius: 4px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: #ffffff;
+        }
+
+        .action-btn i {
             font-size: 14px;
         }
 
-        .delete-btn:hover {
-            background-color: #c82333;
+        .action-btn.edit-btn {
+            background-color: #4a90e2;
+        }
+
+        .action-btn.edit-btn:hover {
+            background-color: #357abd;
+        }
+
+        .action-btn.delete-btn {
+            background-color: #e74c3c;
+        }
+
+        .action-btn.delete-btn:hover {
+            background-color: #c0392b;
         }
 
         .alert {
@@ -213,26 +307,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .edit-btn {
-            background-color: #4a90e2;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 5px;
-        }
-
-        .edit-btn:hover {
-            background-color: #357abd;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 5px;
         }
 
         /* Modal Styles */
@@ -343,78 +417,108 @@ $current_page = basename($_SERVER['PHP_SELF']);
         .btn i {
             margin-right: 5px;
         }
+        @media (max-width: 768px) {
+            .top-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .section-card {
+                padding: 20px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Manage Messages</h1>
-            <a href="messages.php" class="back-btn">Back to Messages</a>
-        </div>
-
-        <?php if (isset($_SESSION['success_message'])): ?>
-            <div class="alert alert-success">
-                <?php 
-                echo $_SESSION['success_message'];
-                unset($_SESSION['success_message']);
-                ?>
+    <div class="dashboard-container">
+        <div class="content-area">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <h1>Manage Messages</h1>
+                    <p>Review and update weekly sermons shared with the congregation.</p>
+                </div>
+                <a class="back-btn" href="messages.php">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Messages
+                </a>
             </div>
-        <?php endif; ?>
 
-        <?php if (isset($_SESSION['error_message'])): ?>
-            <div class="alert alert-danger">
-                <?php 
-                echo $_SESSION['error_message'];
-                unset($_SESSION['error_message']);
-                ?>
-            </div>
-        <?php endif; ?>
+            <div class="section-card">
+                <div class="section-card-header">
+                    <div>
+                        <h2>Messages Library</h2>
+                        <p>Keep your message list organized and up to date.</p>
+                    </div>
+                    <span class="badge"><?php echo count($messages); ?> total</span>
+                </div>
 
-        <div class="messages-table">
-            <table id="messagesTable">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Date</th>
-                        <th>YouTube ID</th>
-                        <th>Outline Preview</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($messages as $message): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($message['title']); ?></td>
-                        <td><?php echo htmlspecialchars($message['date']); ?></td>
-                        <td><?php echo htmlspecialchars($message['youtube_id']); ?></td>
-                        <td class="outline-preview">
+                <?php if (isset($_SESSION['success_message'])): ?>
+                    <div class="alert alert-success">
+                        <?php 
+                        echo $_SESSION['success_message'];
+                        unset($_SESSION['success_message']);
+                        ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (isset($_SESSION['error_message'])): ?>
+                    <div class="alert alert-danger">
+                        <?php 
+                        echo $_SESSION['error_message'];
+                        unset($_SESSION['error_message']);
+                        ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="messages-table">
+                    <table id="messagesTable">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Date</th>
+                                <th>YouTube ID</th>
+                                <th>Outline Preview</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($messages as $message): ?>
                             <?php 
-                            $outline_text = implode(", ", array_slice($message['outline'], 0, 3));
-                            echo htmlspecialchars($outline_text);
+                                $outline_points = is_array($message['outline']) ? $message['outline'] : [];
+                                $outline_text = implode(", ", array_slice($outline_points, 0, 3));
+                                $outline_full = implode(", ", $outline_points);
                             ?>
-                        </td>
-                        <td>
-                            <div class="action-buttons">
-                                <button type="button" class="edit-btn" 
-                                        data-id="<?php echo $message['id']; ?>"
-                                        data-title="<?php echo htmlspecialchars($message['title']); ?>"
-                                        data-date="<?php echo htmlspecialchars($message['date']); ?>"
-                                        data-youtube="<?php echo htmlspecialchars($message['youtube_id']); ?>"
-                                        data-outline="<?php echo htmlspecialchars(implode(', ', $message['outline'])); ?>">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                                <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this message?');">
-                                    <input type="hidden" name="message_id" value="<?php echo $message['id']; ?>">
-                                    <button type="submit" name="delete_message" class="delete-btn">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                            <tr>
+                                <td><?php echo htmlspecialchars($message['title']); ?></td>
+                                <td><?php echo htmlspecialchars($message['date']); ?></td>
+                                <td><?php echo htmlspecialchars($message['youtube_id']); ?></td>
+                                <td class="outline-preview">
+                                    <?php echo htmlspecialchars($outline_text); ?>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button type="button" class="action-btn edit-btn" 
+                                                data-id="<?php echo $message['id']; ?>"
+                                                data-title="<?php echo htmlspecialchars($message['title']); ?>"
+                                                data-date="<?php echo htmlspecialchars($message['date']); ?>"
+                                                data-youtube="<?php echo htmlspecialchars($message['youtube_id']); ?>"
+                                                data-outline="<?php echo htmlspecialchars($outline_full); ?>">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                        <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this message?');">
+                                            <input type="hidden" name="message_id" value="<?php echo $message['id']; ?>">
+                                            <button type="submit" name="delete_message" class="action-btn delete-btn">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
