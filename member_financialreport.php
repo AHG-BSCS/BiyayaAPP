@@ -1480,12 +1480,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             -webkit-overflow-scrolling: touch;
+            min-width: 0;
+        }
+        .table-responsive .dataTables_wrapper {
+            width: 100%;
+        }
+        .table-responsive table.dataTable {
+            width: 100% !important;
+            table-layout: auto;
+        }
+        .table-responsive table.dataTable th,
+        .table-responsive table.dataTable td {
+            white-space: normal;
+            word-break: break-word;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 600px;
-            table-layout: fixed;
+            table-layout: auto;
+            min-width: 0;
         }
         table th, table td {
             padding: 12px 15px;
@@ -1494,7 +1507,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["update_profile_picture
             vertical-align: middle;
             word-wrap: break-word;
             overflow-wrap: break-word;
-            white-space: nowrap;
+            white-space: normal;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+            min-width: 0;
+        }
+        table th, table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
         }
         table th {
             background-color: #f8f9fa;
@@ -2069,83 +2097,6 @@ $live_message = getLiveMessage($conn);
                             </table>
                         </div>
 
-                        <!-- Monthly Expenses Insights -->
-                        <div class="insights-grid">
-                            <div class="insight-card">
-                                <h3><i class="fas fa-chart-line"></i> Financial Overview</h3>
-                                <div class="insight-metric">
-                                    <span class="label">Total Income</span>
-                                    <span class="value">₱<?php echo number_format($expenses_totals['total_income'], 2); ?></span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Total Expenses</span>
-                                    <span class="value">₱<?php echo number_format($expenses_totals['total_expenses'], 2); ?></span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Net Difference</span>
-                                    <span class="value <?php echo $expenses_totals['total_difference'] >= 0 ? 'positive' : 'negative'; ?>">
-                                        ₱<?php echo number_format($expenses_totals['total_difference'], 2); ?>
-                                    </span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Total Months</span>
-                                    <span class="value"><?php echo $expenses_totals['count']; ?></span>
-                                </div>
-                            </div>
-
-                            <div class="insight-card">
-                                <h3><i class="fas fa-calculator"></i> Average Metrics</h3>
-                                <div class="insight-metric">
-                                    <span class="label">Average Monthly Income</span>
-                                    <span class="value">₱<?php echo number_format($expenses_averages['avg_income'], 2); ?></span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Average Monthly Expenses</span>
-                                    <span class="value">₱<?php echo number_format($expenses_averages['avg_expenses'], 2); ?></span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Average Monthly Difference</span>
-                                    <span class="value <?php echo $expenses_averages['avg_difference'] >= 0 ? 'positive' : 'negative'; ?>">
-                                        ₱<?php echo number_format($expenses_averages['avg_difference'], 2); ?>
-                                    </span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Profit Margin</span>
-                                    <span class="value <?php echo $expenses_averages['avg_income'] > 0 ? 'positive' : 'negative'; ?>">
-                                        <?php echo $expenses_averages['avg_income'] > 0 ? number_format(($expenses_averages['avg_difference'] / $expenses_averages['avg_income']) * 100, 1) : '0'; ?>%
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="insight-card">
-                                <h3><i class="fas fa-chart-pie"></i> Financial Health</h3>
-                                <div class="insight-metric">
-                                    <span class="label">Income vs Expenses Ratio</span>
-                                    <span class="value <?php echo $expenses_averages['avg_income'] > $expenses_averages['avg_expenses'] ? 'positive' : 'negative'; ?>">
-                                        <?php echo $expenses_averages['avg_expenses'] > 0 ? number_format($expenses_averages['avg_income'] / $expenses_averages['avg_expenses'], 2) : 'N/A'; ?>
-                                    </span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Expense Coverage</span>
-                                    <span class="value <?php echo $expenses_averages['avg_income'] >= $expenses_averages['avg_expenses'] ? 'positive' : 'negative'; ?>">
-                                        <?php echo $expenses_averages['avg_expenses'] > 0 ? number_format(($expenses_averages['avg_income'] / $expenses_averages['avg_expenses']) * 100, 1) : '0'; ?>%
-                                    </span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Financial Status</span>
-                                    <span class="value <?php echo $expenses_averages['avg_difference'] >= 0 ? 'positive' : 'negative'; ?>">
-                                        <?php echo $expenses_averages['avg_difference'] >= 0 ? 'Profitable' : 'Deficit'; ?>
-                                    </span>
-                                </div>
-                                <div class="insight-metric">
-                                    <span class="label">Monthly Trend</span>
-                                    <span class="value <?php echo $expenses_averages['avg_difference'] >= 0 ? 'positive' : 'negative'; ?>">
-                                        <?php echo $expenses_averages['avg_difference'] >= 0 ? 'Positive' : 'Negative'; ?>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Monthly Expenses Chart -->
                         <div class="insight-card" style="margin-top: 20px;">
                             <h3><i class="fas fa-chart-area"></i> Monthly Income vs Expenses Trend</h3>
@@ -2356,7 +2307,6 @@ $live_message = getLiveMessage($conn);
         // Monthly Expenses Table DataTables initialization
         $('#monthly-expenses-table').DataTable({
             responsive: true,
-            scrollX: true,
             paging: true,
             pageLength: 10,
             lengthMenu: [5, 10, 25, 50, 100],
