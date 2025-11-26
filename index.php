@@ -287,7 +287,6 @@ function getEventImage($event_title, $custom_image = null) {
         .hero-content {
             position: relative;
             z-index: 10;
-            color: var(--primary-color);
             width: 100%;
             padding: 0 20px;
         }
@@ -295,11 +294,13 @@ function getEventImage($event_title, $custom_image = null) {
         .hero-content h2 {
             font-size: 48px;
             margin-bottom: 20px;
+            color: #000000;
         }
 
         .hero-content p {
             font-size: 24px;
             margin-bottom: 30px;
+            color: #000000;
         }
 
         .btn {
