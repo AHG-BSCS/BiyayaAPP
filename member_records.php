@@ -185,6 +185,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         $father_name = $_POST['father_name'];
         $mother_name = $_POST['mother_name'];
         $children = $_POST['children'];
+        $spouse_name = $_POST['spouse_name'] ?? '';
         $education = $_POST['education'];
         $course = $_POST['course'];
         $school = $_POST['school'];
@@ -202,17 +203,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_membership"]) && $
         // Prepare SQL statement
         $sql = "INSERT INTO membership_records (
             id, name, join_date, status, nickname, address, telephone, cellphone, 
-            email, civil_status, sex, birthday, father_name, mother_name, children, 
+            email, civil_status, sex, birthday, father_name, mother_name, children, spouse_name,
             education, course, school, year, company, position, business, 
             spiritual_birthday, inviter, how_know, attendance_duration, previous_church, membership_class_officiant
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?
+        )";
 
         $stmt = $conn->prepare($sql);
         
         // Bind parameters using mysqli
-        $stmt->bind_param("ssssssssssssssssssssssssssss", 
+        $types = str_repeat('s', 29);
+        $stmt->bind_param($types, 
             $next_id, $name, $join_date, $status, $nickname, $address, $telephone, $cellphone,
-            $email, $civil_status, $sex, $birthday, $father_name, $mother_name, $children,
+            $email, $civil_status, $sex, $birthday, $father_name, $mother_name, $children, $spouse_name,
             $education, $course, $school, $year, $company, $position, $business,
             $spiritual_birthday, $inviter, $how_know, $attendance_duration, $previous_church, $membership_class_officiant
         );
@@ -286,6 +293,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
                 mother_name = :mother_name,
                 children = :children,
                 education = :education,
+                spouse_name = :spouse_name,
                 course = :course,
                 school = :school,
                 year = :year,
@@ -319,6 +327,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_membership"]) && 
         $stmt->bindParam(':mother_name', $mother_name);
         $stmt->bindParam(':children', $children);
         $stmt->bindParam(':education', $education);
+        $stmt->bindParam(':spouse_name', $spouse_name);
         $stmt->bindParam(':course', $course);
         $stmt->bindParam(':school', $school);
         $stmt->bindParam(':year', $year);
@@ -1081,6 +1090,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
             $father_name = $_POST['father_name'];
             $mother_name = $_POST['mother_name'];
             $children = $_POST['children'];
+            $spouse_name = $_POST['spouse_name'] ?? '';
             $education = $_POST['education'];
             $course = $_POST['course'];
             $school = $_POST['school'];
@@ -1096,7 +1106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
             $baptism_date = $_POST['baptism_date'];
             $officiant = $_POST['officiant'];
             $venue = $_POST['venue'];
-            $sql = "INSERT INTO baptismal_records (id, name, nickname, address, telephone, cellphone, email, civil_status, sex, birthday, father_name, mother_name, children, education, course, school, year, company, position, business, spiritual_birthday, inviter, how_know, attendance_duration, previous_church, baptism_date, officiant, venue) VALUES (:id, :name, :nickname, :address, :telephone, :cellphone, :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children, :education, :course, :school, :year, :company, :position, :business, :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :baptism_date, :officiant, :venue)";
+            $sql = "INSERT INTO baptismal_records (id, name, nickname, address, telephone, cellphone, email, civil_status, sex, birthday, father_name, mother_name, children, spouse_name, education, course, school, year, company, position, business, spiritual_birthday, inviter, how_know, attendance_duration, previous_church, baptism_date, officiant, venue) VALUES (:id, :name, :nickname, :address, :telephone, :cellphone, :email, :civil_status, :sex, :birthday, :father_name, :mother_name, :children, :spouse_name, :education, :course, :school, :year, :company, :position, :business, :spiritual_birthday, :inviter, :how_know, :attendance_duration, :previous_church, :baptism_date, :officiant, :venue)";
             $stmt = $pdo->prepare($sql);
             $stmt->bindParam(':id', $next_id);
             $stmt->bindParam(':name', $name);
@@ -1111,6 +1121,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_baptismal"]) && $i
             $stmt->bindParam(':father_name', $father_name);
             $stmt->bindParam(':mother_name', $mother_name);
             $stmt->bindParam(':children', $children);
+            $stmt->bindParam(':spouse_name', $spouse_name);
             $stmt->bindParam(':education', $education);
             $stmt->bindParam(':course', $course);
             $stmt->bindParam(':school', $school);
@@ -1153,6 +1164,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     $father_name = $_POST['edit_bap_father_name'];
     $mother_name = $_POST['edit_bap_mother_name'];
     $children = $_POST['edit_bap_children'];
+    $spouse_name = $_POST['edit_bap_spouse_name'] ?? '';
     $education = $_POST['edit_bap_education'];
     $course = $_POST['edit_bap_course'];
     $school = $_POST['edit_bap_school'];
@@ -1172,7 +1184,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
     try {
         $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $stmt = $pdo->prepare("UPDATE baptismal_records SET name = :name, nickname = :nickname, address = :address, telephone = :telephone, cellphone = :cellphone, email = :email, civil_status = :civil_status, sex = :sex, birthday = :birthday, father_name = :father_name, mother_name = :mother_name, children = :children, education = :education, course = :course, school = :school, year = :year, company = :company, position = :position, business = :business, spiritual_birthday = :spiritual_birthday, inviter = :inviter, how_know = :how_know, attendance_duration = :attendance_duration, previous_church = :previous_church, baptism_date = :baptism_date, officiant = :officiant, venue = :venue WHERE id = :id");
+    $stmt = $pdo->prepare("UPDATE baptismal_records SET name = :name, nickname = :nickname, address = :address, telephone = :telephone, cellphone = :cellphone, email = :email, civil_status = :civil_status, sex = :sex, birthday = :birthday, father_name = :father_name, mother_name = :mother_name, children = :children, spouse_name = :spouse_name, education = :education, course = :course, school = :school, year = :year, company = :company, position = :position, business = :business, spiritual_birthday = :spiritual_birthday, inviter = :inviter, how_know = :how_know, attendance_duration = :attendance_duration, previous_church = :previous_church, baptism_date = :baptism_date, officiant = :officiant, venue = :venue WHERE id = :id");
         $stmt->bindParam(':name', $name);
         $stmt->bindParam(':nickname', $nickname);
         $stmt->bindParam(':address', $address);
@@ -1185,6 +1197,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
         $stmt->bindParam(':father_name', $father_name);
         $stmt->bindParam(':mother_name', $mother_name);
         $stmt->bindParam(':children', $children);
+    $stmt->bindParam(':spouse_name', $spouse_name);
         $stmt->bindParam(':education', $education);
         $stmt->bindParam(':course', $course);
         $stmt->bindParam(':school', $school);
@@ -2825,6 +2838,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 <label for="children">Name of Children/Pangalan ng Anak</label>
                                 <textarea id="children" name="children" class="form-control" rows="3"></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="spouse_name">Name of Spouse/Pangalan ng Asawa</label>
+                                <input type="text" id="spouse_name" name="spouse_name" class="form-control">
+                            </div>
                         </div>
 
                         <!-- Educational Background Section -->
@@ -3018,6 +3035,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <div class="view-field" id="view-membership-children"></div>
                     </div>
                     <div class="form-group">
+                        <label>Name of Spouse/Pangalan ng Asawa</label>
+                        <div class="view-field" id="view-membership-spouse_name"></div>
+                    </div>
+                    <div class="form-group">
                         <label>Educational Attainment/Antas na natapos</label>
                         <div class="view-field" id="view-membership-education"></div>
                     </div>
@@ -3159,6 +3180,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <div class="form-group">
                             <label for="edit-membership-children">Name of Children/Pangalan ng Anak</label>
                             <textarea id="edit-membership-children" name="children" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-membership-spouse_name">Name of Spouse/Pangalan ng Asawa</label>
+                            <input type="text" id="edit-membership-spouse_name" name="spouse_name" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit-membership-education">Educational Attainment/Antas na natapos</label>
@@ -3392,6 +3417,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 <label for="bap_children">Name of Children/Pangalan ng Anak</label>
                                 <textarea id="bap_children" name="children" class="form-control" rows="3" required></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="bap_spouse_name">Name of Spouse/Pangalan ng Asawa</label>
+                                <input type="text" id="bap_spouse_name" name="spouse_name" class="form-control">
+                            </div>
                         </div>
 
                         <!-- Educational Background Section -->
@@ -3584,6 +3613,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                         <div class="form-group">
                             <label for="edit_bap_children">Name of Children/Pangalan ng Anak</label>
                             <textarea id="edit_bap_children" name="edit_bap_children" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_bap_spouse_name">Name of Spouse/Pangalan ng Asawa</label>
+                            <input type="text" id="edit_bap_spouse_name" name="edit_bap_spouse_name" class="form-control">
                         </div>
                         <div class="form-group">
                             <label for="edit_bap_education">Educational Attainment/Antas na natapos</label>
@@ -4811,6 +4844,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 document.getElementById('view-membership-father_name').textContent = record.father_name || '';
                                 document.getElementById('view-membership-mother_name').textContent = record.mother_name || '';
                                 document.getElementById('view-membership-children').textContent = record.children || '';
+                                document.getElementById('view-membership-spouse_name').textContent = record.spouse_name || '';
                                 document.getElementById('view-membership-education').textContent = record.education || '';
                                 document.getElementById('view-membership-course').textContent = record.course || '';
                                 document.getElementById('view-membership-school').textContent = record.school || '';
@@ -4846,6 +4880,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 fill('view_bap_father_name', record.father_name);
                                 fill('view_bap_mother_name', record.mother_name);
                                 fill('view_bap_children', record.children);
+                                fill('view_bap_spouse_name', record.spouse_name);
                                 fill('view_bap_education', record.education);
                                 fill('view_bap_course', record.course);
                                 fill('view_bap_school', record.school);
@@ -4980,6 +5015,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 document.getElementById('edit-membership-father_name').value = record.father_name || '';
                                 document.getElementById('edit-membership-mother_name').value = record.mother_name || '';
                                 document.getElementById('edit-membership-children').value = record.children || '';
+                                document.getElementById('edit-membership-spouse_name').value = record.spouse_name || '';
                                 document.getElementById('edit-membership-education').value = record.education || '';
                                 document.getElementById('edit-membership-course').value = record.course || '';
                                 document.getElementById('edit-membership-school').value = record.school || '';
@@ -5015,6 +5051,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
                                 fill('edit_bap_father_name', record.father_name);
                                 fill('edit_bap_mother_name', record.mother_name);
                                 fill('edit_bap_children', record.children);
+                                fill('edit_bap_spouse_name', record.spouse_name);
                                 fill('edit_bap_education', record.education);
                                 fill('edit_bap_course', record.course);
                                 fill('edit_bap_school', record.school);
@@ -5629,6 +5666,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_baptismal"]) && $
             <div class="form-group"><label>Father's Name/Pangalan ng Tatay</label><div class="view-field" id="view_bap_father_name"></div></div>
             <div class="form-group"><label>Mother's Name/Pangalan ng Nanay</label><div class="view-field" id="view_bap_mother_name"></div></div>
             <div class="form-group"><label>Name of Children/Pangalan ng Anak</label><div class="view-field" id="view_bap_children"></div></div>
+            <div class="form-group"><label>Name of Spouse/Pangalan ng Asawa</label><div class="view-field" id="view_bap_spouse_name"></div></div>
             <div class="form-group"><label>Educational Attainment/Antas na natapos</label><div class="view-field" id="view_bap_education"></div></div>
             <div class="form-group"><label>Course/Kursong Natapos</label><div class="view-field" id="view_bap_course"></div></div>
             <div class="form-group"><label>School/Lokal ng Pag-aaral</label><div class="view-field" id="view_bap_school"></div></div>
