@@ -32,7 +32,7 @@ if (isset($_GET['ajax_search'])) {
     $users = [];
     
     if (!empty($search_query)) {
-        $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
+        $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
         $search_param = "%$search_query%";
         $stmt = $conn->prepare($search_sql);
         $stmt->bind_param("sss", $search_param, $search_param, $search_param);
@@ -47,6 +47,7 @@ if (isset($_GET['ajax_search'])) {
                 'contact_number' => $row['contact_number'],
                 'address' => $row['address'],
                 'role' => $row['role'],
+                'created_by' => $row['created_by'],
                 'created_at' => $row['created_at']
             ];
         }
@@ -58,7 +59,7 @@ if (isset($_GET['ajax_search'])) {
 }
 
 if (!empty($search_query)) {
-    $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
+    $search_sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles WHERE username LIKE ? OR email LIKE ? OR full_name LIKE ?";
     $search_param = "%$search_query%";
     $stmt = $conn->prepare($search_sql);
     $stmt->bind_param("sss", $search_param, $search_param, $search_param);
@@ -73,12 +74,13 @@ if (!empty($search_query)) {
             'contact_number' => $row['contact_number'],
             'address' => $row['address'],
             'role' => $row['role'],
+            'created_by' => $row['created_by'],
             'created_at' => $row['created_at']
         ];
     }
 } else {
     // Get all users
-    $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+    $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles";
     $result = $conn->query($sql);
     while ($row = $result->fetch_assoc()) {
         $users[] = [
@@ -89,6 +91,7 @@ if (!empty($search_query)) {
             'contact_number' => $row['contact_number'],
             'address' => $row['address'],
             'role' => $row['role'],
+            'created_by' => $row['created_by'],
             'created_at' => $row['created_at']
         ];
     }
@@ -103,6 +106,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $address = trim($_POST["new_address"]);
         $password = md5($_POST["new_password"]);
         $role = $_POST["new_role"];
+        $creator_name = trim($user_profile['full_name'] ?? '');
+        $created_by = !empty($creator_name) ? $creator_name : ($_SESSION["user"] ?? 'System');
         $user_id = strtolower(str_replace(' ', '', $username)) . rand(100, 999); // Generate a unique user_id
 
         // Check if username or email already exists
@@ -117,9 +122,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $messageType = "danger";
         } else {
             // Insert new user
-            $insert_sql = "INSERT INTO user_profiles (user_id, username, full_name, email, contact_number, address, password, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+            $insert_sql = "INSERT INTO user_profiles (user_id, username, full_name, email, contact_number, address, password, role, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
             $stmt = $conn->prepare($insert_sql);
-            $stmt->bind_param("ssssssss", $user_id, $username, $full_name, $email, $contact_number, $address, $password, $role);
+            $stmt->bind_param("sssssssss", $user_id, $username, $full_name, $email, $contact_number, $address, $password, $role, $created_by);
             
             if ($stmt->execute()) {
                 $message = "User added successfully!";
@@ -127,7 +132,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 // Refresh the users array to include the new user
                 $users = [];
-                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles";
                 $result = $conn->query($sql);
                 while ($row = $result->fetch_assoc()) {
                     $users[] = [
@@ -138,6 +143,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         'contact_number' => $row['contact_number'],
                         'address' => $row['address'],
                         'role' => $row['role'],
+                        'created_by' => $row['created_by'],
                         'created_at' => $row['created_at']
                     ];
                 }
@@ -177,7 +183,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 // Refresh the users array to reflect the changes
                 $users = [];
-                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+                $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles";
                 $result = $conn->query($sql);
                 while ($row = $result->fetch_assoc()) {
                     $users[] = [
@@ -188,6 +194,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         'contact_number' => $row['contact_number'],
                         'address' => $row['address'],
                         'role' => $row['role'],
+                        'created_by' => $row['created_by'],
                         'created_at' => $row['created_at']
                     ];
                 }
@@ -209,7 +216,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             // Refresh the users array to reflect the deletion
             $users = [];
-            $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_at FROM user_profiles";
+            $sql = "SELECT user_id, username, full_name, email, contact_number, address, role, created_by, created_at FROM user_profiles";
             $result = $conn->query($sql);
             while ($row = $result->fetch_assoc()) {
                 $users[] = [
@@ -220,6 +227,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     'contact_number' => $row['contact_number'],
                     'address' => $row['address'],
                     'role' => $row['role'],
+                    'created_by' => $row['created_by'],
                     'created_at' => $row['created_at']
                 ];
             }
@@ -1616,6 +1624,7 @@ $church_logo = getChurchLogo($conn);
                                         <th>Full Name</th>
                                         <th>Role</th>
                                         <th>Created On</th>
+                                        <th>Created By</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1631,16 +1640,17 @@ $church_logo = getChurchLogo($conn);
                                                 </span>
                                             </td>
                                             <td><?php echo isset($user['created_at']) ? date('M d, Y', strtotime($user['created_at'])) : ''; ?></td>
-<td>
-    <div class="action-buttons">
-        <button type="button" class="action-btn edit-btn" onclick="editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['full_name']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['contact_number']); ?>', '<?php echo htmlspecialchars($user['address']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')">
-            <i class="fas fa-edit"></i>
-        </button>
-        <button type="button" class="action-btn delete-btn" onclick="deleteUser('<?php echo htmlspecialchars($user['id']); ?>')">
-            <i class="fas fa-trash"></i>
-        </button>
-    </div>
-</td>
+                                            <td><?php echo htmlspecialchars($user['created_by'] ?? 'N/A'); ?></td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button type="button" class="action-btn edit-btn" onclick="editUser('<?php echo htmlspecialchars($user['id']); ?>', '<?php echo htmlspecialchars($user['username']); ?>', '<?php echo htmlspecialchars($user['full_name']); ?>', '<?php echo htmlspecialchars($user['email']); ?>', '<?php echo htmlspecialchars($user['contact_number']); ?>', '<?php echo htmlspecialchars($user['address']); ?>', '<?php echo htmlspecialchars($user['role']); ?>')">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button type="button" class="action-btn delete-btn" onclick="deleteUser('<?php echo htmlspecialchars($user['id']); ?>')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -2082,10 +2092,11 @@ $church_logo = getChurchLogo($conn);
                     columnDefs: [
                         { width: '10%', targets: 0 }, // ID
                         { width: '20%', targets: 1 }, // Username
-                        { width: '25%', targets: 2 }, // Full Name
+                        { width: '20%', targets: 2 }, // Full Name
                         { width: '15%', targets: 3 }, // Role
-                        { width: '15%', targets: 4 }, // Created On
-                        { width: '15%', targets: 5 }  // Actions
+                        { width: '10%', targets: 4 }, // Created On
+                        { width: '15%', targets: 5 }, // Created By
+                        { width: '10%', targets: 6 }  // Actions
                     ],
                     autoWidth: false,
                     responsive: true,
