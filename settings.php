@@ -2004,7 +2004,6 @@ $church_logo = getChurchLogo($conn);
                             <label for="edit_role">Role</label>
                             <select id="edit_role" name="edit_role" class="form-control" required>
                                 <option value="Member">Member</option>
-                                <option value="Pastor">Pastor</option>
                                 <option value="Administrator">Administrator</option>
                                 <option value="Super Admin">Super Admin</option>
                             </select>
