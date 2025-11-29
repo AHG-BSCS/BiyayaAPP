@@ -950,7 +950,7 @@ function getEventImage($event_title, $custom_image = null) {
             <div class="services-grid">
                 <?php foreach ($service_times as $service => $time): ?>
                     <div class="service-day">
-                        <h3><?php echo htmlspecialchars($service); ?></h3>
+                        <h3><?php echo htmlspecialchars($service); ?><?php if ($service === 'Prayer Intercession'): ?> (Every Wednesday)<?php endif; ?></h3>
                         <p><?php echo htmlspecialchars($time); ?></p>
                     </div>
                 <?php endforeach; ?>

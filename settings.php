@@ -324,7 +324,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             'login_background' => $_POST['current_background'],
             'service_times' => json_encode([
                 'Sunday Worship Service' => $_POST['sunday_service'],
-                'Prayer Intercession (Every Wednesday) ' => $_POST['prayer_service']
+                'Prayer Intercession' => $_POST['prayer_service']
             ])
         ];
 
