@@ -983,10 +983,47 @@ if (
             
             let foundMessages = [];
 
+            // Helper function to format date for searching
+            function formatDateForSearch(dateString) {
+                if (!dateString) return '';
+                try {
+                    const date = new Date(dateString);
+                    if (isNaN(date.getTime())) return dateString.toLowerCase();
+                    
+                    const months = ['january', 'february', 'march', 'april', 'may', 'june', 
+                                   'july', 'august', 'september', 'october', 'november', 'december'];
+                    const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                                      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                    
+                    const year = date.getFullYear();
+                    const month = date.getMonth();
+                    const day = date.getDate();
+                    const monthName = months[month];
+                    const monthAbbrName = monthAbbr[month];
+                    
+                    // Create searchable date string with multiple formats
+                    return [
+                        dateString.toLowerCase(), // Original format (e.g., "2024-01-15")
+                        `${monthName} ${day}, ${year}`, // "January 15, 2024"
+                        `${monthName} ${day}`, // "January 15"
+                        `${day} ${monthName}`, // "15 January"
+                        monthName, // "January"
+                        monthAbbrName, // "Jan"
+                        day.toString(), // "15"
+                        year.toString(), // "2024"
+                        `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`, // "2024-01-15"
+                        `${month + 1}/${day}/${year}`, // "1/15/2024"
+                        `${day}/${month + 1}/${year}` // "15/1/2024"
+                    ].join(' ').toLowerCase();
+                } catch (e) {
+                    return dateString.toLowerCase();
+                }
+            }
+
             for (let i = 0; i < messages.length; i++) {
                 const message = messages[i];
                 const title = message.title.toLowerCase();
-                const date = message.date.toLowerCase();
+                const dateSearchText = formatDateForSearch(message.date);
                 
                 // Debug the outline for this message
                 console.log('Message outline:', message.outline);
@@ -1006,7 +1043,7 @@ if (
                 
                 // Check if search term exists in any part of the message
                 const titleMatch = title.includes(searchTerm);
-                const dateMatch = date.includes(searchTerm);
+                const dateMatch = dateSearchText.includes(searchTerm);
                 const outlineMatch = outlineText.includes(searchTerm);
                 
                 console.log('Matches:', {
@@ -1048,7 +1085,7 @@ if (
                 foundMessages.forEach(result => {
                     const message = result.message;
                     const titleText = message.title || '';
-                    const dateText = message.date || '';
+                    const dateSearchText = formatDateForSearch(message.date);
                     const outlineText = Array.isArray(message.outline) ? 
                         message.outline.map(point => {
                             if (typeof point === 'object' && point.text) {
@@ -1060,7 +1097,7 @@ if (
                         }).join(' ') : '';
                     
                     result.occurrences = countOccurrences(titleText, searchTerm) +
-                                       countOccurrences(dateText, searchTerm) +
+                                       countOccurrences(dateSearchText, searchTerm) +
                                        countOccurrences(outlineText, searchTerm);
                 });
 
