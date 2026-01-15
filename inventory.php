@@ -44,6 +44,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_church_property"])
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
         // Check if table exists, if not create it
         $stmt = $conn->query("SHOW TABLES LIKE 'church_property_inventory'");
@@ -63,9 +64,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_church_property"])
         }
         
         // Insert the record
-        $sql = "INSERT INTO church_property_inventory (id, item_name, quantity, notes) VALUES (?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssis", $id, $item_name, $quantity, $notes);
+        if ($updated_at) {
+            $sql = "INSERT INTO church_property_inventory (id, item_name, quantity, notes, updated_at) VALUES (?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssiss", $id, $item_name, $quantity, $notes, $updated_at);
+        } else {
+            $sql = "INSERT INTO church_property_inventory (id, item_name, quantity, notes) VALUES (?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssis", $id, $item_name, $quantity, $notes);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -92,6 +99,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_office_supplies"])
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
         // Check if table exists, if not create it
         $stmt = $conn->query("SHOW TABLES LIKE 'office_supplies_inventory'");
@@ -111,9 +119,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_office_supplies"])
         }
         
         // Insert the record
-        $sql = "INSERT INTO office_supplies_inventory (id, item_name, quantity, notes) VALUES (?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssis", $id, $item_name, $quantity, $notes);
+        if ($updated_at) {
+            $sql = "INSERT INTO office_supplies_inventory (id, item_name, quantity, notes, updated_at) VALUES (?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssiss", $id, $item_name, $quantity, $notes, $updated_at);
+        } else {
+            $sql = "INSERT INTO office_supplies_inventory (id, item_name, quantity, notes) VALUES (?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssis", $id, $item_name, $quantity, $notes);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -141,6 +155,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_technical_equipmen
         $quantity = $_POST['quantity'] ?? '0';
         $status = $_POST['status'] ?? 'Working';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
         // Check if table exists, if not create it
         $stmt = $conn->query("SHOW TABLES LIKE 'technical_equipments_inventory'");
@@ -160,9 +175,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_technical_equipmen
         }
         
         // Insert the record
-        $sql = "INSERT INTO technical_equipments_inventory (id, item_name, quantity, status, notes) VALUES (?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssiss", $id, $item_name, $quantity, $status, $notes);
+        if ($updated_at) {
+            $sql = "INSERT INTO technical_equipments_inventory (id, item_name, quantity, status, notes, updated_at) VALUES (?, ?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssisss", $id, $item_name, $quantity, $status, $notes, $updated_at);
+        } else {
+            $sql = "INSERT INTO technical_equipments_inventory (id, item_name, quantity, status, notes) VALUES (?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssiss", $id, $item_name, $quantity, $status, $notes);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -189,10 +210,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_church_property"]
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
-        $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+        if ($updated_at) {
+            $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
+        } else {
+            $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -244,10 +272,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_office_supplies"]
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
-        $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+        if ($updated_at) {
+            $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
+        } else {
+            $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -300,10 +335,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_technical_equipme
         $quantity = $_POST['quantity'] ?? '0';
         $status = $_POST['status'] ?? 'Working';
         $notes = $_POST['notes'] ?? '';
+        $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
         
-        $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ? WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("siss", $item_name, $quantity, $status, $notes, $id);
+        if ($updated_at) {
+            $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sissss", $item_name, $quantity, $status, $notes, $updated_at, $id);
+        } else {
+            $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ? WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("siss", $item_name, $quantity, $status, $notes, $id);
+        }
         
         if ($stmt->execute()) {
             $stmt->close();
@@ -1136,13 +1178,14 @@ try {
                                         <th>Item Name</th>
                                         <th>Quantity</th>
                                         <th>Notes</th>
+                                        <th>Updated</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($church_property_records)): ?>
                                         <tr>
-                                            <td colspan="5" style="text-align: center; padding: 20px;">
+                                            <td colspan="6" style="text-align: center; padding: 20px;">
                                                 No church property records found. Click "Add New Property" to add one.
                                             </td>
                                         </tr>
@@ -1153,6 +1196,7 @@ try {
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
+                                                <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
                                                     <div class="action-buttons">
                                                         <button class="action-btn view-btn" title="View" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="church-property">
@@ -1194,13 +1238,14 @@ try {
                                         <th>Item Name</th>
                                         <th>Quantity</th>
                                         <th>Notes</th>
+                                        <th>Updated</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($office_supplies_records)): ?>
                                         <tr>
-                                            <td colspan="5" style="text-align: center; padding: 20px;">
+                                            <td colspan="6" style="text-align: center; padding: 20px;">
                                                 No office supplies records found. Click "Add New Supply" to add one.
                                             </td>
                                         </tr>
@@ -1211,6 +1256,7 @@ try {
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
+                                                <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
                                                     <div class="action-buttons">
                                                         <button class="action-btn view-btn" title="View" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="office-supplies">
@@ -1253,13 +1299,14 @@ try {
                                         <th>Quantity</th>
                                         <th>Status</th>
                                         <th>Notes</th>
+                                        <th>Updated</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($technical_equipments_records)): ?>
                                         <tr>
-                                            <td colspan="6" style="text-align: center; padding: 20px;">
+                                            <td colspan="7" style="text-align: center; padding: 20px;">
                                                 No technical equipments records found. Click "Add New Equipment" to add one.
                                             </td>
                                         </tr>
@@ -1283,6 +1330,7 @@ try {
                                                     </span>
                                                 </td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
+                                                <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
                                                     <div class="action-buttons">
                                                         <button class="action-btn view-btn" title="View" data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="technical-equipments">
@@ -1334,6 +1382,10 @@ try {
                 <label>Notes</label>
                 <div class="view-field" id="view-church-property-notes"></div>
             </div>
+            <div class="form-group">
+                <label>Updated</label>
+                <div class="view-field" id="view-church-property-updated"></div>
+            </div>
             <div class="modal-buttons">
                 <button type="button" class="btn exit-btn" id="view-church-property-exit-btn">
                     <i class="fas fa-times"></i> Close
@@ -1364,6 +1416,10 @@ try {
             <div class="form-group">
                 <label>Notes</label>
                 <div class="view-field" id="view-office-supplies-notes"></div>
+            </div>
+            <div class="form-group">
+                <label>Updated</label>
+                <div class="view-field" id="view-office-supplies-updated"></div>
             </div>
             <div class="modal-buttons">
                 <button type="button" class="btn exit-btn" id="view-office-supplies-exit-btn">
@@ -1400,6 +1456,10 @@ try {
                 <label>Notes</label>
                 <div class="view-field" id="view-technical-equipments-notes"></div>
             </div>
+            <div class="form-group">
+                <label>Updated</label>
+                <div class="view-field" id="view-technical-equipments-updated"></div>
+            </div>
             <div class="modal-buttons">
                 <button type="button" class="btn exit-btn" id="view-technical-equipments-exit-btn">
                     <i class="fas fa-times"></i> Close
@@ -1433,6 +1493,12 @@ try {
                 <div class="form-group">
                     <label for="edit-church-property-notes">Notes</label>
                     <textarea id="edit-church-property-notes" name="notes" class="form-control" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-church-property-updated">Updated</label>
+                    <input type="datetime-local" id="edit-church-property-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
                 </div>
                 
                 <div class="modal-buttons">
@@ -1471,6 +1537,12 @@ try {
                 <div class="form-group">
                     <label for="edit-office-supplies-notes">Notes</label>
                     <textarea id="edit-office-supplies-notes" name="notes" class="form-control" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-office-supplies-updated">Updated</label>
+                    <input type="datetime-local" id="edit-office-supplies-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
                 </div>
                 
                 <div class="modal-buttons">
@@ -1517,6 +1589,12 @@ try {
                 <div class="form-group">
                     <label for="edit-technical-equipments-notes">Notes</label>
                     <textarea id="edit-technical-equipments-notes" name="notes" class="form-control" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit-technical-equipments-updated">Updated</label>
+                    <input type="datetime-local" id="edit-technical-equipments-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
                 </div>
                 
                 <div class="modal-buttons">
@@ -1584,6 +1662,12 @@ try {
                     <textarea id="property-notes" name="notes" class="form-control" rows="4"></textarea>
                 </div>
                 
+                <div class="form-group">
+                    <label for="property-updated">Updated</label>
+                    <input type="datetime-local" id="property-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
+                </div>
+                
                 <div class="modal-buttons">
                     <button type="submit" class="btn">
                         <i class="fas fa-save"></i> Submit
@@ -1624,6 +1708,12 @@ try {
                 <div class="form-group">
                     <label for="supply-notes">Notes</label>
                     <textarea id="supply-notes" name="notes" class="form-control" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="supply-updated">Updated</label>
+                    <input type="datetime-local" id="supply-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
                 </div>
                 
                 <div class="modal-buttons">
@@ -1674,6 +1764,12 @@ try {
                 <div class="form-group">
                     <label for="equipment-notes">Notes</label>
                     <textarea id="equipment-notes" name="notes" class="form-control" rows="4"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="equipment-updated">Updated</label>
+                    <input type="datetime-local" id="equipment-updated" name="updated_at" class="form-control">
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Leave empty to use current date/time</small>
                 </div>
                 
                 <div class="modal-buttons">
@@ -1899,12 +1995,14 @@ try {
                         document.getElementById('view-church-property-item-name').textContent = row.cells[1].textContent;
                         document.getElementById('view-church-property-quantity').textContent = row.cells[2].textContent;
                         document.getElementById('view-church-property-notes').textContent = row.cells[3].textContent || 'N/A';
+                        document.getElementById('view-church-property-updated').textContent = row.cells[4].textContent || 'N/A';
                         openModal('view-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('view-office-supplies-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-office-supplies-item-name').textContent = row.cells[1].textContent;
                         document.getElementById('view-office-supplies-quantity').textContent = row.cells[2].textContent;
                         document.getElementById('view-office-supplies-notes').textContent = row.cells[3].textContent || 'N/A';
+                        document.getElementById('view-office-supplies-updated').textContent = row.cells[4].textContent || 'N/A';
                         openModal('view-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('view-technical-equipments-id').textContent = row.cells[0].textContent;
@@ -1912,10 +2010,30 @@ try {
                         document.getElementById('view-technical-equipments-quantity').textContent = row.cells[2].textContent;
                         document.getElementById('view-technical-equipments-status').textContent = row.cells[3].textContent.trim();
                         document.getElementById('view-technical-equipments-notes').textContent = row.cells[4].textContent || 'N/A';
+                        document.getElementById('view-technical-equipments-updated').textContent = row.cells[5].textContent || 'N/A';
                         openModal('view-technical-equipments-modal');
                     }
                 });
             });
+
+            // Helper function to convert displayed date to datetime-local format
+            function convertToDatetimeLocal(dateStr) {
+                if (!dateStr || dateStr === 'N/A') return '';
+                try {
+                    // Parse date like "Jan 15, 2024 14:30" or "Jan 15, 2024"
+                    const date = new Date(dateStr);
+                    if (isNaN(date.getTime())) return '';
+                    // Format as YYYY-MM-DDTHH:mm for datetime-local input
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    return `${year}-${month}-${day}T${hours}:${minutes}`;
+                } catch (e) {
+                    return '';
+                }
+            }
 
             // Edit Button Handlers
             document.querySelectorAll('.edit-btn[data-type]').forEach(btn => {
@@ -1929,12 +2047,14 @@ try {
                         document.getElementById('edit-church-property-item-name').value = row.cells[1].textContent;
                         document.getElementById('edit-church-property-quantity').value = row.cells[2].textContent;
                         document.getElementById('edit-church-property-notes').value = row.cells[3].textContent || '';
+                        document.getElementById('edit-church-property-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
                         openModal('edit-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('edit-office-supplies-id').value = id;
                         document.getElementById('edit-office-supplies-item-name').value = row.cells[1].textContent;
                         document.getElementById('edit-office-supplies-quantity').value = row.cells[2].textContent;
                         document.getElementById('edit-office-supplies-notes').value = row.cells[3].textContent || '';
+                        document.getElementById('edit-office-supplies-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
                         openModal('edit-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('edit-technical-equipments-id').value = id;
@@ -1943,6 +2063,7 @@ try {
                         const statusText = row.cells[3].textContent.trim();
                         document.getElementById('edit-technical-equipments-status').value = statusText;
                         document.getElementById('edit-technical-equipments-notes').value = row.cells[4].textContent || '';
+                        document.getElementById('edit-technical-equipments-updated').value = convertToDatetimeLocal(row.cells[5].textContent);
                         openModal('edit-technical-equipments-modal');
                     }
                 });
