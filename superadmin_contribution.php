@@ -11,6 +11,13 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 
 // Get user profile and site settings
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
+
+// Always update session role from database
+$_SESSION["user_role"] = $user_profile['role'];
+
+// Check if user is super administrator
+$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
+
 $church_logo = getChurchLogo($conn);
 $site_settings = getSiteSettings($conn);
 $church_name = $site_settings['church_name'];
@@ -386,6 +393,7 @@ $totals = $stmt->get_result()->fetch_assoc();
                     <li><a href="member_records.php" class="drawer-link <?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-address-book"></i><span>Member Records</span></a></li>
                     <li><a href="superadmin_financialreport.php" class="drawer-link <?php echo $current_page == 'superadmin_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
                     <li><a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i><span>Stewardship Report</span></a></li>
+                    <li><a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>"><i class="fas fa-boxes"></i><span>Inventory</span></a></li>
                     <li><a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
                     <li><a href="login_logs.php" class="drawer-link <?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i><span>Login Logs</span></a></li>
                 </ul>

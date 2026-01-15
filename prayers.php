@@ -13,7 +13,13 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     exit;
 }
 
-// Check if the user is a super admin only
+// Get user profile from database
+$user_profile = getUserProfile($conn, $_SESSION["user"]);
+
+// Always update session role from database
+$_SESSION["user_role"] = $user_profile['role'];
+
+// Check if user is super administrator
 $is_super_admin = ($_SESSION["user_role"] === "Super Admin");
 
 if (!$is_super_admin) {
@@ -126,9 +132,6 @@ if ($result && $result->num_rows > 0) {
         ];
     }
 }
-
-// Get user profile from database
-$user_profile = getUserProfile($conn, $_SESSION["user"]);
 ?>
 
 <!DOCTYPE html>
@@ -993,6 +996,12 @@ $user_profile = getUserProfile($conn, $_SESSION["user"]);
                         <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
                             <i class="fas fa-hand-holding-dollar"></i>
                             <span>Stewardship Report</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-boxes"></i>
+                            <span>Inventory</span>
                         </a>
                     </li>
                     <?php endif; ?>

@@ -1010,6 +1010,12 @@ $church_logo = getChurchLogo($conn);
                             <span>Stewardship Report</span>
                         </a>
                     </li>
+                    <li>
+                        <a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-boxes"></i>
+                            <span>Inventory</span>
+                        </a>
+                    </li>
                     <?php endif; ?>
                     <li>
                         <a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">

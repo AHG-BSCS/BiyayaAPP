@@ -13,6 +13,10 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
 $church_logo = getChurchLogo($conn);
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
+// Always update session role from database
+$_SESSION["user_role"] = $user_profile['role'];
+// Check if user is super administrator
+$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
 // Site configuration
 $site_settings = getSiteSettings($conn);
 $church_name = $site_settings['church_name'];
@@ -57,53 +61,241 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
         body { background-color: var(--light-gray); color: var(--primary-color); margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .dashboard-container { display: flex; min-height: 100vh; }
         .content-area { flex: 1; margin-left: 0; padding: 20px; min-height: 100vh; background-color: #f5f5f5; padding-top: 80px; }
-        /* Drawer Navigation Styles (from superadmin_dashboard.php) */
-        .nav-toggle-container { position: fixed; top: 20px; left: 20px; z-index: 50; }
-        .nav-toggle-btn { background-color: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background-color 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 8px; }
-        .nav-toggle-btn:hover { background-color: #2563eb; }
-        .custom-drawer { position: fixed; top: 0; left: -300px; width: 300px; height: 100vh; background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%); color: #3a3a3a; z-index: 1000; transition: left 0.3s ease; overflow-y: auto; box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; justify-content: space-between; }
-        .custom-drawer.open { left: 0; }
-        .drawer-header { padding: 20px; border-bottom: 1px solid rgba(0, 0, 0, 0.1); display: flex; justify-content: space-between; align-items: flex-start; min-height: 120px; }
-        .drawer-logo-section { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 100px; justify-content: center; flex: 1; }
-        .drawer-logo { height: 60px; width: auto; max-width: 200px; object-fit: contain; flex-shrink: 0; }
-        .drawer-title { font-size: 16px; font-weight: bold; margin: 0; text-align: center; color: #3a3a3a; max-width: 200px; word-wrap: break-word; line-height: 1.2; min-height: 20px; }
-        .drawer-close { background: none; border: none; color: #3a3a3a; font-size: 20px; cursor: pointer; padding: 5px; }
-        .drawer-close:hover { color: #666; }
-        .drawer-content { padding: 20px 0 0 0; flex: 1; }
-        .drawer-menu { list-style: none; margin: 0; padding: 0; }
-        .drawer-menu li { margin: 0; }
+        /* Custom Drawer Navigation Styles */
+        .nav-toggle-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 50;
+        }
+
+        .nav-toggle-btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-toggle-btn:hover {
+            background-color: #2563eb;
+        }
+
+        .custom-drawer {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
+            color: #3a3a3a;
+            z-index: 1000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .custom-drawer.open {
+            left: 0;
+        }
+
+        .drawer-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            min-height: 120px;
+        }
+
+        .drawer-logo-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            min-height: 100px;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .drawer-logo {
+            height: 60px;
+            width: auto;
+            max-width: 200px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .drawer-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0;
+            text-align: center;
+            color: #3a3a3a;
+            max-width: 200px;
+            word-wrap: break-word;
+            line-height: 1.2;
+            min-height: 20px;
+        }
+
+        .drawer-close {
+            background: none;
+            border: none;
+            color: #3a3a3a;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .drawer-close:hover {
+            color: #666;
+        }
+
+        .drawer-content {
+            padding: 20px 0 0 0;
+            flex: 1;
+        }
+
+        .drawer-menu {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .drawer-menu li {
+            margin: 0;
+        }
+
         .drawer-link {
             display: flex;
             align-items: center;
-            padding: 12px 18px; /* reduced padding */
+            padding: 12px 18px;
             color: #3a3a3a;
             text-decoration: none;
-            font-size: 15px; /* reduced font size */
+            font-size: 15px;
             font-weight: 500;
-            gap: 10px; /* reduced gap */
+            gap: 10px;
             border-left: 4px solid transparent;
             transition: background 0.2s, border-color 0.2s, color 0.2s;
             position: relative;
         }
+
         .drawer-link i {
-            font-size: 18px; /* reduced icon size */
+            font-size: 18px;
             min-width: 22px;
             text-align: center;
         }
-        .drawer-link.active { background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%); border-left: 4px solid var(--accent-color); color: var(--accent-color); }
-        .drawer-link.active i { color: var(--accent-color); }
-        .drawer-link:hover { background: rgba(0, 139, 30, 0.07); color: var(--accent-color); }
-        .drawer-link:hover i { color: var(--accent-color); }
-        .drawer-profile { padding: 24px 20px 20px 20px; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.85); }
-        .drawer-profile .avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--accent-color); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; overflow: hidden; }
-        .drawer-profile .avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .drawer-profile .profile-info { flex: 1; }
-        .drawer-profile .name { font-size: 16px; font-weight: 600; color: #222; }
-        .drawer-profile .role { font-size: 13px; color: var(--accent-color); font-weight: 500; margin-top: 2px; }
-        .drawer-profile .logout-btn { background: #f44336; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; margin-left: 10px; cursor: pointer; transition: background 0.2s; }
-        .drawer-profile .logout-btn:hover { background: #d32f2f; }
-        .drawer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 999; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
-        .drawer-overlay.open { opacity: 1; visibility: visible; }
+
+        .drawer-link.active {
+            background: linear-gradient(90deg, #e0ffe7 0%, #f5f5f5 100%);
+            border-left: 4px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .drawer-link.active i {
+            color: var(--accent-color);
+        }
+
+        .drawer-link:hover {
+            background: rgba(0, 139, 30, 0.07);
+            color: var(--accent-color);
+        }
+
+        .drawer-link:hover i {
+            color: var(--accent-color);
+        }
+
+        .drawer-profile {
+            padding: 24px 20px 20px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255,255,255,0.85);
+        }
+
+        .drawer-profile .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            overflow: hidden;
+        }
+
+        .drawer-profile .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .drawer-profile .profile-info {
+            flex: 1;
+        }
+
+        .drawer-profile .name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #222;
+        }
+
+        .drawer-profile .role {
+            font-size: 13px;
+            color: var(--accent-color);
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        .drawer-profile .logout-btn {
+            background: #f44336;
+            color: #fff;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .drawer-profile .logout-btn:hover {
+            background: #d32f2f;
+        }
+
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
         /* Stats Cards */
         .stats-cards { display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
         .stats-card { background: var(--white); border-radius: 8px; padding: 18px 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); flex: 1; text-align: center; min-width: 180px; margin-bottom: 10px; }
@@ -209,6 +401,7 @@ $success_rate = $stats['total_attempts'] > 0 ? round(($stats['successful_logins'
                 <li><a href="member_records.php" class="drawer-link <?php echo $current_page == 'member_records.php' ? 'active' : ''; ?>"><i class="fas fa-address-book"></i><span>Member Records</span></a></li>
                 <li><a href="superadmin_financialreport.php" class="drawer-link <?php echo $current_page == 'superadmin_financialreport.php' ? 'active' : ''; ?>"><i class="fas fa-chart-line"></i><span>Financial Reports</span></a></li>
                 <li><a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>"><i class="fas fa-hand-holding-dollar"></i><span>Stewardship Report</span></a></li>
+                <li><a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>"><i class="fas fa-boxes"></i><span>Inventory</span></a></li>
                 <li><a href="settings.php" class="drawer-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>"><i class="fas fa-cog"></i><span>Settings</span></a></li>
                 <li><a href="login_logs.php" class="drawer-link <?php echo $current_page == 'login_logs.php' ? 'active' : ''; ?>"><i class="fas fa-sign-in-alt"></i><span>Login Logs</span></a></li>
             </ul>

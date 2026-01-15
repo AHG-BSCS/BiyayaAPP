@@ -10,13 +10,19 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION
     exit;
 }
 
+// Get user profile from database
+$user_profile = getUserProfile($conn, $_SESSION["user"]);
+
+// Always update session role from database
+$_SESSION["user_role"] = $user_profile['role'];
+
+// Check if user is super administrator
+$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
+
 // Site configuration
 $site_settings = getSiteSettings($conn);
 $church_name = $site_settings['church_name'];
 $current_page = basename($_SERVER['PHP_SELF']);
-
-// Get user profile from database
-$user_profile = getUserProfile($conn, $_SESSION["user"]);
 
 // Process form submissions
 $message = "";
@@ -1543,6 +1549,12 @@ $church_logo = getChurchLogo($conn);
                         <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
                             <i class="fas fa-hand-holding-dollar"></i>
                             <span>Stewardship Report</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>">
+                            <i class="fas fa-boxes"></i>
+                            <span>Inventory</span>
                         </a>
                     </li>
                     <li>

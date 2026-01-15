@@ -7,14 +7,20 @@ require_once 'user_functions.php';
 // Get user profile from database
 $user_profile = getUserProfile($conn, $_SESSION["user"]);
 
-// Get church logo
-$church_logo = getChurchLogo($conn);
+// Always update session role from database
+$_SESSION["user_role"] = $user_profile['role'];
+
+// Check if user is super administrator
+$is_super_admin = ($_SESSION["user_role"] === "Super Admin");
 
 // Check if user is logged in and is super administrator only
-if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || $_SESSION["user_role"] !== "Super Admin") {
+if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true || !$is_super_admin) {
     header("Location: index.php");
     exit;
 }
+
+// Get church logo
+$church_logo = getChurchLogo($conn);
 
 // Site configuration
 $site_settings = getSiteSettings($conn);
@@ -1581,6 +1587,12 @@ if ($prophet_predictions && count($prophet_predictions) > 0) {
                     <a href="superadmin_contribution.php" class="drawer-link <?php echo $current_page == 'superadmin_contribution.php' ? 'active' : ''; ?>">
                         <i class="fas fa-hand-holding-dollar"></i>
                         <span>Stewardship Report</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="inventory.php" class="drawer-link <?php echo $current_page == 'inventory.php' ? 'active' : ''; ?>">
+                        <i class="fas fa-boxes"></i>
+                        <span>Inventory</span>
                     </a>
                 </li>
                 <li>
