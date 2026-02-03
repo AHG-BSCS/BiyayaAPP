@@ -1,5 +1,6 @@
 <?php
 # inventory.php
+ob_start();
 session_start();
 require_once 'config.php';
 require_once 'user_functions.php';
@@ -424,15 +425,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["adjust_quantity"]) && 
             $qty_after = $qty_before + 1;
             $change_amount = 1;
         }
-        $stmt = $conn->prepare("UPDATE {$table} SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-        $stmt->bind_param("is", $qty_after, $item_id);
-        if (!$stmt->execute()) {
+
+        $deleted = false;
+        if ($qty_after === 0) {
+            // Quantity reached 0: delete the item (out of stock)
+            $stmt = $conn->prepare("DELETE FROM {$table} WHERE id = ?");
+            $stmt->bind_param("s", $item_id);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                echo json_encode(['success' => false, 'error' => 'Delete failed']);
+                exit;
+            }
             $stmt->close();
-            echo json_encode(['success' => false, 'error' => 'Update failed']);
-            exit;
+            $deleted = true;
+        } else {
+            $stmt = $conn->prepare("UPDATE {$table} SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+            $stmt->bind_param("is", $qty_after, $item_id);
+            if (!$stmt->execute()) {
+                $stmt->close();
+                echo json_encode(['success' => false, 'error' => 'Update failed']);
+                exit;
+            }
+            $stmt->close();
         }
-        $stmt->close();
-        // Ensure inventory_adjustments table exists
+
+        // Ensure inventory_adjustments table exists and log the change
         $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
             id INT AUTO_INCREMENT PRIMARY KEY,
             inventory_type VARCHAR(50) NOT NULL,
@@ -449,7 +466,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["adjust_quantity"]) && 
         $stmt->bind_param("sssiiis", $type, $item_id, $item_name, $change_amount, $qty_before, $qty_after, $adjusted_by);
         $stmt->execute();
         $stmt->close();
-        echo json_encode(['success' => true, 'new_quantity' => $qty_after]);
+        echo json_encode(['success' => true, 'new_quantity' => $qty_after, 'deleted' => $deleted]);
         exit;
     } catch (Exception $e) {
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -1195,6 +1212,43 @@ foreach ($technical_equipments_records as $rec) {
             .summary-cards .card-info p {
                 font-size: 20px;
             }
+        }
+
+        /* Toast notification */
+        .toast-container {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+        }
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            border-left: 4px solid var(--warning-color);
+            animation: toastSlideIn 0.3s ease;
+        }
+        .toast.toast-warning { border-left-color: var(--warning-color); }
+        .toast.toast-success { border-left-color: var(--success-color); }
+        .toast.toast-danger { border-left-color: var(--danger-color); }
+        .toast .toast-icon { font-size: 22px; flex-shrink: 0; }
+        .toast.toast-warning .toast-icon { color: var(--warning-color); }
+        .toast .toast-message { flex: 1; font-size: 14px; color: #222; line-height: 1.4; }
+        .toast .toast-close {
+            background: none; border: none; color: #999; cursor: pointer; padding: 4px; font-size: 18px;
+        }
+        .toast .toast-close:hover { color: #333; }
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
     </style>
     <script>
@@ -2087,6 +2141,27 @@ foreach ($technical_equipments_records as $rec) {
         let officeSuppliesTable = null;
         let technicalEquipmentsTable = null;
 
+        // Toast notification when item reaches 0 (out of stock)
+        function showToast(message, type) {
+            type = type || 'warning';
+            var container = document.getElementById('toast-container');
+            if (!container) return;
+            var icon = type === 'success' ? 'fa-check-circle' : (type === 'danger' ? 'fa-exclamation-circle' : 'fa-exclamation-triangle');
+            var toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = '<span class="toast-icon"><i class="fas ' + icon + '"></i></span><span class="toast-message">' + (message || '') + '</span><button type="button" class="toast-close" aria-label="Close"><i class="fas fa-times"></i></button>';
+            container.appendChild(toast);
+            var close = function() {
+                toast.style.animation = 'toastSlideIn 0.25s ease reverse';
+                setTimeout(function() {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 250);
+            };
+            toast.querySelector('.toast-close').addEventListener('click', close);
+            setTimeout(close, 5000);
+        }
+
         // Function to initialize DataTable for a specific table
         function initializeDataTable(tableId) {
             const table = $('#' + tableId);
@@ -2524,17 +2599,36 @@ foreach ($technical_equipments_records as $rec) {
                     fetch(window.location.href, {
                         method: 'POST',
                         body: formData
-                    }).then(function(r) { return r.json();                     }).then(function(data) {
-                        if (data.success) {
-                            qtySpan.textContent = data.new_quantity;
-                            var minusBtn = row.querySelector('.qty-minus');
-                            if (minusBtn) minusBtn.disabled = data.new_quantity <= 0;
-                            var adjTab = document.getElementById('adjustment-history');
-                            if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
-                                loadAdjustmentHistory();
+                    }).then(function(r) { return r.text(); }).then(function(text) {
+                        var data;
+                        try { data = JSON.parse(text); } catch (e) { data = {}; }
+                        if (data && data.success) {
+                            if (data.deleted === true || data.deleted === 'true') {
+                                alert('This item is out of stock and will be removed from the inventory.');
+                                if (window.showToast) {
+                                    window.showToast('This item is out of stock and will be removed from the inventory.', 'warning');
+                                }
+                                var table = row.closest('table');
+                                if (table && $.fn.DataTable && $.fn.DataTable.isDataTable(table)) {
+                                    $(table).DataTable().row(row).remove().draw();
+                                } else {
+                                    row.remove();
+                                }
+                                var adjTab = document.getElementById('adjustment-history');
+                                if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
+                                    loadAdjustmentHistory();
+                                }
+                            } else {
+                                qtySpan.textContent = data.new_quantity;
+                                var minusBtn = row.querySelector('.qty-minus');
+                                if (minusBtn) minusBtn.disabled = data.new_quantity <= 0;
+                                var adjTab = document.getElementById('adjustment-history');
+                                if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
+                                    loadAdjustmentHistory();
+                                }
                             }
                         } else {
-                            alert(data.error || 'Failed to update quantity');
+                            alert(data && data.error ? data.error : 'Failed to update quantity');
                         }
                     }).catch(function() {
                         alert('Network error. Please try again.');
