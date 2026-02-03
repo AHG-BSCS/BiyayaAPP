@@ -390,6 +390,110 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_technical_equip
     }
 }
 
+// Handle AJAX quantity adjust (minus/plus) and log adjustment
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["adjust_quantity"]) && $is_super_admin) {
+    header('Content-Type: application/json');
+    // Frontend sends hyphenated types (church-property); normalize to underscore for validation and DB
+    $type = str_replace('-', '_', $_POST['inventory_type'] ?? '');
+    $item_id = trim($_POST['item_id'] ?? '');
+    $direction = $_POST['direction'] ?? ''; // 'plus' or 'minus'
+    $valid_types = ['church_property', 'office_supplies', 'technical_equipments'];
+    if (!in_array($type, $valid_types) || $item_id === '' || !in_array($direction, ['plus', 'minus'])) {
+        echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
+        exit;
+    }
+    try {
+        $table = $type === 'church_property' ? 'church_property_inventory' : ($type === 'office_supplies' ? 'office_supplies_inventory' : 'technical_equipments_inventory');
+        $stmt = $conn->prepare("SELECT quantity, item_name FROM {$table} WHERE id = ?");
+        $stmt->bind_param("s", $item_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res->num_rows === 0) {
+            $stmt->close();
+            echo json_encode(['success' => false, 'error' => 'Item not found']);
+            exit;
+        }
+        $row = $res->fetch_assoc();
+        $stmt->close();
+        $qty_before = (int) $row['quantity'];
+        $item_name = $row['item_name'];
+        if ($direction === 'minus') {
+            $qty_after = max(0, $qty_before - 1);
+            $change_amount = $qty_after - $qty_before;
+        } else {
+            $qty_after = $qty_before + 1;
+            $change_amount = 1;
+        }
+        $stmt = $conn->prepare("UPDATE {$table} SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt->bind_param("is", $qty_after, $item_id);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            echo json_encode(['success' => false, 'error' => 'Update failed']);
+            exit;
+        }
+        $stmt->close();
+        // Ensure inventory_adjustments table exists
+        $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            inventory_type VARCHAR(50) NOT NULL,
+            item_id VARCHAR(50) NOT NULL,
+            item_name VARCHAR(255),
+            change_amount INT NOT NULL,
+            quantity_before INT NOT NULL,
+            quantity_after INT NOT NULL,
+            adjusted_by VARCHAR(255),
+            adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+        $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+        $stmt = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssiiis", $type, $item_id, $item_name, $change_amount, $qty_before, $qty_after, $adjusted_by);
+        $stmt->execute();
+        $stmt->close();
+        echo json_encode(['success' => true, 'new_quantity' => $qty_after]);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
+// AJAX: return adjustment history as JSON (so the tab can show fresh data after +/-)
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'adjustment_history' && $is_super_admin) {
+    header('Content-Type: application/json');
+    $list = [];
+    try {
+        $stmt = $conn->query("SHOW TABLES LIKE 'inventory_adjustments'");
+        if ($stmt && $stmt->num_rows > 0) {
+            $stmt = $conn->query("SELECT * FROM inventory_adjustments ORDER BY adjusted_at DESC LIMIT 200");
+            if ($stmt) {
+                while ($row = $stmt->fetch_assoc()) {
+                    $list[] = $row;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // ignore
+    }
+    echo json_encode($list);
+    exit;
+}
+
+// Fetch adjustment history (for AJAX or display)
+$adjustment_records = [];
+try {
+    $stmt = $conn->query("SHOW TABLES LIKE 'inventory_adjustments'");
+    if ($stmt && $stmt->num_rows > 0) {
+        $stmt = $conn->query("SELECT * FROM inventory_adjustments ORDER BY adjusted_at DESC LIMIT 200");
+        if ($stmt) {
+            while ($row = $stmt->fetch_assoc()) {
+                $adjustment_records[] = $row;
+            }
+        }
+    }
+} catch (Exception $e) {
+    // ignore
+}
+
 // Fetch church property inventory from database
 try {
     $stmt = $conn->query("SHOW TABLES LIKE 'church_property_inventory'");
@@ -436,6 +540,18 @@ try {
     }
 } catch(Exception $e) {
     $technical_equipments_records = [];
+}
+
+// Technical equipment counts by status (Working / Not Working)
+$technical_working_count = 0;
+$technical_not_working_count = 0;
+foreach ($technical_equipments_records as $rec) {
+    $st = strtolower(trim($rec['status'] ?? ''));
+    if ($st === 'working') {
+        $technical_working_count++;
+    } else {
+        $technical_not_working_count++;
+    }
 }
 
 ?>
@@ -992,6 +1108,94 @@ try {
             min-height: 20px;
             color: var(--primary-color);
         }
+
+        .quantity-controls {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .qty-btn {
+            width: 28px;
+            height: 28px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f5f5f5;
+            color: var(--primary-color);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .qty-btn:hover:not(:disabled) {
+            background: var(--accent-color);
+            color: var(--white);
+            border-color: var(--accent-color);
+        }
+
+        .qty-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .qty-btn.qty-minus:not(:disabled):hover {
+            background: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .qty-value {
+            min-width: 28px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        /* Summary Cards (same design as superadmin_contribution) */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .summary-cards .card {
+            background-color: var(--white);
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .summary-cards .card-info h3 {
+            font-size: 16px;
+            margin-bottom: 5px;
+            color: var(--primary-color);
+        }
+        .summary-cards .card-info p {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+        .summary-cards .card-info p.summary-row {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .summary-cards .card-info p.summary-row:last-child {
+            margin-bottom: 0;
+        }
+        .summary-cards .card-info .summary-label {
+            font-weight: 500;
+            color: #555;
+            margin-right: 6px;
+        }
+        @media (max-width: 768px) {
+            .summary-cards {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            .summary-cards .card-info p {
+                font-size: 20px;
+            }
+        }
     </style>
     <script>
     // Custom Drawer Navigation JavaScript
@@ -1153,10 +1357,33 @@ try {
                     </div>
                 <?php endif; ?>
 
+                <div class="summary-cards">
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Church Property</h3>
+                            <p><?php echo number_format(count($church_property_records)); ?> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Office Supplies</h3>
+                            <p><?php echo number_format(count($office_supplies_records)); ?> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Technical Equipment</h3>
+                            <p class="summary-row"><span class="summary-label">Working:</span> <strong><?php echo number_format($technical_working_count); ?></strong> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                            <p class="summary-row"><span class="summary-label">Not Working:</span> <strong><?php echo number_format($technical_not_working_count); ?></strong> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-navigation">
                     <a href="#church-property" class="active" data-tab="church-property">Church Property Inventory</a>
                     <a href="#office-supplies" data-tab="office-supplies">Office Supplies</a>
                     <a href="#technical-equipments" data-tab="technical-equipments">Technical Equipments</a>
+                    <a href="#adjustment-history" data-tab="adjustment-history">Adjustment History</a>
                 </div>
 
                 <div class="tab-content">
@@ -1191,10 +1418,16 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($church_property_records as $record): ?>
-                                            <tr>
+                                            <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="church-property">
                                                 <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></td>
+                                                <td class="quantity-cell">
+                                                    <div class="quantity-controls">
+                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
+                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
+                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
+                                                    </div>
+                                                </td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
                                                 <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
@@ -1251,10 +1484,16 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($office_supplies_records as $record): ?>
-                                            <tr>
+                                            <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="office-supplies">
                                                 <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></td>
+                                                <td class="quantity-cell">
+                                                    <div class="quantity-controls">
+                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
+                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
+                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
+                                                    </div>
+                                                </td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
                                                 <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
@@ -1312,10 +1551,16 @@ try {
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($technical_equipments_records as $record): ?>
-                                            <tr>
+                                            <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="technical-equipments">
                                                 <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></td>
+                                                <td class="quantity-cell">
+                                                    <div class="quantity-controls">
+                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
+                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
+                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
+                                                    </div>
+                                                </td>
                                                 <td>
                                                     <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; 
                                                         <?php 
@@ -1346,6 +1591,56 @@ try {
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Adjustment History Tab -->
+                    <div class="tab-pane" id="adjustment-history">
+                        <p style="margin-bottom: 15px; color: #666;">Records of quantity increases and decreases from the minus/plus buttons.</p>
+                        <div class="table-responsive">
+                            <table id="adjustment-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date &amp; Time</th>
+                                        <th>Type</th>
+                                        <th>Item ID</th>
+                                        <th>Item Name</th>
+                                        <th>Change</th>
+                                        <th>Qty Before</th>
+                                        <th>Qty After</th>
+                                        <th>Adjusted By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($adjustment_records)): ?>
+                                        <tr>
+                                            <td colspan="8" style="text-align: center; padding: 20px;">No adjustment records yet. Use the minus/plus buttons on inventory items to record changes.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($adjustment_records as $adj): ?>
+                                            <tr>
+                                                <td><?php echo !empty($adj['adjusted_at']) ? date('M d, Y H:i', strtotime($adj['adjusted_at'])) : 'N/A'; ?></td>
+                                                <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $adj['inventory_type'] ?? ''))); ?></td>
+                                                <td><?php echo htmlspecialchars($adj['item_id'] ?? ''); ?></td>
+                                                <td><?php echo htmlspecialchars($adj['item_name'] ?? ''); ?></td>
+                                                <td>
+                                                    <?php
+                                                    $ch = (int)($adj['change_amount'] ?? 0);
+                                                    if ($ch > 0) {
+                                                        echo '<span style="color: var(--success-color); font-weight: 600;">+' . $ch . '</span>';
+                                                    } else {
+                                                        echo '<span style="color: var(--danger-color); font-weight: 600;">' . $ch . '</span>';
+                                                    }
+                                                    ?>
+                                                </td>
+                                                <td><?php echo (int)($adj['quantity_before'] ?? 0); ?></td>
+                                                <td><?php echo (int)($adj['quantity_after'] ?? 0); ?></td>
+                                                <td><?php echo htmlspecialchars($adj['adjusted_by'] ?? 'N/A'); ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -1900,10 +2195,58 @@ try {
                         officeSuppliesTable = reinitializeDataTable('office-supplies-table');
                     } else if (tabId === 'technical-equipments') {
                         technicalEquipmentsTable = reinitializeDataTable('technical-equipments-table');
+                    } else if (tabId === 'adjustment-history') {
+                        loadAdjustmentHistory();
                     }
                 }, 100);
             });
         });
+
+        // Fetch latest adjustment history and refresh the table (so new +/- show up)
+        function loadAdjustmentHistory() {
+            var tbody = document.querySelector('#adjustment-history-table tbody');
+            if (!tbody) return;
+            var url = window.location.pathname + '?ajax=adjustment_history';
+            fetch(url).then(function(r) { return r.json(); }).then(function(list) {
+                if (!Array.isArray(list)) return;
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No adjustment records yet. Use the minus/plus buttons on inventory items to record changes.</td></tr>';
+                } else {
+                    tbody.innerHTML = list.map(function(adj) {
+                        var date = adj.adjusted_at ? formatAdjustmentDate(adj.adjusted_at) : 'N/A';
+                        var typeLabel = (adj.inventory_type || '').replace(/_/g, ' ');
+                        typeLabel = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+                        var ch = parseInt(adj.change_amount, 10) || 0;
+                        var changeHtml = ch > 0 ? '<span style="color: var(--success-color); font-weight: 600;">+' + ch + '</span>' : '<span style="color: var(--danger-color); font-weight: 600;">' + ch + '</span>';
+                        var itemName = (adj.item_name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        var itemId = (adj.item_id || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        var by = (adj.adjusted_by || 'N/A').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        return '<tr><td>' + date + '</td><td>' + typeLabel + '</td><td>' + itemId + '</td><td>' + itemName + '</td><td>' + changeHtml + '</td><td>' + (parseInt(adj.quantity_before, 10) || 0) + '</td><td>' + (parseInt(adj.quantity_after, 10) || 0) + '</td><td>' + by + '</td></tr>';
+                    }).join('');
+                }
+                if ($.fn.DataTable.isDataTable('#adjustment-history-table')) {
+                    $('#adjustment-history-table').DataTable().destroy();
+                }
+                adjustmentHistoryTable = initializeDataTable('adjustment-history-table');
+            }).catch(function() {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">Failed to load adjustment history.</td></tr>';
+            });
+        }
+
+        function formatAdjustmentDate(dateStr) {
+            try {
+                var d = new Date(dateStr);
+                if (isNaN(d.getTime())) return dateStr;
+                var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                var day = d.getDate();
+                var year = d.getFullYear();
+                var h = d.getHours();
+                var m = d.getMinutes();
+                return months[d.getMonth()] + ' ' + day + ', ' + year + ' ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+            } catch (e) {
+                return dateStr;
+            }
+        }
 
         // Hash-based tab activation and DataTables initialization
         $(document).ready(function() {
@@ -1926,13 +2269,14 @@ try {
 
             // Initialize DataTables after a short delay to ensure tables are visible
             setTimeout(function() {
-                // Initialize the active tab's DataTable
                 if (defaultTab === 'church-property') {
                     churchPropertyTable = initializeDataTable('church-property-table');
                 } else if (defaultTab === 'office-supplies') {
                     officeSuppliesTable = initializeDataTable('office-supplies-table');
                 } else if (defaultTab === 'technical-equipments') {
                     technicalEquipmentsTable = initializeDataTable('technical-equipments-table');
+                } else if (defaultTab === 'adjustment-history') {
+                    adjustmentHistoryTable = initializeDataTable('adjustment-history-table');
                 }
             }, 200);
 
@@ -1990,24 +2334,26 @@ try {
                     const type = this.getAttribute('data-type');
                     const row = this.closest('tr');
                     
+                    var qtyCell = row.querySelector('.quantity-cell');
+                    var qtyText = qtyCell ? (qtyCell.querySelector('.qty-value') || qtyCell).textContent.trim() : row.cells[2].textContent;
                     if (type === 'church-property') {
                         document.getElementById('view-church-property-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-church-property-item-name').textContent = row.cells[1].textContent;
-                        document.getElementById('view-church-property-quantity').textContent = row.cells[2].textContent;
+                        document.getElementById('view-church-property-quantity').textContent = qtyText;
                         document.getElementById('view-church-property-notes').textContent = row.cells[3].textContent || 'N/A';
                         document.getElementById('view-church-property-updated').textContent = row.cells[4].textContent || 'N/A';
                         openModal('view-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('view-office-supplies-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-office-supplies-item-name').textContent = row.cells[1].textContent;
-                        document.getElementById('view-office-supplies-quantity').textContent = row.cells[2].textContent;
+                        document.getElementById('view-office-supplies-quantity').textContent = qtyText;
                         document.getElementById('view-office-supplies-notes').textContent = row.cells[3].textContent || 'N/A';
                         document.getElementById('view-office-supplies-updated').textContent = row.cells[4].textContent || 'N/A';
                         openModal('view-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('view-technical-equipments-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-technical-equipments-item-name').textContent = row.cells[1].textContent;
-                        document.getElementById('view-technical-equipments-quantity').textContent = row.cells[2].textContent;
+                        document.getElementById('view-technical-equipments-quantity').textContent = qtyText;
                         document.getElementById('view-technical-equipments-status').textContent = row.cells[3].textContent.trim();
                         document.getElementById('view-technical-equipments-notes').textContent = row.cells[4].textContent || 'N/A';
                         document.getElementById('view-technical-equipments-updated').textContent = row.cells[5].textContent || 'N/A';
@@ -2042,24 +2388,26 @@ try {
                     const type = this.getAttribute('data-type');
                     const row = this.closest('tr');
                     
+                    var qtyCell = row.querySelector('.quantity-cell');
+                    var qtyVal = qtyCell ? (qtyCell.querySelector('.qty-value') || qtyCell).textContent.trim() : row.cells[2].textContent;
                     if (type === 'church-property') {
                         document.getElementById('edit-church-property-id').value = id;
                         document.getElementById('edit-church-property-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-church-property-quantity').value = row.cells[2].textContent;
+                        document.getElementById('edit-church-property-quantity').value = qtyVal;
                         document.getElementById('edit-church-property-notes').value = row.cells[3].textContent || '';
                         document.getElementById('edit-church-property-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
                         openModal('edit-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('edit-office-supplies-id').value = id;
                         document.getElementById('edit-office-supplies-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-office-supplies-quantity').value = row.cells[2].textContent;
+                        document.getElementById('edit-office-supplies-quantity').value = qtyVal;
                         document.getElementById('edit-office-supplies-notes').value = row.cells[3].textContent || '';
                         document.getElementById('edit-office-supplies-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
                         openModal('edit-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('edit-technical-equipments-id').value = id;
                         document.getElementById('edit-technical-equipments-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-technical-equipments-quantity').value = row.cells[2].textContent;
+                        document.getElementById('edit-technical-equipments-quantity').value = qtyVal;
                         const statusText = row.cells[3].textContent.trim();
                         document.getElementById('edit-technical-equipments-status').value = statusText;
                         document.getElementById('edit-technical-equipments-notes').value = row.cells[4].textContent || '';
@@ -2154,8 +2502,48 @@ try {
                     }
                 });
             });
+
+            // Quantity minus/plus buttons (event delegation for DataTables)
+            document.querySelectorAll('.tab-content').forEach(function(container) {
+                container.addEventListener('click', function(e) {
+                    var btn = e.target.closest('.qty-minus, .qty-plus');
+                    if (!btn || btn.disabled) return;
+                    var row = btn.closest('tr');
+                    if (!row || !row.dataset.id || !row.dataset.type) return;
+                    var type = row.dataset.type;
+                    var itemId = row.dataset.id;
+                    var direction = btn.classList.contains('qty-minus') ? 'minus' : 'plus';
+                    var qtySpan = row.querySelector('.qty-value');
+                    if (!qtySpan) return;
+                    var formData = new FormData();
+                    formData.append('adjust_quantity', '1');
+                    formData.append('inventory_type', type);
+                    formData.append('item_id', itemId);
+                    formData.append('direction', direction);
+                    btn.disabled = true;
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData
+                    }).then(function(r) { return r.json();                     }).then(function(data) {
+                        if (data.success) {
+                            qtySpan.textContent = data.new_quantity;
+                            var minusBtn = row.querySelector('.qty-minus');
+                            if (minusBtn) minusBtn.disabled = data.new_quantity <= 0;
+                            var adjTab = document.getElementById('adjustment-history');
+                            if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
+                                loadAdjustmentHistory();
+                            }
+                        } else {
+                            alert(data.error || 'Failed to update quantity');
+                        }
+                    }).catch(function() {
+                        alert('Network error. Please try again.');
+                    }).finally(function() {
+                        btn.disabled = false;
+                    });
+                });
+            });
         });
     </script>
 </body>
 </html>
-
