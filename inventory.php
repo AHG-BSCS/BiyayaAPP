@@ -38,10 +38,39 @@ $current_page = basename($_SERVER['PHP_SELF']);
 $message = '';
 $messageType = '';
 
+/**
+ * Generate the next automatic ID for an inventory table.
+ * Church Property: CPI-001, CPI-002, ...
+ * Office Supplies: OS-001, OS-002, ...
+ * Technical Equipments: EI-001, EI-002, ...
+ * @param mysqli $conn Database connection
+ * @param string $tableName Table name (church_property_inventory, office_supplies_inventory, technical_equipments_inventory)
+ * @param string $prefix Prefix (CPI, OS, TE)
+ * @return string Next ID e.g. CPI-001
+ */
+function getNextInventoryId($conn, $tableName, $prefix) {
+    $safeTable = preg_replace('/[^a-z0-9_]/', '', $tableName);
+    $next = 1;
+    try {
+        $res = $conn->query("SELECT id FROM `{$safeTable}` WHERE id LIKE '" . $conn->real_escape_string($prefix) . "-%'");
+        if ($res && $res->num_rows > 0) {
+            while ($row = $res->fetch_assoc()) {
+                $id = $row['id'];
+                if (preg_match('/^' . preg_quote($prefix, '/') . '-(\d+)$/', $id, $m)) {
+                    $n = (int) $m[1];
+                    if ($n >= $next) $next = $n + 1;
+                }
+            }
+            $res->free();
+        }
+    } catch (Exception $e) { /* use 1 */ }
+    return $prefix . '-' . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+}
+
 // Handle form submission for adding church property
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_church_property"]) && $is_super_admin) {
     try {
-        $id = $_POST['id'] ?? '';
+        $id = getNextInventoryId($conn, 'church_property_inventory', 'CPI');
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
@@ -96,7 +125,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_church_property"])
 // Handle form submission for adding office supplies
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_office_supplies"]) && $is_super_admin) {
     try {
-        $id = $_POST['id'] ?? '';
+        $id = getNextInventoryId($conn, 'office_supplies_inventory', 'OS');
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $notes = $_POST['notes'] ?? '';
@@ -151,7 +180,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_office_supplies"])
 // Handle form submission for adding technical equipments
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["add_technical_equipments"]) && $is_super_admin) {
     try {
-        $id = $_POST['id'] ?? '';
+        $id = getNextInventoryId($conn, 'technical_equipments_inventory', 'EI');
         $item_name = $_POST['item_name'] ?? '';
         $quantity = $_POST['quantity'] ?? '0';
         $status = $_POST['status'] ?? 'Working';
@@ -209,9 +238,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_church_property"]
     try {
         $id = $_POST['id'] ?? '';
         $item_name = $_POST['item_name'] ?? '';
-        $quantity = $_POST['quantity'] ?? '0';
+        $current_quantity = (int) ($_POST['current_quantity'] ?? 0);
+        $amount = (int) ($_POST['quantity'] ?? 0);
+        $stock_action = $_POST['stock_action'] ?? 'add_stock';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
+        
+        if ($stock_action === 'withdraw_stock') {
+            $quantity = max(0, $current_quantity - $amount);
+        } else {
+            $quantity = $current_quantity + $amount;
+        }
         
         if ($updated_at) {
             $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
@@ -225,6 +262,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_church_property"]
         
         if ($stmt->execute()) {
             $stmt->close();
+            if ($amount != 0) {
+                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    inventory_type VARCHAR(50) NOT NULL,
+                    item_id VARCHAR(50) NOT NULL,
+                    item_name VARCHAR(255),
+                    change_amount INT NOT NULL,
+                    quantity_before INT NOT NULL,
+                    quantity_after INT NOT NULL,
+                    adjusted_by VARCHAR(255),
+                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )");
+                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('church_property', ?, ?, ?, ?, ?, ?)");
+                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                $log->execute();
+                $log->close();
+            }
             $message = "Church property updated successfully!";
             $messageType = "success";
             header("Location: " . $_SERVER['PHP_SELF'] . "#church-property");
@@ -271,9 +327,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_office_supplies"]
     try {
         $id = $_POST['id'] ?? '';
         $item_name = $_POST['item_name'] ?? '';
-        $quantity = $_POST['quantity'] ?? '0';
+        $current_quantity = (int) ($_POST['current_quantity'] ?? 0);
+        $amount = (int) ($_POST['quantity'] ?? 0);
+        $stock_action = $_POST['stock_action'] ?? 'add_stock';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
+        
+        if ($stock_action === 'withdraw_stock') {
+            $quantity = max(0, $current_quantity - $amount);
+        } else {
+            $quantity = $current_quantity + $amount;
+        }
         
         if ($updated_at) {
             $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
@@ -287,6 +351,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_office_supplies"]
         
         if ($stmt->execute()) {
             $stmt->close();
+            if ($amount != 0) {
+                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    inventory_type VARCHAR(50) NOT NULL,
+                    item_id VARCHAR(50) NOT NULL,
+                    item_name VARCHAR(255),
+                    change_amount INT NOT NULL,
+                    quantity_before INT NOT NULL,
+                    quantity_after INT NOT NULL,
+                    adjusted_by VARCHAR(255),
+                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )");
+                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('office_supplies', ?, ?, ?, ?, ?, ?)");
+                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                $log->execute();
+                $log->close();
+            }
             $message = "Office supply updated successfully!";
             $messageType = "success";
             header("Location: " . $_SERVER['PHP_SELF'] . "#office-supplies");
@@ -333,10 +416,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_technical_equipme
     try {
         $id = $_POST['id'] ?? '';
         $item_name = $_POST['item_name'] ?? '';
-        $quantity = $_POST['quantity'] ?? '0';
+        $current_quantity = (int) ($_POST['current_quantity'] ?? 0);
+        $amount = (int) ($_POST['quantity'] ?? 0);
+        $stock_action = $_POST['stock_action'] ?? 'add_stock';
         $status = $_POST['status'] ?? 'Working';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
+        
+        if ($stock_action === 'withdraw_stock') {
+            $quantity = max(0, $current_quantity - $amount);
+        } else {
+            $quantity = $current_quantity + $amount;
+        }
         
         if ($updated_at) {
             $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?";
@@ -350,6 +441,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_technical_equipme
         
         if ($stmt->execute()) {
             $stmt->close();
+            if ($amount != 0) {
+                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    inventory_type VARCHAR(50) NOT NULL,
+                    item_id VARCHAR(50) NOT NULL,
+                    item_name VARCHAR(255),
+                    change_amount INT NOT NULL,
+                    quantity_before INT NOT NULL,
+                    quantity_after INT NOT NULL,
+                    adjusted_by VARCHAR(255),
+                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )");
+                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('technical_equipments', ?, ?, ?, ?, ?, ?)");
+                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                $log->execute();
+                $log->close();
+            }
             $message = "Technical equipment updated successfully!";
             $messageType = "success";
             header("Location: " . $_SERVER['PHP_SELF'] . "#technical-equipments");
@@ -388,89 +498,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["delete_technical_equip
     } catch(Exception $e) {
         $message = "Error: " . $e->getMessage();
         $messageType = "danger";
-    }
-}
-
-// Handle AJAX quantity adjust (minus/plus) and log adjustment
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["adjust_quantity"]) && $is_super_admin) {
-    header('Content-Type: application/json');
-    // Frontend sends hyphenated types (church-property); normalize to underscore for validation and DB
-    $type = str_replace('-', '_', $_POST['inventory_type'] ?? '');
-    $item_id = trim($_POST['item_id'] ?? '');
-    $direction = $_POST['direction'] ?? ''; // 'plus' or 'minus'
-    $valid_types = ['church_property', 'office_supplies', 'technical_equipments'];
-    if (!in_array($type, $valid_types) || $item_id === '' || !in_array($direction, ['plus', 'minus'])) {
-        echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
-        exit;
-    }
-    try {
-        $table = $type === 'church_property' ? 'church_property_inventory' : ($type === 'office_supplies' ? 'office_supplies_inventory' : 'technical_equipments_inventory');
-        $stmt = $conn->prepare("SELECT quantity, item_name FROM {$table} WHERE id = ?");
-        $stmt->bind_param("s", $item_id);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($res->num_rows === 0) {
-            $stmt->close();
-            echo json_encode(['success' => false, 'error' => 'Item not found']);
-            exit;
-        }
-        $row = $res->fetch_assoc();
-        $stmt->close();
-        $qty_before = (int) $row['quantity'];
-        $item_name = $row['item_name'];
-        if ($direction === 'minus') {
-            $qty_after = max(0, $qty_before - 1);
-            $change_amount = $qty_after - $qty_before;
-        } else {
-            $qty_after = $qty_before + 1;
-            $change_amount = 1;
-        }
-
-        $deleted = false;
-        if ($qty_after === 0) {
-            // Quantity reached 0: delete the item (out of stock)
-            $stmt = $conn->prepare("DELETE FROM {$table} WHERE id = ?");
-            $stmt->bind_param("s", $item_id);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                echo json_encode(['success' => false, 'error' => 'Delete failed']);
-                exit;
-            }
-            $stmt->close();
-            $deleted = true;
-        } else {
-            $stmt = $conn->prepare("UPDATE {$table} SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-            $stmt->bind_param("is", $qty_after, $item_id);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                echo json_encode(['success' => false, 'error' => 'Update failed']);
-                exit;
-            }
-            $stmt->close();
-        }
-
-        // Ensure inventory_adjustments table exists and log the change
-        $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            inventory_type VARCHAR(50) NOT NULL,
-            item_id VARCHAR(50) NOT NULL,
-            item_name VARCHAR(255),
-            change_amount INT NOT NULL,
-            quantity_before INT NOT NULL,
-            quantity_after INT NOT NULL,
-            adjusted_by VARCHAR(255),
-            adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
-        $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
-        $stmt = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("sssiiis", $type, $item_id, $item_name, $change_amount, $qty_before, $qty_after, $adjusted_by);
-        $stmt->execute();
-        $stmt->close();
-        echo json_encode(['success' => true, 'new_quantity' => $qty_after, 'deleted' => $deleted]);
-        exit;
-    } catch (Exception $e) {
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        exit;
     }
 }
 
@@ -570,6 +597,11 @@ foreach ($technical_equipments_records as $rec) {
         $technical_not_working_count++;
     }
 }
+
+// Next auto-generated IDs for add modals (so user sees which ID will be assigned)
+$next_church_property_id = getNextInventoryId($conn, 'church_property_inventory', 'CPI');
+$next_office_supplies_id = getNextInventoryId($conn, 'office_supplies_inventory', 'OS');
+$next_technical_equipments_id = getNextInventoryId($conn, 'technical_equipments_inventory', 'EI');
 
 ?>
 <!DOCTYPE html>
@@ -1126,45 +1158,7 @@ foreach ($technical_equipments_records as $rec) {
             color: var(--primary-color);
         }
 
-        .quantity-controls {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .qty-btn {
-            width: 28px;
-            height: 28px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: #f5f5f5;
-            color: var(--primary-color);
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s, color 0.2s;
-        }
-
-        .qty-btn:hover:not(:disabled) {
-            background: var(--accent-color);
-            color: var(--white);
-            border-color: var(--accent-color);
-        }
-
-        .qty-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .qty-btn.qty-minus:not(:disabled):hover {
-            background: var(--danger-color);
-            border-color: var(--danger-color);
-        }
-
         .qty-value {
-            min-width: 28px;
-            text-align: center;
             font-weight: 600;
             font-size: 15px;
         }
@@ -1411,17 +1405,28 @@ foreach ($technical_equipments_records as $rec) {
                     </div>
                 <?php endif; ?>
 
+                <?php
+                $church_property_total_qty = 0;
+                foreach ($church_property_records as $r) { $church_property_total_qty += (int)($r['quantity'] ?? 0); }
+                $office_supplies_total_qty = 0;
+                foreach ($office_supplies_records as $r) { $office_supplies_total_qty += (int)($r['quantity'] ?? 0); }
+                $technical_equipments_total_qty = 0;
+                foreach ($technical_equipments_records as $r) { $technical_equipments_total_qty += (int)($r['quantity'] ?? 0); }
+                $total_assets_qty = $church_property_total_qty + $office_supplies_total_qty + $technical_equipments_total_qty;
+                ?>
                 <div class="summary-cards">
                     <div class="card">
                         <div class="card-info">
                             <h3>Total Church Property</h3>
                             <p><?php echo number_format(count($church_property_records)); ?> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                            <p class="summary-row"><span class="summary-label">Total Quantity:</span> <strong><?php echo number_format($church_property_total_qty); ?></strong></p>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-info">
                             <h3>Total Office Supplies</h3>
                             <p><?php echo number_format(count($office_supplies_records)); ?> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                            <p class="summary-row"><span class="summary-label">Total Quantity:</span> <strong><?php echo number_format($office_supplies_total_qty); ?></strong></p>
                         </div>
                     </div>
                     <div class="card">
@@ -1429,6 +1434,12 @@ foreach ($technical_equipments_records as $rec) {
                             <h3>Total Technical Equipment</h3>
                             <p class="summary-row"><span class="summary-label">Working:</span> <strong><?php echo number_format($technical_working_count); ?></strong> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
                             <p class="summary-row"><span class="summary-label">Not Working:</span> <strong><?php echo number_format($technical_not_working_count); ?></strong> <span style="font-size: 14px; font-weight: 500; color: #666;">items</span></p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-info">
+                            <h3>Total Assets</h3>
+                            <p><?php echo number_format($total_assets_qty); ?> <span style="font-size: 14px; font-weight: 500; color: #666;">total quantity (all tabs)</span></p>
                         </div>
                     </div>
                 </div>
@@ -1458,6 +1469,7 @@ foreach ($technical_equipments_records as $rec) {
                                         <th>ID</th>
                                         <th>Item Name</th>
                                         <th>Quantity</th>
+                                        <th>Status</th>
                                         <th>Notes</th>
                                         <th>Updated</th>
                                         <th>Actions</th>
@@ -1466,22 +1478,22 @@ foreach ($technical_equipments_records as $rec) {
                                 <tbody>
                                     <?php if (empty($church_property_records)): ?>
                                         <tr>
-                                            <td colspan="6" style="text-align: center; padding: 20px;">
+                                            <td colspan="7" style="text-align: center; padding: 20px;">
                                                 No church property records found. Click "Add New Property" to add one.
                                             </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($church_property_records as $record): ?>
+                                            <?php
+                                            $qty = (int)($record['quantity'] ?? 0);
+                                            $stockStatus = $qty <= 0 ? 'OUT OF STOCK' : 'In Stock';
+                                            $stockStatusStyle = $qty <= 0 ? 'background-color: #e74c3c; color: white;' : 'background-color: #2ecc71; color: white;';
+                                            ?>
                                             <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="church-property">
                                                 <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td class="quantity-cell">
-                                                    <div class="quantity-controls">
-                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
-                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
-                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
-                                                    </div>
-                                                </td>
+                                                <td class="quantity-cell"><span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span></td>
+                                                <td><span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; <?php echo $stockStatusStyle; ?>"><?php echo htmlspecialchars($stockStatus); ?></span></td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
                                                 <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
@@ -1524,6 +1536,7 @@ foreach ($technical_equipments_records as $rec) {
                                         <th>ID</th>
                                         <th>Item Name</th>
                                         <th>Quantity</th>
+                                        <th>Status</th>
                                         <th>Notes</th>
                                         <th>Updated</th>
                                         <th>Actions</th>
@@ -1532,22 +1545,22 @@ foreach ($technical_equipments_records as $rec) {
                                 <tbody>
                                     <?php if (empty($office_supplies_records)): ?>
                                         <tr>
-                                            <td colspan="6" style="text-align: center; padding: 20px;">
+                                            <td colspan="7" style="text-align: center; padding: 20px;">
                                                 No office supplies records found. Click "Add New Supply" to add one.
                                             </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($office_supplies_records as $record): ?>
+                                            <?php
+                                            $qty = (int)($record['quantity'] ?? 0);
+                                            $stockStatus = $qty <= 0 ? 'OUT OF STOCK' : 'In Stock';
+                                            $stockStatusStyle = $qty <= 0 ? 'background-color: #e74c3c; color: white;' : 'background-color: #2ecc71; color: white;';
+                                            ?>
                                             <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="office-supplies">
                                                 <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td class="quantity-cell">
-                                                    <div class="quantity-controls">
-                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
-                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
-                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
-                                                    </div>
-                                                </td>
+                                                <td class="quantity-cell"><span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span></td>
+                                                <td><span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; <?php echo $stockStatusStyle; ?>"><?php echo htmlspecialchars($stockStatus); ?></span></td>
                                                 <td><?php echo htmlspecialchars($record['notes'] ?? ''); ?></td>
                                                 <td><?php echo !empty($record['updated_at']) ? date('M d, Y H:i', strtotime($record['updated_at'])) : 'N/A'; ?></td>
                                                 <td>
@@ -1606,15 +1619,9 @@ foreach ($technical_equipments_records as $rec) {
                                     <?php else: ?>
                                         <?php foreach ($technical_equipments_records as $record): ?>
                                             <tr data-id="<?php echo htmlspecialchars($record['id'] ?? ''); ?>" data-type="technical-equipments">
-                                                <td><?php echo htmlspecialchars($record['id'] ?? ''); ?></td>
+                                                <td><?php echo htmlspecialchars(isset($record['id']) && (string)$record['id'] !== '' ? $record['id'] : '—'); ?></td>
                                                 <td><?php echo htmlspecialchars($record['item_name'] ?? ''); ?></td>
-                                                <td class="quantity-cell">
-                                                    <div class="quantity-controls">
-                                                        <button type="button" class="qty-btn qty-minus" title="Decrease quantity" <?php echo ((int)($record['quantity'] ?? 0)) <= 0 ? ' disabled' : ''; ?>><i class="fas fa-minus"></i></button>
-                                                        <span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span>
-                                                        <button type="button" class="qty-btn qty-plus" title="Increase quantity"><i class="fas fa-plus"></i></button>
-                                                    </div>
-                                                </td>
+                                                <td class="quantity-cell"><span class="qty-value"><?php echo htmlspecialchars($record['quantity'] ?? '0'); ?></span></td>
                                                 <td>
                                                     <span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; 
                                                         <?php 
@@ -1655,7 +1662,7 @@ foreach ($technical_equipments_records as $rec) {
 
                     <!-- Adjustment History Tab -->
                     <div class="tab-pane" id="adjustment-history">
-                        <p style="margin-bottom: 15px; color: #666;">Records of quantity increases and decreases from the minus/plus buttons.</p>
+                        <p style="margin-bottom: 15px; color: #666;">Records of quantity increases and decreases from Add stock / Withdraw stock in the edit form.</p>
                         <div class="table-responsive">
                             <table id="adjustment-history-table">
                                 <thead>
@@ -1664,7 +1671,8 @@ foreach ($technical_equipments_records as $rec) {
                                         <th>Type</th>
                                         <th>Item ID</th>
                                         <th>Item Name</th>
-                                        <th>Change</th>
+                                        <th>Quantity</th>
+                                        <th>Status</th>
                                         <th>Qty Before</th>
                                         <th>Qty After</th>
                                         <th>Adjusted By</th>
@@ -1673,25 +1681,24 @@ foreach ($technical_equipments_records as $rec) {
                                 <tbody>
                                     <?php if (empty($adjustment_records)): ?>
                                         <tr>
-                                            <td colspan="8" style="text-align: center; padding: 20px;">No adjustment records yet. Use the minus/plus buttons on inventory items to record changes.</td>
+                                            <td colspan="9" style="text-align: center; padding: 20px;">No adjustment records yet. Edit an item and use Add stock or Withdraw stock to record changes.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($adjustment_records as $adj): ?>
+                                            <?php
+                                            $ch = (int)($adj['change_amount'] ?? 0);
+                                            $qtyDisplay = abs($ch);
+                                            $isAdd = $ch > 0;
+                                            $statusLabel = $isAdd ? 'Add to Stock' : 'Withdraw stock';
+                                            $statusStyle = $isAdd ? 'background-color: #2ecc71; color: white;' : 'background-color: #e74c3c; color: white;';
+                                            ?>
                                             <tr>
                                                 <td><?php echo !empty($adj['adjusted_at']) ? date('M d, Y H:i', strtotime($adj['adjusted_at'])) : 'N/A'; ?></td>
                                                 <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $adj['inventory_type'] ?? ''))); ?></td>
                                                 <td><?php echo htmlspecialchars($adj['item_id'] ?? ''); ?></td>
                                                 <td><?php echo htmlspecialchars($adj['item_name'] ?? ''); ?></td>
-                                                <td>
-                                                    <?php
-                                                    $ch = (int)($adj['change_amount'] ?? 0);
-                                                    if ($ch > 0) {
-                                                        echo '<span style="color: var(--success-color); font-weight: 600;">+' . $ch . '</span>';
-                                                    } else {
-                                                        echo '<span style="color: var(--danger-color); font-weight: 600;">' . $ch . '</span>';
-                                                    }
-                                                    ?>
-                                                </td>
+                                                <td><?php echo $qtyDisplay; ?></td>
+                                                <td><span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; <?php echo $statusStyle; ?>"><?php echo htmlspecialchars($statusLabel); ?></span></td>
                                                 <td><?php echo (int)($adj['quantity_before'] ?? 0); ?></td>
                                                 <td><?php echo (int)($adj['quantity_after'] ?? 0); ?></td>
                                                 <td><?php echo htmlspecialchars($adj['adjusted_by'] ?? 'N/A'); ?></td>
@@ -1835,8 +1842,20 @@ foreach ($technical_equipments_records as $rec) {
                 </div>
                 
                 <div class="form-group">
-                    <label for="edit-church-property-quantity">Quantity</label>
+                    <label>Current quantity</label>
+                    <div class="form-control" id="edit-church-property-current-qty-display" style="background: #f5f5f5;" readonly></div>
+                    <input type="hidden" name="current_quantity" id="edit-church-property-current-quantity">
+                </div>
+                <div class="form-group">
+                    <label for="edit-church-property-quantity">Quantity (amount to add or withdraw)</label>
                     <input type="number" id="edit-church-property-quantity" name="quantity" class="form-control" min="0" value="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-church-property-stock-action">Stock action</label>
+                    <select id="edit-church-property-stock-action" name="stock_action" class="form-control" required>
+                        <option value="add_stock">Add stock</option>
+                        <option value="withdraw_stock">Withdraw stock</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
@@ -1879,8 +1898,20 @@ foreach ($technical_equipments_records as $rec) {
                 </div>
                 
                 <div class="form-group">
-                    <label for="edit-office-supplies-quantity">Quantity</label>
+                    <label>Current quantity</label>
+                    <div class="form-control" id="edit-office-supplies-current-qty-display" style="background: #f5f5f5;" readonly></div>
+                    <input type="hidden" name="current_quantity" id="edit-office-supplies-current-quantity">
+                </div>
+                <div class="form-group">
+                    <label for="edit-office-supplies-quantity">Quantity (amount to add or withdraw)</label>
                     <input type="number" id="edit-office-supplies-quantity" name="quantity" class="form-control" min="0" value="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-office-supplies-stock-action">Stock action</label>
+                    <select id="edit-office-supplies-stock-action" name="stock_action" class="form-control" required>
+                        <option value="add_stock">Add stock</option>
+                        <option value="withdraw_stock">Withdraw stock</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
@@ -1923,8 +1954,20 @@ foreach ($technical_equipments_records as $rec) {
                 </div>
                 
                 <div class="form-group">
-                    <label for="edit-technical-equipments-quantity">Quantity</label>
+                    <label>Current quantity</label>
+                    <div class="form-control" id="edit-technical-equipments-current-qty-display" style="background: #f5f5f5;" readonly></div>
+                    <input type="hidden" name="current_quantity" id="edit-technical-equipments-current-quantity">
+                </div>
+                <div class="form-group">
+                    <label for="edit-technical-equipments-quantity">Quantity (amount to add or withdraw)</label>
                     <input type="number" id="edit-technical-equipments-quantity" name="quantity" class="form-control" min="0" value="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-technical-equipments-stock-action">Stock action</label>
+                    <select id="edit-technical-equipments-stock-action" name="stock_action" class="form-control" required>
+                        <option value="add_stock">Add stock</option>
+                        <option value="withdraw_stock">Withdraw stock</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
@@ -1992,10 +2035,10 @@ foreach ($technical_equipments_records as $rec) {
                 <input type="hidden" name="add_church_property" value="1">
                 
                 <div class="form-group">
-                    <label for="property-id">ID</label>
-                    <input type="text" id="property-id" name="id" class="form-control" required>
+                    <label>ID</label>
+                    <div class="form-control" style="background: #f5f5f5; font-weight: 600;"><?php echo htmlspecialchars($next_church_property_id); ?></div>
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Assigned automatically</small>
                 </div>
-                
                 <div class="form-group">
                     <label for="property-item-name">Item Name</label>
                     <input type="text" id="property-item-name" name="item_name" class="form-control" required>
@@ -2040,10 +2083,10 @@ foreach ($technical_equipments_records as $rec) {
                 <input type="hidden" name="add_office_supplies" value="1">
                 
                 <div class="form-group">
-                    <label for="supply-id">ID</label>
-                    <input type="text" id="supply-id" name="id" class="form-control" required>
+                    <label>ID</label>
+                    <div class="form-control" style="background: #f5f5f5; font-weight: 600;"><?php echo htmlspecialchars($next_office_supplies_id); ?></div>
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Assigned automatically</small>
                 </div>
-                
                 <div class="form-group">
                     <label for="supply-item-name">Item Name</label>
                     <input type="text" id="supply-item-name" name="item_name" class="form-control" required>
@@ -2088,10 +2131,10 @@ foreach ($technical_equipments_records as $rec) {
                 <input type="hidden" name="add_technical_equipments" value="1">
                 
                 <div class="form-group">
-                    <label for="equipment-id">ID</label>
-                    <input type="text" id="equipment-id" name="id" class="form-control" required>
+                    <label>ID</label>
+                    <div class="form-control" style="background: #f5f5f5; font-weight: 600;"><?php echo htmlspecialchars($next_technical_equipments_id); ?></div>
+                    <small class="form-text" style="color: #666; font-size: 12px; margin-top: 5px;">Assigned automatically</small>
                 </div>
-                
                 <div class="form-group">
                     <label for="equipment-item-name">Item Name</label>
                     <input type="text" id="equipment-item-name" name="item_name" class="form-control" required>
@@ -2179,11 +2222,14 @@ foreach ($technical_equipments_records as $rec) {
             const hasDataRows = tbodyRows.length > 0 && 
                                !tbodyRows.first().find('td[colspan]').length;
             
-            // DataTables configuration
+            // DataTables configuration (keep column 0 - ID - always visible with responsive)
             const dtConfig = {
                 "pageLength": 10,
                 "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]],
                 "order": [[0, "asc"]],
+                "columnDefs": [
+                    { "targets": 0, "responsivePriority": 1 }
+                ],
                 "language": {
                     "emptyTable": "No records found. Click 'Add New' to add records.",
                     "zeroRecords": "No matching records found",
@@ -2285,18 +2331,22 @@ foreach ($technical_equipments_records as $rec) {
             fetch(url).then(function(r) { return r.json(); }).then(function(list) {
                 if (!Array.isArray(list)) return;
                 if (list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">No adjustment records yet. Use the minus/plus buttons on inventory items to record changes.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">No adjustment records yet. Edit an item and use Add stock or Withdraw stock to record changes.</td></tr>';
                 } else {
                     tbody.innerHTML = list.map(function(adj) {
                         var date = adj.adjusted_at ? formatAdjustmentDate(adj.adjusted_at) : 'N/A';
                         var typeLabel = (adj.inventory_type || '').replace(/_/g, ' ');
                         typeLabel = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
                         var ch = parseInt(adj.change_amount, 10) || 0;
-                        var changeHtml = ch > 0 ? '<span style="color: var(--success-color); font-weight: 600;">+' + ch + '</span>' : '<span style="color: var(--danger-color); font-weight: 600;">' + ch + '</span>';
+                        var qtyDisplay = Math.abs(ch);
+                        var isAdd = ch > 0;
+                        var statusLabel = isAdd ? 'Add to Stock' : 'Withdraw stock';
+                        var statusStyle = isAdd ? 'background-color: #2ecc71; color: white;' : 'background-color: #e74c3c; color: white;';
+                        var statusHtml = '<span style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; ' + statusStyle + '">' + statusLabel + '</span>';
                         var itemName = (adj.item_name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                         var itemId = (adj.item_id || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                         var by = (adj.adjusted_by || 'N/A').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                        return '<tr><td>' + date + '</td><td>' + typeLabel + '</td><td>' + itemId + '</td><td>' + itemName + '</td><td>' + changeHtml + '</td><td>' + (parseInt(adj.quantity_before, 10) || 0) + '</td><td>' + (parseInt(adj.quantity_after, 10) || 0) + '</td><td>' + by + '</td></tr>';
+                        return '<tr><td>' + date + '</td><td>' + typeLabel + '</td><td>' + itemId + '</td><td>' + itemName + '</td><td>' + qtyDisplay + '</td><td>' + statusHtml + '</td><td>' + (parseInt(adj.quantity_before, 10) || 0) + '</td><td>' + (parseInt(adj.quantity_after, 10) || 0) + '</td><td>' + by + '</td></tr>';
                     }).join('');
                 }
                 if ($.fn.DataTable.isDataTable('#adjustment-history-table')) {
@@ -2304,7 +2354,7 @@ foreach ($technical_equipments_records as $rec) {
                 }
                 adjustmentHistoryTable = initializeDataTable('adjustment-history-table');
             }).catch(function() {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">Failed to load adjustment history.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Failed to load adjustment history.</td></tr>';
             });
         }
 
@@ -2415,15 +2465,15 @@ foreach ($technical_equipments_records as $rec) {
                         document.getElementById('view-church-property-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-church-property-item-name').textContent = row.cells[1].textContent;
                         document.getElementById('view-church-property-quantity').textContent = qtyText;
-                        document.getElementById('view-church-property-notes').textContent = row.cells[3].textContent || 'N/A';
-                        document.getElementById('view-church-property-updated').textContent = row.cells[4].textContent || 'N/A';
+                        document.getElementById('view-church-property-notes').textContent = row.cells[4].textContent || 'N/A';
+                        document.getElementById('view-church-property-updated').textContent = row.cells[5].textContent || 'N/A';
                         openModal('view-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('view-office-supplies-id').textContent = row.cells[0].textContent;
                         document.getElementById('view-office-supplies-item-name').textContent = row.cells[1].textContent;
                         document.getElementById('view-office-supplies-quantity').textContent = qtyText;
-                        document.getElementById('view-office-supplies-notes').textContent = row.cells[3].textContent || 'N/A';
-                        document.getElementById('view-office-supplies-updated').textContent = row.cells[4].textContent || 'N/A';
+                        document.getElementById('view-office-supplies-notes').textContent = row.cells[4].textContent || 'N/A';
+                        document.getElementById('view-office-supplies-updated').textContent = row.cells[5].textContent || 'N/A';
                         openModal('view-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('view-technical-equipments-id').textContent = row.cells[0].textContent;
@@ -2464,25 +2514,35 @@ foreach ($technical_equipments_records as $rec) {
                     const row = this.closest('tr');
                     
                     var qtyCell = row.querySelector('.quantity-cell');
-                    var qtyVal = qtyCell ? (qtyCell.querySelector('.qty-value') || qtyCell).textContent.trim() : row.cells[2].textContent;
+                    var qtyVal = qtyCell ? (qtyCell.querySelector('.qty-value') || qtyCell).textContent.trim() : row.cells[2].textContent.trim();
+                    var currentQty = parseInt(qtyVal, 10) || 0;
                     if (type === 'church-property') {
                         document.getElementById('edit-church-property-id').value = id;
                         document.getElementById('edit-church-property-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-church-property-quantity').value = qtyVal;
-                        document.getElementById('edit-church-property-notes').value = row.cells[3].textContent || '';
-                        document.getElementById('edit-church-property-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
+                        document.getElementById('edit-church-property-current-quantity').value = currentQty;
+                        document.getElementById('edit-church-property-current-qty-display').textContent = currentQty;
+                        document.getElementById('edit-church-property-quantity').value = '0';
+                        document.getElementById('edit-church-property-stock-action').value = 'add_stock';
+                        document.getElementById('edit-church-property-notes').value = row.cells[4].textContent || '';
+                        document.getElementById('edit-church-property-updated').value = convertToDatetimeLocal(row.cells[5].textContent);
                         openModal('edit-church-property-modal');
                     } else if (type === 'office-supplies') {
                         document.getElementById('edit-office-supplies-id').value = id;
                         document.getElementById('edit-office-supplies-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-office-supplies-quantity').value = qtyVal;
-                        document.getElementById('edit-office-supplies-notes').value = row.cells[3].textContent || '';
-                        document.getElementById('edit-office-supplies-updated').value = convertToDatetimeLocal(row.cells[4].textContent);
+                        document.getElementById('edit-office-supplies-current-quantity').value = currentQty;
+                        document.getElementById('edit-office-supplies-current-qty-display').textContent = currentQty;
+                        document.getElementById('edit-office-supplies-quantity').value = '0';
+                        document.getElementById('edit-office-supplies-stock-action').value = 'add_stock';
+                        document.getElementById('edit-office-supplies-notes').value = row.cells[4].textContent || '';
+                        document.getElementById('edit-office-supplies-updated').value = convertToDatetimeLocal(row.cells[5].textContent);
                         openModal('edit-office-supplies-modal');
                     } else if (type === 'technical-equipments') {
                         document.getElementById('edit-technical-equipments-id').value = id;
                         document.getElementById('edit-technical-equipments-item-name').value = row.cells[1].textContent;
-                        document.getElementById('edit-technical-equipments-quantity').value = qtyVal;
+                        document.getElementById('edit-technical-equipments-current-quantity').value = currentQty;
+                        document.getElementById('edit-technical-equipments-current-qty-display').textContent = currentQty;
+                        document.getElementById('edit-technical-equipments-quantity').value = '0';
+                        document.getElementById('edit-technical-equipments-stock-action').value = 'add_stock';
                         const statusText = row.cells[3].textContent.trim();
                         document.getElementById('edit-technical-equipments-status').value = statusText;
                         document.getElementById('edit-technical-equipments-notes').value = row.cells[4].textContent || '';
@@ -2578,65 +2638,6 @@ foreach ($technical_equipments_records as $rec) {
                 });
             });
 
-            // Quantity minus/plus buttons (event delegation for DataTables)
-            document.querySelectorAll('.tab-content').forEach(function(container) {
-                container.addEventListener('click', function(e) {
-                    var btn = e.target.closest('.qty-minus, .qty-plus');
-                    if (!btn || btn.disabled) return;
-                    var row = btn.closest('tr');
-                    if (!row || !row.dataset.id || !row.dataset.type) return;
-                    var type = row.dataset.type;
-                    var itemId = row.dataset.id;
-                    var direction = btn.classList.contains('qty-minus') ? 'minus' : 'plus';
-                    var qtySpan = row.querySelector('.qty-value');
-                    if (!qtySpan) return;
-                    var formData = new FormData();
-                    formData.append('adjust_quantity', '1');
-                    formData.append('inventory_type', type);
-                    formData.append('item_id', itemId);
-                    formData.append('direction', direction);
-                    btn.disabled = true;
-                    fetch(window.location.href, {
-                        method: 'POST',
-                        body: formData
-                    }).then(function(r) { return r.text(); }).then(function(text) {
-                        var data;
-                        try { data = JSON.parse(text); } catch (e) { data = {}; }
-                        if (data && data.success) {
-                            if (data.deleted === true || data.deleted === 'true') {
-                                alert('This item is out of stock and will be removed from the inventory.');
-                                if (window.showToast) {
-                                    window.showToast('This item is out of stock and will be removed from the inventory.', 'warning');
-                                }
-                                var table = row.closest('table');
-                                if (table && $.fn.DataTable && $.fn.DataTable.isDataTable(table)) {
-                                    $(table).DataTable().row(row).remove().draw();
-                                } else {
-                                    row.remove();
-                                }
-                                var adjTab = document.getElementById('adjustment-history');
-                                if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
-                                    loadAdjustmentHistory();
-                                }
-                            } else {
-                                qtySpan.textContent = data.new_quantity;
-                                var minusBtn = row.querySelector('.qty-minus');
-                                if (minusBtn) minusBtn.disabled = data.new_quantity <= 0;
-                                var adjTab = document.getElementById('adjustment-history');
-                                if (adjTab && adjTab.classList.contains('active') && typeof loadAdjustmentHistory === 'function') {
-                                    loadAdjustmentHistory();
-                                }
-                            }
-                        } else {
-                            alert(data && data.error ? data.error : 'Failed to update quantity');
-                        }
-                    }).catch(function() {
-                        alert('Network error. Please try again.');
-                    }).finally(function() {
-                        btn.disabled = false;
-                    });
-                });
-            });
         });
     </script>
 </body>
