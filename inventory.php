@@ -243,52 +243,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_church_property"]
         $stock_action = $_POST['stock_action'] ?? 'add_stock';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
-        
-        if ($stock_action === 'withdraw_stock') {
-            $quantity = max(0, $current_quantity - $amount);
+
+        // Prevent withdrawing more than available stock
+        if ($stock_action === 'withdraw_stock' && $amount > $current_quantity) {
+            $message = "Your requested quantity exceeds available stock. Only {$current_quantity} items are left.";
+            $messageType = "danger";
         } else {
-            $quantity = $current_quantity + $amount;
-        }
-        
-        if ($updated_at) {
-            $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
-        } else {
-            $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
-        }
-        
-        if ($stmt->execute()) {
-            $stmt->close();
-            if ($amount != 0) {
-                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    inventory_type VARCHAR(50) NOT NULL,
-                    item_id VARCHAR(50) NOT NULL,
-                    item_name VARCHAR(255),
-                    change_amount INT NOT NULL,
-                    quantity_before INT NOT NULL,
-                    quantity_after INT NOT NULL,
-                    adjusted_by VARCHAR(255),
-                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )");
-                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
-                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
-                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('church_property', ?, ?, ?, ?, ?, ?)");
-                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
-                $log->execute();
-                $log->close();
+            if ($stock_action === 'withdraw_stock') {
+                $quantity = max(0, $current_quantity - $amount);
+            } else {
+                $quantity = $current_quantity + $amount;
             }
-            $message = "Church property updated successfully!";
-            $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#church-property");
-            exit();
-        } else {
-            $error = $stmt->error;
-            $stmt->close();
-            throw new Exception("Failed to update property: " . $error);
+            
+            if ($updated_at) {
+                $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
+            } else {
+                $sql = "UPDATE church_property_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+            }
+            
+            if ($stmt->execute()) {
+                $stmt->close();
+                if ($amount != 0) {
+                    $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        inventory_type VARCHAR(50) NOT NULL,
+                        item_id VARCHAR(50) NOT NULL,
+                        item_name VARCHAR(255),
+                        change_amount INT NOT NULL,
+                        quantity_before INT NOT NULL,
+                        quantity_after INT NOT NULL,
+                        adjusted_by VARCHAR(255),
+                        adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )");
+                    $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                    $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                    $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('church_property', ?, ?, ?, ?, ?, ?)");
+                    $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                    $log->execute();
+                    $log->close();
+                }
+                $message = "Church property updated successfully!";
+                $messageType = "success";
+                header("Location: " . $_SERVER['PHP_SELF'] . "#church-property");
+                exit();
+            } else {
+                $error = $stmt->error;
+                $stmt->close();
+                throw new Exception("Failed to update property: " . $error);
+            }
         }
     } catch(Exception $e) {
         $message = "Error: " . $e->getMessage();
@@ -332,52 +338,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_office_supplies"]
         $stock_action = $_POST['stock_action'] ?? 'add_stock';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
-        
-        if ($stock_action === 'withdraw_stock') {
-            $quantity = max(0, $current_quantity - $amount);
+
+        // Prevent withdrawing more than available stock
+        if ($stock_action === 'withdraw_stock' && $amount > $current_quantity) {
+            $message = "Your requested quantity exceeds available stock. Only {$current_quantity} items are left.";
+            $messageType = "danger";
         } else {
-            $quantity = $current_quantity + $amount;
-        }
-        
-        if ($updated_at) {
-            $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
-        } else {
-            $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
-        }
-        
-        if ($stmt->execute()) {
-            $stmt->close();
-            if ($amount != 0) {
-                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    inventory_type VARCHAR(50) NOT NULL,
-                    item_id VARCHAR(50) NOT NULL,
-                    item_name VARCHAR(255),
-                    change_amount INT NOT NULL,
-                    quantity_before INT NOT NULL,
-                    quantity_after INT NOT NULL,
-                    adjusted_by VARCHAR(255),
-                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )");
-                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
-                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
-                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('office_supplies', ?, ?, ?, ?, ?, ?)");
-                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
-                $log->execute();
-                $log->close();
+            if ($stock_action === 'withdraw_stock') {
+                $quantity = max(0, $current_quantity - $amount);
+            } else {
+                $quantity = $current_quantity + $amount;
             }
-            $message = "Office supply updated successfully!";
-            $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#office-supplies");
-            exit();
-        } else {
-            $error = $stmt->error;
-            $stmt->close();
-            throw new Exception("Failed to update office supply: " . $error);
+            
+            if ($updated_at) {
+                $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ?, updated_at = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sisss", $item_name, $quantity, $notes, $updated_at, $id);
+            } else {
+                $sql = "UPDATE office_supplies_inventory SET item_name = ?, quantity = ?, notes = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("siss", $item_name, $quantity, $notes, $id);
+            }
+            
+            if ($stmt->execute()) {
+                $stmt->close();
+                if ($amount != 0) {
+                    $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        inventory_type VARCHAR(50) NOT NULL,
+                        item_id VARCHAR(50) NOT NULL,
+                        item_name VARCHAR(255),
+                        change_amount INT NOT NULL,
+                        quantity_before INT NOT NULL,
+                        quantity_after INT NOT NULL,
+                        adjusted_by VARCHAR(255),
+                        adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )");
+                    $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                    $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                    $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('office_supplies', ?, ?, ?, ?, ?, ?)");
+                    $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                    $log->execute();
+                    $log->close();
+                }
+                $message = "Office supply updated successfully!";
+                $messageType = "success";
+                header("Location: " . $_SERVER['PHP_SELF'] . "#office-supplies");
+                exit();
+            } else {
+                $error = $stmt->error;
+                $stmt->close();
+                throw new Exception("Failed to update office supply: " . $error);
+            }
         }
     } catch(Exception $e) {
         $message = "Error: " . $e->getMessage();
@@ -422,52 +434,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["edit_technical_equipme
         $status = $_POST['status'] ?? 'Working';
         $notes = $_POST['notes'] ?? '';
         $updated_at = !empty($_POST['updated_at']) ? $_POST['updated_at'] : null;
-        
-        if ($stock_action === 'withdraw_stock') {
-            $quantity = max(0, $current_quantity - $amount);
+
+        // Prevent withdrawing more than available stock
+        if ($stock_action === 'withdraw_stock' && $amount > $current_quantity) {
+            $message = "Your requested quantity exceeds available stock. Only {$current_quantity} items are left.";
+            $messageType = "danger";
         } else {
-            $quantity = $current_quantity + $amount;
-        }
-        
-        if ($updated_at) {
-            $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sissss", $item_name, $quantity, $status, $notes, $updated_at, $id);
-        } else {
-            $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("siss", $item_name, $quantity, $status, $notes, $id);
-        }
-        
-        if ($stmt->execute()) {
-            $stmt->close();
-            if ($amount != 0) {
-                $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    inventory_type VARCHAR(50) NOT NULL,
-                    item_id VARCHAR(50) NOT NULL,
-                    item_name VARCHAR(255),
-                    change_amount INT NOT NULL,
-                    quantity_before INT NOT NULL,
-                    quantity_after INT NOT NULL,
-                    adjusted_by VARCHAR(255),
-                    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )");
-                $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
-                $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
-                $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('technical_equipments', ?, ?, ?, ?, ?, ?)");
-                $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
-                $log->execute();
-                $log->close();
+            if ($stock_action === 'withdraw_stock') {
+                $quantity = max(0, $current_quantity - $amount);
+            } else {
+                $quantity = $current_quantity + $amount;
             }
-            $message = "Technical equipment updated successfully!";
-            $messageType = "success";
-            header("Location: " . $_SERVER['PHP_SELF'] . "#technical-equipments");
-            exit();
-        } else {
-            $error = $stmt->error;
-            $stmt->close();
-            throw new Exception("Failed to update technical equipment: " . $error);
+            
+            if ($updated_at) {
+                $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sissss", $item_name, $quantity, $status, $notes, $updated_at, $id);
+            } else {
+                $sql = "UPDATE technical_equipments_inventory SET item_name = ?, quantity = ?, status = ?, notes = ? WHERE id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("siss", $item_name, $quantity, $status, $notes, $id);
+            }
+            
+            if ($stmt->execute()) {
+                $stmt->close();
+                if ($amount != 0) {
+                    $conn->query("CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        inventory_type VARCHAR(50) NOT NULL,
+                        item_id VARCHAR(50) NOT NULL,
+                        item_name VARCHAR(255),
+                        change_amount INT NOT NULL,
+                        quantity_before INT NOT NULL,
+                        quantity_after INT NOT NULL,
+                        adjusted_by VARCHAR(255),
+                        adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )");
+                    $change_amount = $stock_action === 'withdraw_stock' ? -$amount : $amount;
+                    $adjusted_by = $_SESSION['user'] ?? ($user_profile['username'] ?? '');
+                    $log = $conn->prepare("INSERT INTO inventory_adjustments (inventory_type, item_id, item_name, change_amount, quantity_before, quantity_after, adjusted_by) VALUES ('technical_equipments', ?, ?, ?, ?, ?, ?)");
+                    $log->bind_param("ssiiis", $id, $item_name, $change_amount, $current_quantity, $quantity, $adjusted_by);
+                    $log->execute();
+                    $log->close();
+                }
+                $message = "Technical equipment updated successfully!";
+                $messageType = "success";
+                header("Location: " . $_SERVER['PHP_SELF'] . "#technical-equipments");
+                exit();
+            } else {
+                $error = $stmt->error;
+                $stmt->close();
+                throw new Exception("Failed to update technical equipment: " . $error);
+            }
         }
     } catch(Exception $e) {
         $message = "Error: " . $e->getMessage();
@@ -2204,6 +2222,22 @@ $next_technical_equipments_id = getNextInventoryId($conn, 'technical_equipments_
             toast.querySelector('.toast-close').addEventListener('click', close);
             setTimeout(close, 5000);
         }
+
+        // Auto-dismiss top alert messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var alertEl = document.querySelector('.records-content .alert');
+                if (alertEl) {
+                    alertEl.style.transition = 'opacity 0.4s ease';
+                    alertEl.style.opacity = '0';
+                    setTimeout(function() {
+                        if (alertEl && alertEl.parentNode) {
+                            alertEl.parentNode.removeChild(alertEl);
+                        }
+                    }, 400);
+                }
+            }, 5000);
+        });
 
         // Function to initialize DataTable for a specific table
         function initializeDataTable(tableId) {
